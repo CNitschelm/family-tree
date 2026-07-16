@@ -2,3 +2,4 @@
 .password
 data.json
 *.bak
+*.new
