@@ -67,6 +67,8 @@ ok(!html.includes("const DATA = {"), "no plaintext DATA in the page");
 ok(!/Nitschelm", years:"/.test(html), "no person records leak outside the ciphertext");
 ok(html.includes('id="lock"'), "lock screen present");
 ok(html.includes("function boot(DATA)"), "app boots only after decryption");
+ok(!/p\.name==="/.test(html), "no person-name literals in the plaintext UI layer");
+ok(!/\d{4}–\d{4}/.test(html), "no lifespan literals in the plaintext UI layer");
 
 /* ---------- 2. Script extraction + syntax ---------- */
 section("Script syntax");
@@ -155,12 +157,16 @@ ok(allNodes.length >= 108, "tree has >= 108 people (" + allNodes.length + ")");
 ok(allNodes.every(n => BC[n.branch]), "every person has a known branch color");
 ok(allNodes.every(n => n.p.name && typeof n.p.name === "string"), "every person has a name");
 ok(/^\d{4}-\d{2}-\d{2}$/.test(SYNCED), "SYNCED is YYYY-MM-DD (" + SYNCED + ")");
-const cory = allNodes.find(n => n.p.name === "Cory Alexander Nitschelm");
-ok(cory && /^data:image\/(jpeg|png|webp);base64,/.test(cory.p.img || ""), "Cory's photo embedded as data URI");
+/* anchors: branch navigation ids live INSIDE the encrypted data */
+ok(["trunk", "fr", "east", "west", "schw"].every(a => allNodes.some(n => n.p.anchor === a)),
+  "all 5 navigation anchors present in encrypted data");
+ok(["fr", "east", "west", "schw"].every(k => BRANCH_HEADS[k]), "branch heads resolve via anchors");
+/* people are referenced structurally, never by name, to keep this file PII-free */
+const creator = allNodes.find(n => /creator of this website/i.test(n.p.note || ""));
+ok(!!creator, "site-creator credit exists");
+ok(creator && /^data:image\/(jpeg|png|webp);base64,/.test(creator.p.img || ""), "creator's photo embedded as data URI");
 ok(allNodes.every(n => !n.p.img || /^data:image\//.test(n.p.img)), "all photos embedded (none reference repo files)");
-const fred = allNodes.find(n => n.p.name === "Frederic Adrian Nitschelm" && n.p.years === "1831–1888");
-ok(fred && /circus/.test(fred.p.note || ""), "family lore preserved (circus note)");
-ok(cory && /creator of this website/i.test(cory.p.note || ""), "Cory credited as site creator");
+ok(allNodes.some(n => /circus/i.test(n.p.note || "")), "family lore preserved");
 ok(!allNodes.some(n => n.p.tag === "you"), "no 'you' tag (site is for the whole family)");
 /* "Married twice." (commentary) is fine; "Remarried Kathleen Neary" (a hidden marriage) is not */
 ok(allNodes.every(n => !/(re)?married\s+[A-Z]/.test(n.p.note || "")),
@@ -196,15 +202,32 @@ ok(visCount() === 1, "all filters off = root only");
 initView();
 ok(visCount() === legacyN, "reset restores default view");
 
-/* ---------- 8. Search (regressions: accents, duplicates, ghost-click is DOM-only) ---------- */
+/* ---------- 8. Search (regressions: accents, duplicates) ----------
+ * All queries are DERIVED from the decrypted data at runtime so this
+ * committed file contains no names. */
 section("Search");
-ok(searchMatches("rene").length === 2, "'rene' → René + spouse Vérène");
-ok(searchMatches("René").length === searchMatches("rene").length, "accented query = plain query");
-ok(searchMatches("noelie").length === 1, "'noelie' finds Noélie");
-ok(searchMatches("guillaume").length === 2, "duplicate names both returned (years disambiguate)");
-ok(searchMatches("nitschelm").length === 8, "results capped at 8");
+const norm = get("norm");
+const accented = allNodes.find(n => norm(n.p.name) !== n.p.name.toLowerCase());
+ok(!!accented, "data contains accented names to test with");
+if (accented) {
+  const word = accented.p.name.split(" ").find(w => norm(w) !== w.toLowerCase());
+  ok(searchMatches(norm(word)).length >= 1, "accent-stripped query finds accented name");
+  ok(searchMatches(norm(word)).length === searchMatches(word).length, "accented query = plain query");
+}
+const seen = {}; let dupName = null;
+for (const n of allNodes) { if (seen[n.p.name]) { dupName = n.p.name; break; } seen[n.p.name] = 1; }
+ok(!!dupName, "data contains duplicate display names to test with");
+if (dupName) {
+  const res = searchMatches(norm(dupName));
+  ok(res.length >= 2, "duplicate names all returned (years disambiguate)");
+}
+const surname = norm(root.p.name.split(" ").pop());
+ok(searchMatches(surname).length === 8, "results capped at 8");
 ok(searchMatches("zzzz").length === 0, "no false positives");
-ok(searchMatches("simone")[0].via === "Simone Cleisz", "spouse matches report the spouse");
+let anySpouse = null;
+outer: for (const n of allNodes) for (const u of (n.p.unions || [])) if (u.s) { anySpouse = u.s; break outer; }
+ok(!!anySpouse && searchMatches(norm(anySpouse)).some(r => r.via === anySpouse),
+  "spouse matches report the spouse");
 
 /* ---------- 9. i18n ---------- */
 section("i18n");
