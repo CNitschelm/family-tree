@@ -173,8 +173,9 @@ ok(allNodes.every(n => !n.p.note || (n.p.note_fr && n.p.note_fr.length > 0)),
   "every person note has a French translation");
 ok(allNodes.every(n => (n.p.unions || []).every(u => !u.n || (u.n_fr && u.n_fr.length > 0))),
   "every union note has a French translation");
-/* "Married twice." (commentary) is fine; "Remarried Kathleen Neary" (a hidden marriage) is not */
-ok(allNodes.every(n => !/(re)?married\s+[A-Z]/.test(n.p.note || "")),
+/* commentary like "Married into the X family" is fine; a NAMED spouse in a
+ * note ("Remarried Kathleen…", "first wife Anne…") belongs on the card */
+ok(allNodes.every(n => !/(re)?married\s+[A-Z]|\b(wife|husband|spouse)\s+[A-ZÉ]/.test(n.p.note || "")),
   "no marriages hidden in notes — they belong on cards as unions");
 
 /* ---------- 6. Descendant counts (pill labels) ---------- */
