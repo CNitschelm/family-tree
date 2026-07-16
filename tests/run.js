@@ -168,6 +168,11 @@ ok(creator && /^data:image\/(jpeg|png|webp);base64,/.test(creator.p.img || ""), 
 ok(allNodes.every(n => !n.p.img || /^data:image\//.test(n.p.img)), "all photos embedded (none reference repo files)");
 ok(allNodes.some(n => /circus/i.test(n.p.note || "")), "family lore preserved");
 ok(!allNodes.some(n => n.p.tag === "you"), "no 'you' tag (site is for the whole family)");
+/* bilingual data: every English note must carry a French translation */
+ok(allNodes.every(n => !n.p.note || (n.p.note_fr && n.p.note_fr.length > 0)),
+  "every person note has a French translation");
+ok(allNodes.every(n => (n.p.unions || []).every(u => !u.n || (u.n_fr && u.n_fr.length > 0))),
+  "every union note has a French translation");
 /* "Married twice." (commentary) is fine; "Remarried Kathleen Neary" (a hidden marriage) is not */
 ok(allNodes.every(n => !/(re)?married\s+[A-Z]/.test(n.p.note || "")),
   "no marriages hidden in notes — they belong on cards as unions");

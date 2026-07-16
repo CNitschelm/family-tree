@@ -18,8 +18,22 @@ const { webcrypto } = require("node:crypto");
 const subtle = webcrypto.subtle;
 
 const ROOT = path.join(__dirname, "..");
-const HTML = path.join(ROOT, "index.html");
 const JSON_FILE = path.join(ROOT, "data.json");
+
+/* The Cowork sandbox mount can serve stale (or falsely missing) entries for a
+ * cached exact path; unseen case variants bypass the cache. On case-sensitive
+ * filesystems the variants don't exist and the plain name wins. */
+function resolveHtml() {
+  const variant = () => "index.html".split("").map(c => Math.random() < 0.5 ? c.toUpperCase() : c.toLowerCase()).join("");
+  for (const name of ["index.html", variant(), variant(), variant()]) {
+    try {
+      const t = fs.readFileSync(path.join(ROOT, name), "utf8");
+      if (t.trimEnd().endsWith("</html>")) return path.join(ROOT, name);
+    } catch (_) { /* try next */ }
+  }
+  console.error("FAILED: no complete index.html reachable"); process.exit(1);
+}
+const HTML = resolveHtml();
 
 function password() {
   if (process.env.FT_PASSWORD) return process.env.FT_PASSWORD.trim();
@@ -64,7 +78,17 @@ async function key(pw, salt, iter, usages) {
     const k = await key(pw, salt, iter, ["encrypt"]);
     const ct = new Uint8Array(await subtle.encrypt({ name: "AES-GCM", iv }, k, Buffer.from(JSON.stringify(data))));
     const line = `const ENC = {v:1, iter:${iter}, salt:"${Buffer.from(salt).toString("base64")}", iv:"${Buffer.from(iv).toString("base64")}", ct:"${Buffer.from(ct).toString("base64")}"};`;
-    fs.writeFileSync(HTML, html.replace(raw, line));
+    /* atomic-ish replace: in-place overwrites through the Cowork mount have
+     * truncated the file before (grown files got capped at the old length).
+     * Writing a new file and renaming over the original avoids that. */
+    const out = html.replace(raw, line);
+    fs.writeFileSync(HTML + ".new", out);
+    const check = fs.readFileSync(HTML + ".new", "utf8");
+    if (check.length !== out.length || !check.trimEnd().endsWith("</html>")) {
+      console.error("FAILED: staging write verification"); process.exit(1);
+    }
+    fs.rmSync(HTML, { force: true });
+    fs.renameSync(HTML + ".new", HTML);
     console.log("re-encrypted DATA into index.html (" + ct.length + " bytes). Run tests, then commit.");
     console.log(newSalt
       ? "note: NEW SALT — every family member must re-enter the password."
