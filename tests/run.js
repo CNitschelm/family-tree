@@ -255,10 +255,10 @@ try {
     (p.unions || []).forEach(u => { if (u.s) sp += esc(u.s) + (u.sy ? esc(u.sy) : "") + (u.div ? "1" : ""); });
     const badge = p.tag === "author" ? T("author") : p.tag === "emig" ? "USA" : p.tag === "mem" ? "m" : "";
     const pill = n.children.length ? ("+" + n.children.length + (n.desc > n.children.length ? " → " + n.desc : "")) : "";
-    const ni = noteText(n) ? "i" : "";
+    const ni = "i"; /* marker always in template; visibility is a DOM-time decision */
     const s = cls + badge + esc(p.name) + esc(p.years || "") + ni + sp + pill + (p.img || AV);
     if (!s) throw new Error("empty card");
-    built++; if (ni) notes++;
+    built++; if (noteText(n)) notes++;
   });
 } catch (e) { buildErr = e; }
 ok(!buildErr, "all cards build without runtime errors" + (buildErr ? " — " + buildErr.message : ""));
