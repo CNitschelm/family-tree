@@ -1,0 +1,4 @@
+# local secrets and working files — never commit
+.password
+data.json
+*.bak
