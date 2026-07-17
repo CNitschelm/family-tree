@@ -168,6 +168,18 @@ ok(creator && /^data:image\/(jpeg|png|webp);base64,/.test(creator.p.img || ""), 
 ok(allNodes.every(n => !n.p.img || /^data:image\//.test(n.p.img)), "all photos embedded (none reference repo files)");
 ok(allNodes.some(n => /circus/i.test(n.p.note || "")), "family lore preserved");
 ok(!allNodes.some(n => n.p.tag === "you"), "no 'you' tag (site is for the whole family)");
+/* profiles: bio pages carried inside the encrypted payload */
+const profiled = allNodes.filter(n => n.p.profile);
+ok(profiled.length >= 1, "at least one profile exists (" + profiled.length + ")");
+ok(profiled.every(n => {
+  const pr = n.p.profile;
+  return Array.isArray(pr.bio) && pr.bio.length &&
+         Array.isArray(pr.bio_fr) && pr.bio_fr.length === pr.bio.length;
+}), "profile bios are bilingual, paragraph for paragraph");
+ok(profiled.every(n => (n.p.profile.timeline || []).every(t => t.y && t.t && t.t_fr)),
+  "profile timeline entries bilingual");
+ok(profiled.every(n => (n.p.profile.links || []).every(l => /^https:\/\//.test(l.url))),
+  "profile links are https");
 /* bilingual data: every English note must carry a French translation */
 ok(allNodes.every(n => !n.p.note || (n.p.note_fr && n.p.note_fr.length > 0)),
   "every person note has a French translation");
