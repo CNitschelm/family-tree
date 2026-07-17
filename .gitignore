@@ -3,3 +3,7 @@
 data.json
 *.bak
 *.new
+
+# local research documents (contain names — the repo stays PII-free)
+Family-Tree-Audit-*.docx
+bio-research-notes.md
