@@ -180,6 +180,11 @@ ok(profiled.every(n => (n.p.profile.timeline || []).every(t => t.y && t.t && t.t
   "profile timeline entries bilingual");
 ok(profiled.every(n => (n.p.profile.links || []).every(l => /^https:\/\//.test(l.url))),
   "profile links are https");
+/* THE STANDARD: every bio must cite its sources (url optional — e.g. family correspondence) */
+ok(profiled.every(n => {
+  const s = n.p.profile.sources;
+  return Array.isArray(s) && s.length > 0 && s.every(x => x.label && (!x.url || /^https:\/\//.test(x.url)));
+}), "every profile cites at least one source");
 /* bilingual data: every English note must carry a French translation */
 ok(allNodes.every(n => !n.p.note || (n.p.note_fr && n.p.note_fr.length > 0)),
   "every person note has a French translation");
