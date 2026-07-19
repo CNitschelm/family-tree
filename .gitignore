@@ -3,8 +3,10 @@
 data.json
 *.bak
 *.new
+~$*.docx
 
 # local research documents (contain names — the repo stays PII-free)
 Family-Tree-Audit-*.docx
 East-West-Connection-*.docx
+Family-History-*.docx
 bio-research-notes.md
