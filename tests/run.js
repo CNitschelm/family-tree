@@ -185,6 +185,11 @@ ok(profiled.every(n => {
   const s = n.p.profile.sources;
   return Array.isArray(s) && s.length > 0 && s.every(x => x.label && (!x.url || /^https:\/\//.test(x.url)));
 }), "every profile cites at least one source");
+/* THE STANDARD, extended: every PERSON carries card-level sources (src array in the payload).
+   url optional (family records); when present it must be http(s). */
+ok(allNodes.every(n => Array.isArray(n.p.src) && n.p.src.length > 0), "every person has at least one card source");
+ok(allNodes.every(n => (n.p.src || []).every(s => s.l && typeof s.l === "string" && (!s.u || /^https?:\/\//.test(s.u)))),
+  "card sources well-formed (label required, url http(s) when present)");
 /* bilingual data: every English note must carry a French translation */
 ok(allNodes.every(n => !n.p.note || (n.p.note_fr && n.p.note_fr.length > 0)),
   "every person note has a French translation");
