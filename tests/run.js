@@ -190,6 +190,34 @@ ok(profiled.every(n => {
 ok(allNodes.every(n => Array.isArray(n.p.src) && n.p.src.length > 0), "every person has at least one card source");
 ok(allNodes.every(n => (n.p.src || []).every(s => s.l && typeof s.l === "string" && (!s.u || /^https?:\/\//.test(s.u)))),
   "card sources well-formed (label required, url http(s) when present)");
+/* corrected-base architecture: the payload IS the up-to-date tree; _legacy holds reversions */
+const DL = get("DATA")._legacy;
+ok(!!DL && DL.vals && DL.phantom && DL.phantomParent, "_legacy block present (vals + phantom + parent key)");
+ok(!!(DL.banner && DL.banner_fr && DL.lbanner && DL.lbanner_fr), "_legacy banners bilingual (diff + legacy view)");
+ok(Object.keys(DL.vals).every(k => allNodes.some(n => ((n.p.years||"")+"|"+(n.p.name||"")) === k)),
+  "every _legacy reversion key resolves to a person in the corrected base");
+ok(allNodes.some(n => n.p.years === "1729–1804") && !allNodes.some(n => n.p.years === "1734–1804"),
+  "base carries the corrected West keystone years (1729–1804, no 1734)");
+ok(!allNodes.some(n => n.p.years === "1713–?" && n.p.anchor === "west"),
+  "the superseded 1713 bridge person is gone from the corrected base");
+ok(allNodes.filter(n => n.p._g26).length === 2 && allNodes.filter(n => n.p._n26).length === 50,
+  "provenance tags: 2 grafted-chain people, 50 post-original additions (messages + register children)");
+ok(allNodes.every(n => n.p.g === "f" || n.p.g === "m"),
+  "every person carries a sex field (genogram avatar shapes)");
+/* original-document images shown inside bios: embedded, captioned and transcribed in both languages */
+const docPeople = allNodes.filter(n => n.p.profile && n.p.profile.docs);
+const docCount = docPeople.reduce((a, n) => a + n.p.profile.docs.length, 0);
+ok(docPeople.length >= 10 && docCount >= 20,
+  "documents embedded in bios (" + docCount + " images on " + docPeople.length + " people)");
+/* the family bible and the two Amboy gravestones are family-supplied: no URL, but still transcribed */
+const bibleDocs = allNodes.filter(n => n.p.profile && n.p.profile.docs)
+  .flatMap(n => n.p.profile.docs).filter(d => !d.u);
+ok(bibleDocs.length >= 6 && bibleDocs.every(d => d.tr && d.tr_fr),
+  "family-supplied images (bible, gravestones, 1907 photo) are transcribed too (" + bibleDocs.length + ")");
+ok(docPeople.every(n => n.p.profile.docs.every(d =>
+  /^data:image\/(jpeg|png);base64,/.test(d.img || "") && d.cap && d.cap_fr && d.tr && d.tr_fr &&
+  (!d.u || /^https:\/\//.test(d.u)))),
+  "each document has an embedded image, bilingual caption + transcription, https source");
 /* bilingual data: every English note must carry a French translation */
 ok(allNodes.every(n => !n.p.note || (n.p.note_fr && n.p.note_fr.length > 0)),
   "every person note has a French translation");
@@ -251,6 +279,21 @@ if (dupName) {
 }
 const surname = norm(root.p.name.split(" ").pop());
 ok(searchMatches(surname).length === 8, "results capped at 8");
+
+/* partial, out-of-order, middle-name-skipping queries must still land the person:
+   "<first> <first 3 of surname>" has to find "<first> <middle> <surname>" */
+const threePart = allNodes.find(n => n.p.name.split(" ").length >= 3);
+ok(!!threePart, "data contains a three-part name to test with");
+if (threePart) {
+  const parts = threePart.p.name.split(" ").map(norm);
+  const q = parts[0] + " " + parts[parts.length - 1].slice(0, 3);   /* first name + start of surname */
+  ok(searchMatches(q).some(r => r.n.p.name === threePart.p.name),
+    "partial query skipping the middle name finds the person");
+  const rev = parts[parts.length - 1].slice(0, 4) + " " + parts[0].slice(0, 3); /* reversed order */
+  ok(searchMatches(rev).some(r => r.n.p.name === threePart.p.name),
+    "words in any order still match");
+}
+ok(searchMatches("   ").length === 0, "whitespace-only query returns nothing");
 ok(searchMatches("zzzz").length === 0, "no false positives");
 let anySpouse = null;
 outer: for (const n of allNodes) for (const u of (n.p.unions || [])) if (u.s) { anySpouse = u.s; break outer; }
