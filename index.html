@@ -55,7 +55,7 @@ header button{font:inherit;font-size:12px;font-weight:600;color:var(--ink);paddi
 @media (min-width: 701px){ #hdrtoggle{display:none} }
 /* ---- first-visit intro tour ---- */
 #intro{position:fixed;inset:0;background:rgba(21,25,28,.55);display:none;align-items:center;justify-content:center;z-index:70;padding:18px}
-#intro .icard{background:var(--panel);color:var(--ink);border:1px solid var(--rule);border-radius:16px;max-width:580px;width:100%;max-height:88vh;overflow:auto;padding:30px 34px;box-shadow:0 12px 40px rgba(0,0,0,.35);position:relative}
+#intro .icard{background:var(--panel);color:var(--ink);border:1px solid var(--rule);border-radius:16px;max-width:580px;width:100%;max-height:88vh;max-height:86dvh;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:30px 34px;box-shadow:0 12px 40px rgba(0,0,0,.35);position:relative}
 #intro .pclose{position:absolute;top:12px;right:16px;font-size:26px;line-height:1;cursor:pointer;color:var(--ink-soft);background:none;border:none;padding:4px 8px}
 #intro .pclose:hover{color:var(--ink)}
 #intro h2{font-family:'EB Garamond',serif;font-size:27px;font-weight:600;margin-bottom:16px;padding-right:30px}
@@ -96,7 +96,7 @@ header button{font:inherit;font-size:12px;font-weight:600;color:var(--ink);paddi
 #introgo{margin-top:14px;width:100%;font-weight:500;padding:10px;font-size:13px;opacity:.75}
 #introgo:hover{opacity:1}
 @media (prefers-reduced-motion: reduce){ #intro *{animation:none !important} }
-#hdrtoggle{margin-left:auto;border:none;background:transparent;font-size:13px;opacity:.55;padding:4px 8px;cursor:pointer}
+#hdrtoggle{margin-left:auto;border:1px solid var(--rule);background:var(--panel);color:var(--ink);font-size:20px;line-height:1;opacity:.85;padding:10px 16px;min-width:48px;min-height:44px;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 #hdrtoggle:hover{opacity:1}
 header.hmin > :not(h1):not(#hdrtoggle){display:none !important}
 header.hmin{padding-top:6px;padding-bottom:6px}
@@ -262,7 +262,16 @@ html.dark #lock .err{color:#EF9A9A}
   /* --- mobile rules for the 2026 additions --- */
   #introsearch{font-size:16px;padding:12px 13px}   /* 16px stops iOS auto-zoom — this box is the first thing people see */
   #introfind{padding:12px 16px}
-  #intro .icard{padding:22px 18px;border-radius:14px}
+  #intro{padding:8px}
+  #intro .icard{padding:20px 16px;border-radius:14px;max-height:92dvh}
+  #intro h2{font-size:20px;line-height:1.2}
+  .irow{gap:12px;margin:11px 0}
+  .ianim{width:72px;height:48px;border-radius:8px}
+  .itxt{font-size:12.5px;line-height:1.45}
+  #introgo{margin-top:10px;padding:12px}
+  #hdrtoggle{font-size:22px;padding:10px 18px;opacity:1}
+  #profile{padding:8px}
+  #profile .pcard{max-height:92dvh;padding:20px 16px}
   #intro .ihr{margin:12px 0 10px}
   #lb{padding:10px}
   #lb img{width:96vw;max-height:86vh}
