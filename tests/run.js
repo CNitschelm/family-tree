@@ -341,6 +341,158 @@ const heights = allNodes.map(n => {
 ok(Math.max(...heights) === 90, "uniform height source = 90px (two-marriage cards)");
 ok(new Set(allNodes.map(n => n.gen)).size >= 13, "generations computed");
 
+/* ---------- 12. Map view ---------- */
+section("Map view");
+ok(/const MAPGEO = \{/.test(html), "basemap geometry present in the plaintext layer");
+ok(html.includes('id="mapview"') && html.includes('id="mapcanvas"'), "map view markup present");
+ok(!/\bMAPGEO\b[\s\S]{0,400}?(Nitschelm|Gunsbach|Amboy)/.test(html),
+  "basemap block carries no family place names");
+{
+  /* the encoder is delta + zig-zag base64 varints; decode it here the same way
+     the page does, so a change to either side fails loudly */
+  const IDX = {}; "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+    .split("").forEach((c, i) => IDX[c] = i);
+  const geoSrc = html.match(/const MAPGEO = \{[\s\S]*?\n\};/)[0];
+  const MAPGEO = vm.runInNewContext(geoSrc + " MAPGEO");
+  const decode = str => str.split("|").map(r => {
+    const pts = []; let i = 0, x = 0, y = 0, c, v, sh;
+    while (i < r.length) {
+      v = 0; sh = 0; do { c = IDX[r[i++]]; v |= (c & 31) << sh; sh += 5; } while (c & 32);
+      x += (v & 1) ? -((v + 1) >>> 1) : (v >>> 1);
+      v = 0; sh = 0; do { c = IDX[r[i++]]; v |= (c & 31) << sh; sh += 5; } while (c & 32);
+      y += (v & 1) ? -((v + 1) >>> 1) : (v >>> 1);
+      pts.push([x / 1000, y / 1000]);
+    }
+    return pts;
+  });
+  const land = decode(MAPGEO.land);
+  const all = land.flat();
+  ok(land.length > 200, "basemap decodes to " + land.length + " land rings");
+  ok(all.every(([lo, la]) => lo >= -180.5 && lo <= 180.5 && la >= -90 && la <= 90),
+    "every decoded coordinate is a real lon/lat");
+  ok(decode(MAPGEO.usst).length > 20, "US state borders decode");
+
+  /* the reference place-name layer: what keeps a zoomed-in view from being blank */
+  const MAPLBL = vm.runInNewContext(html.match(/const MAPLBL = "[\s\S]*?";/)[0] + " MAPLBL");
+  const recs = MAPLBL.split("\t");
+  ok(recs.length > 3000, "reference place labels present (" + recs.length + ")");
+  let lx = 0, ly = 0; const pts = [];
+  for (const rec of recs) {
+    let i = 1, v, sh, c;
+    v = 0; sh = 0; do { c = IDX[rec[i++]]; v |= (c & 31) << sh; sh += 5; } while (c & 32);
+    lx += (v & 1) ? -((v + 1) >>> 1) : (v >>> 1);
+    v = 0; sh = 0; do { c = IDX[rec[i++]]; v |= (c & 31) << sh; sh += 5; } while (c & 32);
+    ly += (v & 1) ? -((v + 1) >>> 1) : (v >>> 1);
+    const parts = rec.slice(i).split("~");
+    pts.push({ r: +rec[0], lon: lx / 1000, lat: ly / 1000, n: parts[1], cc: parts[2] });
+  }
+  ok(pts.every(p => p.r >= 0 && p.r <= 6 && p.n && p.cc &&
+    Math.abs(p.lat) <= 90 && Math.abs(p.lon) <= 180), "every reference label decodes to a real point");
+  const near = (lo, la, d) => pts.filter(p => Math.abs(p.lon - lo) < d && Math.abs(p.lat - la) < d).length;
+  ok(near(7.17, 48.03, 0.4) >= 4, "the Munster valley has towns to orient by");
+  ok(near(-122.44, 45.92, 0.6) >= 4, "the Amboy country has towns to orient by");
+  ok(near(-88.84, 41.35, 0.6) >= 4, "the Ottawa country has towns to orient by");
+  ok(near(-70.76, 43.07, 0.5) >= 4, "the Portsmouth country has towns to orient by");
+  ok(!/Nitschelm|Schweitzer/.test(MAPLBL), "reference labels carry no family names");
+}
+
+/* gazetteer + place trails live INSIDE the ciphertext, like every other fact */
+const DATA = get("DATA");
+const GAZ = DATA.gaz || {};
+const gazKeys = Object.keys(GAZ);
+ok(gazKeys.length > 100, "gazetteer has " + gazKeys.length + " places");
+ok(gazKeys.every(k => {
+  const g = GAZ[k];
+  return g && typeof g.lat === "number" && typeof g.lon === "number" &&
+    Math.abs(g.lat) <= 90 && Math.abs(g.lon) <= 180;
+}), "every gazetteer entry has valid coordinates");
+ok(gazKeys.every(k => GAZ[k].n && GAZ[k].n_fr), "gazetteer names bilingual");
+ok(gazKeys.every(k => GAZ[k].c !== undefined && GAZ[k].c_fr !== undefined),
+  "gazetteer contexts bilingual");
+ok(!/gaz:\s*\{|"lat":/.test(html.replace(/const ENC = \{[\s\S]*?\};/, "")),
+  "no gazetteer leaks outside the ciphertext");
+
+const placed = allNodes.filter(n => (n.p.pl || []).length);
+const rows = placed.flatMap(n => n.p.pl);
+ok(placed.length >= 90, placed.length + " people carry a place trail");
+ok(rows.length >= 380, rows.length + " place-events recorded");
+{ /* the presence audit: a pin must be somewhere the PERSON was, not merely a
+     place associated with them. These specific rows were removed after review
+     and must not creep back in. */
+  const banned = ["73:work:newmexico", "131:arrival:valdemunster", "11:work:bellecour",
+    "11:work:perrache", "7:residence:montbeliard", "10:work:strietmuhle", "65:death:keenenh",
+    "102:work:pfaffenhoffen", "148:arrival:chicago", "150:arrival:chicago",
+    "57:residence:valdemunster", "97:residence:strasbourg", "62:residence:shrewsbury",
+    "112:emigration:lehavre", "114:work:washington", "155:work:munster"];
+  const held = new Set();
+  allNodes.forEach((n, i) => (n.p.pl || []).forEach(r => held.add(i + ":" + r.t + ":" + r.k)));
+  const back = banned.filter(b => held.has(b));
+  ok(!back.length, "pins removed by the presence audit have not returned" + (back.length ? " — " + back.join(", ") : ""));
+}
+ok(rows.every(r => GAZ[r.k]), "every place-event resolves to a gazetteer entry");
+ok(rows.every(r => ["doc", "inf", "apx"].includes(r.c)), "every place-event states its certainty");
+ok(rows.every(r => /^(birth|baptism|marriage|residence|emigration|arrival|military|work|study|death|burial)$/.test(r.t)),
+  "every place-event has a known type");
+ok(rows.every(r => r.y == null || (r.y > 1400 && r.y < 2100)), "place-event years are plausible");
+ok(rows.every(r => r.y2 == null || r.y == null || r.y2 >= r.y), "place-event spans never run backwards");
+ok(placed.every(n => n.p.pl.every((r, i, a) => i === 0 || (r.y == null || a[i-1].y == null || r.y >= a[i-1].y)),
+  ), "place trails are in chronological order");
+ok(rows.every(r => !r.w || r.w_fr), "pin notes bilingual");
+{ /* An undated row used to be ordered by its EVENT TYPE, which put one man's
+     current city second in his trail, ahead of two universities he left years
+     earlier. Trails must read as a life: nothing after the death but a burial,
+     and no person may end up with a trail that is entirely undated. */
+  const late = [];
+  placed.forEach(n => {
+    const pl = n.p.pl, di = pl.findIndex(r => r.t === "death");
+    if (di < 0) return;
+    /* a second death row is a disclosed alternative reading, not a drift */
+    pl.slice(di + 1).forEach(r => {
+      if (r.t !== "burial" && r.t !== "death" && !r.x) late.push(n.p.name + ": " + r.t + "@" + r.k);
+    });
+  });
+  ok(!late.length, "no place-event is ordered after the person's death" + (late.length ? " — " + late.join(", ") : ""));
+  const undated = placed.filter(n => n.p.pl.length > 1 && n.p.pl.every(r => r.y == null));
+  ok(!undated.length, "no multi-stop trail is left entirely undated" +
+    (undated.length ? " — " + undated.map(n => n.p.name).join(", ") : ""));
+  /* attending a school is "study"; being paid by one is "work" */
+  const named = k => (GAZ[k].n + " " + GAZ[k].c).toLowerCase();
+  const uni = rows.filter(r => /universit|institute of technology|dartmouth|northwestern/.test(named(r.k)));
+  ok(uni.length && uni.every(r => ["study", "work"].includes(r.t)),
+    uni.length + " university pins, each typed study or work");
+}
+ok(rows.filter(r => r.c !== "doc" || r.x).every(r => r.w),
+  "every uncertain or conflicting pin explains itself");
+ok(allNodes.every(n => !n.p.mn || n.p.mn_fr), "person map notes bilingual");
+{ /* the default view shows one pin per person, at their birthplace, so every
+     mapped person must resolve to exactly one "home" row */
+  const home = n => {
+    const r = n.p.pl || [];
+    return r.find(x => x.t === "birth" && !x.x) || r.find(x => x.t === "baptism" && !x.x)
+        || r.find(x => !x.x) || r[0] || null;
+  };
+  ok(placed.every(n => home(n)), "every mapped person resolves to one home place");
+  const withBirth = placed.filter(n => ["birth","baptism"].includes(home(n).t)).length;
+  ok(withBirth >= 80, withBirth + " of " + placed.length + " home pins are an actual birth or baptism");
+  const homes = new Set(placed.map(n => home(n).k));
+  ok(homes.size >= 25, "birthplaces span " + homes.size + " distinct locations");
+}
+{
+  const perType = {};
+  rows.forEach(r => perType[r.t] = (perType[r.t] || 0) + 1);
+  ok(Object.keys(perType).length >= 8, "place-events span " + Object.keys(perType).length + " event types");
+  const conflicts = allNodes.filter(n => (n.p.pl || []).some(r => r.x));
+  ok(conflicts.length >= 1, conflicts.length + " people disclose a conflicting place rather than picking one");
+}
+{ /* the map's i18n keys must exist in both languages, like every other string */
+  const need = ["view_tree", "view_map", "map_nodate", "map_alt", "map_c_doc", "map_c_inf", "map_c_apx",
+                "map_e_birth", "map_e_death", "map_e_burial", "map_e_study", "map_legend", "profile_viewmap",
+                "map_stopof", "map_of", "map_c_n", "map_c_se", "map_c_nw",
+                "map_living", "map_deceased", "map_est", "map_none",
+                "map_births", "map_nobirth"];
+  ok(need.every(k => I18N.en[k] && I18N.fr[k]), "map strings present in en and fr");
+}
+
 report();
 
 })().catch(e => { console.error("FATAL: " + (e && e.message)); process.exit(1); });
