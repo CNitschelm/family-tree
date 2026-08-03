@@ -109,6 +109,14 @@ header.hmin h1{font-size:15px}
 .jumps button.b-schw.on{background:var(--schw);color:#fff}
 #hint{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);background:rgba(31,42,51,.88);color:#fff;font-size:12px;padding:7px 14px;border-radius:16px;cursor:pointer;transition:opacity .4s;z-index:5;max-width:90%;text-align:center}
 #stage{flex:1;position:relative;overflow:hidden;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
+/* interface chrome is not text: a double-tap to zoom must never leave a button
+   glyph highlighted. Bios, tooltips and the detail panel stay selectable so
+   names and dates can still be copied. */
+header, header *, #viewtoggle, #mapbar, #mapbar *, #mapctl, #zoomctl, #ruler,
+#maplegend, #mapwhere, #mappins, #mappins *, #sync, .jumps, button{
+  user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;
+}
+#profile .pcard, #mapsheet .sb, #tip, #lb{ user-select:text; -webkit-user-select:text }
 #stage.dragging{cursor:grabbing}
 svg{position:absolute;inset:0;width:100%;height:100%;z-index:0}
 #cards{position:absolute;left:0;top:0;width:0;height:0;transform-origin:0 0;z-index:1;touch-action:none}
@@ -2371,7 +2379,20 @@ function mEnd(e){
      mapEl and never to the marker — resolve the tap here, as the tree does */
   if(!tap) return;
   const hit = tapped && tapped.closest ? tapped.closest(".pin") : null;
-  if(hit && hit._onTap) hit._onTap(); else closeSheet();
+  if(hit && hit._onTap){ mapEl._lastTap = null; hit._onTap(); return; }
+  /* double-tap empty map = zoom in at that point, matching the tree */
+  const now = Date.now(), lt = mapEl._lastTap;
+  if(COARSE && lt && now - lt.t < 320 && Math.hypot(e.clientX - lt.x, e.clientY - lt.y) < 34){
+    mapEl._lastTap = null;
+    const r = mapEl.getBoundingClientRect();
+    const mx = e.clientX - r.left, my = e.clientY - r.top;
+    const ns = clampMS(MS * 1.7), rf = ns / MS;
+    MTX = mx - (mx - MTX) * rf; MTY = my - (my - MTY) * rf; MS = ns;
+    mapApply(); reclusterSoon();
+    return;
+  }
+  mapEl._lastTap = { t: now, x: e.clientX, y: e.clientY };
+  closeSheet();
 }
 mapEl.addEventListener("pointerup", mEnd);
 mapEl.addEventListener("pointercancel", mEnd);
