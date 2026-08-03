@@ -379,6 +379,7 @@ html.dark{--sea:#121A1F; --land:#222A2E; --coast:#3D474C; --bord:#39434A; --stat
   z-index:5;display:none;flex-direction:column;overflow:hidden;
 }
 #mapsheet.on{display:flex}
+#mapsheet .grab{display:none}
 #mapsheet .sh{padding:12px 14px 8px;border-bottom:1px solid var(--rule);position:relative;flex:none}
 #mapsheet .sh h3{font-family:'EB Garamond',serif;font-size:17px;font-weight:600;margin:0;padding-right:26px;text-transform:none;letter-spacing:0;color:var(--ink)}
 #mapsheet .sh .sub{font-size:11.5px;color:var(--ink-soft);margin-top:2px}
@@ -440,7 +441,18 @@ html.dark{--sea:#121A1F; --land:#222A2E; --coast:#3D474C; --bord:#39434A; --stat
   #mapbar .grp{padding:2px 3px}
   #mapsheet .sh h3{font-size:15px;line-height:1.25}
   #mapbar .grp{flex-wrap:nowrap}
-  #mapsheet{left:6px;right:6px;width:auto;bottom:6px;max-height:58%}
+  #mapsheet{left:6px;right:6px;width:auto;bottom:6px;max-height:76%;transition:max-height .18s ease}
+  #mapsheet.peek{max-height:min(38%,270px)}
+  #mapsheet .grab{
+    display:block;position:absolute;top:0;left:0;right:0;height:22px;border:none;background:none;
+    cursor:grab;padding:0;touch-action:none;z-index:2;
+  }
+  #mapsheet .grab::before{
+    content:"";position:absolute;top:7px;left:50%;transform:translateX(-50%);
+    width:38px;height:4px;border-radius:2px;background:var(--rule);
+  }
+  #mapsheet .sh{padding-top:20px}
+  #mapsheet .sh h3{padding-right:34px}
   #mapctl{top:56px;right:8px;bottom:auto;flex-direction:column}
   #maplegend{display:none}
   #mapwhere{bottom:8px;font-size:11px;padding:3px 10px;max-width:94%}
@@ -457,7 +469,7 @@ html.dark{--sea:#121A1F; --land:#222A2E; --coast:#3D474C; --bord:#39434A; --stat
   #mapbar{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;left:0;right:0;padding:0 8px 3px}
   #mapbar .glbl{display:none}
   #mapbar .grp{flex-wrap:nowrap;padding:2px 3px}
-  #mapsheet{max-height:calc(100% - 58px);width:min(330px,54%);bottom:8px;left:8px}
+  #mapsheet{max-height:min(72%,300px);width:min(320px,48%);bottom:8px;left:8px}
   #maplegend{display:none}
   #mapctl{top:52px;right:8px;bottom:auto}
   #mapctl button{width:34px;height:34px;font-size:17px}
@@ -2247,18 +2259,25 @@ function clampMS(v){ return Math.min(MS_MAX, Math.max(MS_MIN(), v)); }
 function fitTo(pts, pad){
   if(!pts.length) return;
   const w = mapEl.clientWidth, h = mapEl.clientHeight;
-  const P = pad === undefined ? Math.max(26, Math.min(70, w*0.075)) : Math.max(26, Math.min(pad, w*0.14));
+  const P = pad === undefined ? Math.max(26, Math.min(70, w*0.075)) : Math.max(26, Math.min(pad, w*0.20));
   let x0=1, x1=0, y0=1, y1=0;
   pts.forEach(([lon,lat])=>{
     const a=prjX(lon), b=prjY(lat);
     x0=Math.min(x0,a); x1=Math.max(x1,a); y0=Math.min(y0,b); y1=Math.max(y1,b);
   });
   const dx = Math.max(x1-x0, 1e-5), dy = Math.max(y1-y0, 1e-5);
-  const sheetW = (w >= 760 && sheetEl.classList.contains("on")) ? sheetEl.offsetWidth + 18 : 0;
+  /* On a wide screen the sheet is a side panel and steals width; on a phone it
+     is docked across the bottom and steals height. Either way the journey has
+     to be fitted into what is left, or it is drawn underneath the thing
+     describing it. */
+  const on = sheetEl.classList.contains("on");
+  const wide = w >= 760;
+  const sheetW = (on && wide) ? sheetEl.offsetWidth + 18 : 0;
+  const sheetH = (on && !wide) ? Math.min(sheetEl.offsetHeight + 12, h * 0.55) : 0;
   const barH = 46;
-  MS = clampMS(Math.min((w-P*2-sheetW)/dx, (h-P*2-barH)/dy));
+  MS = clampMS(Math.min((w-P*2-sheetW)/dx, (h-P*2-barH-sheetH)/dy));
   MTX = (w+sheetW)/2 - (x0+x1)/2*MS;
-  MTY = (h+barH)/2 - (y0+y1)/2*MS;
+  MTY = (h+barH-sheetH)/2 - (y0+y1)/2*MS;
   mapApply();
 }
 /* The family's places run from Honolulu to Bangkok, but all but a handful sit
@@ -2386,10 +2405,33 @@ function exitPerson(){
 }
 function openSheet(title, sub, body){
   sheetEl.innerHTML =
-    `<div class="sh"><button class="shx" aria-label="Close">×</button><h3>${title}</h3>${sub?`<div class="sub">${sub}</div>`:""}</div>` +
+    `<div class="sh"><button class="grab" aria-label="Expand"></button>` +
+    `<button class="shx" aria-label="Close">×</button><h3>${title}</h3>${sub?`<div class="sub">${sub}</div>`:""}</div>` +
     `<div class="sb">${body}</div>`;
   sheetEl.classList.add("on");
+  /* on a phone it opens at a peek height so the map stays usable; the grabber
+     pulls it up and pushes it back down */
+  sheetEl.classList.toggle("peek", window.innerWidth < 760);
   sheetEl.querySelector(".shx").onclick = ()=>{ if(selPerson) exitPerson(); else closeSheet(); };
+  const grab = sheetEl.querySelector(".grab");
+  if(grab){
+    let gy = null;
+    const setPeek = v => {
+      if(sheetEl.classList.contains("peek") === v) return;
+      sheetEl.classList.toggle("peek", v);
+      if(selPerson && journey.length) requestAnimationFrame(()=>{
+        fitTo(stops.map(st=>[gp(st.k).lon, gp(st.k).lat]), 70);
+        buildPins();
+      });
+    };
+    grab.onclick = ()=> setPeek(!sheetEl.classList.contains("peek"));
+    grab.addEventListener("pointerdown", e=>{ gy = e.clientY; e.stopPropagation(); });
+    grab.addEventListener("pointerup", e=>{
+      if(gy === null) return;
+      const dy = e.clientY - gy; gy = null;
+      if(Math.abs(dy) > 18) setPeek(dy > 0);   /* drag down = shrink, up = grow */
+    });
+  }
 }
 function fmtWhen(r){
   if(r.d) return esc(r.d);
