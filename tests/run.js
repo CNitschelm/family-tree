@@ -200,8 +200,8 @@ ok(allNodes.some(n => n.p.years === "1729–1804") && !allNodes.some(n => n.p.ye
   "base carries the corrected West keystone years (1729–1804, no 1734)");
 ok(!allNodes.some(n => n.p.years === "1713–?" && n.p.anchor === "west"),
   "the superseded 1713 bridge person is gone from the corrected base");
-ok(allNodes.filter(n => n.p._g26).length === 2 && allNodes.filter(n => n.p._n26).length === 50,
-  "provenance tags: 2 grafted-chain people, 50 post-original additions (messages + register children)");
+ok(allNodes.filter(n => n.p._g26).length === 2 && allNodes.filter(n => n.p._n26).length === 53,
+  "provenance tags: 2 grafted-chain people, 53 post-original additions (messages + register children)");
 ok(allNodes.every(n => n.p.g === "f" || n.p.g === "m"),
   "every person carries a sex field (genogram avatar shapes)");
 /* original-document images shown inside bios: embedded, captioned and transcribed in both languages */
@@ -419,13 +419,27 @@ ok(rows.length >= 380, rows.length + " place-events recorded");
 { /* the presence audit: a pin must be somewhere the PERSON was, not merely a
      place associated with them. These specific rows were removed after review
      and must not creep back in. */
-  const banned = ["73:work:newmexico", "131:arrival:valdemunster", "11:work:bellecour",
-    "11:work:perrache", "7:residence:montbeliard", "10:work:strietmuhle", "65:death:keenenh",
-    "102:work:pfaffenhoffen", "148:arrival:chicago", "150:arrival:chicago",
-    "57:residence:valdemunster", "97:residence:strasbourg", "62:residence:shrewsbury",
-    "112:emigration:lehavre", "114:work:washington", "155:work:munster"];
+  /* keyed by name+years, not by node index: adding a person must not silently
+     re-point a banned entry at somebody else's legitimate pin. */
+  const banned = [
+    "Charlie James Nitschelm|b. 1998:work:newmexico",
+    "Aubrey Nitschelm|:arrival:valdemunster",
+    "Frédéric (Fritz) Nitschelm|1876–1953:work:bellecour",
+    "Frédéric (Fritz) Nitschelm|1876–1953:work:perrache",
+    "Jean Martin Nitschelm|1764–1847:residence:montbeliard",
+    "Frédéric (Fritz) Nitschelm|1840–1914:work:strietmuhle",
+    "Meylert M. Armstrong IV|1962–2008:death:keenenh",
+    "Johann Ludwig Schweitzer|1759–1827:work:pfaffenhoffen",
+    "David West|:arrival:chicago",
+    "Jean Martin Nitschelm|1756–1786:residence:valdemunster",
+    "Jean Martin Nitschelm|1808–1899:residence:strasbourg",
+    "Adrian (Edwin?) Nitschelm|1870–1949:residence:shrewsbury",
+    "Jean Georges Nitschelm|1729–1804:emigration:lehavre",
+    "Jean Georges Nitschelm|1792–1858:work:washington",
+    "Georges Nitschelm|1875–?:work:munster"];
   const held = new Set();
-  allNodes.forEach((n, i) => (n.p.pl || []).forEach(r => held.add(i + ":" + r.t + ":" + r.k)));
+  allNodes.forEach(n => (n.p.pl || []).forEach(r =>
+    held.add(n.p.name + "|" + (n.p.years || "") + ":" + r.t + ":" + r.k)));
   const back = banned.filter(b => held.has(b));
   ok(!back.length, "pins removed by the presence audit have not returned" + (back.length ? " — " + back.join(", ") : ""));
 }
