@@ -166,7 +166,10 @@ const creator = allNodes.find(n => /creator of this website/i.test(n.p.note || "
 ok(!!creator, "site-creator credit exists");
 ok(creator && /^data:image\/(jpeg|png|webp);base64,/.test(creator.p.img || ""), "creator's photo embedded as data URI");
 ok(allNodes.every(n => !n.p.img || /^data:image\//.test(n.p.img)), "all photos embedded (none reference repo files)");
-ok(allNodes.some(n => /circus/i.test(n.p.note || "")), "family lore preserved");
+/* the circus was withdrawn from the tooltip in 2026 as unsupported, but the story itself
+   is kept in the bio, told as a story — lore is preserved, it is just no longer asserted */
+ok(allNodes.some(n => ((n.p.profile || {}).bio || []).some(b => /circus/i.test(b))),
+  "family lore preserved (as lore, in the bio, not as fact in a tooltip)");
 ok(!allNodes.some(n => n.p.tag === "you"), "no 'you' tag (site is for the whole family)");
 /* profiles: bio pages carried inside the encrypted payload */
 const profiled = allNodes.filter(n => n.p.profile);
