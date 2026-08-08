@@ -35,6 +35,19 @@ node tests/run.js                    # must be all-green before deploy
 ```
 Deploy = GitHub Desktop: Fetch → commit → Ctrl+P push. Verify with the GitHub MCP `list_commits`.
 
+### Deploying is not done when the push succeeds
+A green `list_commits` only proves the commit reached `main`. **Always verify the live site actually changed.** Fetch `https://cnitschelm.github.io/family-tree/` and compare `index.html`'s byte length and payload head against the local file. Three commits once sat undeployed for a day while the site quietly served an old payload and every local check was green.
+
+**If the site is behind, do NOT rewrite, recompress or re-encrypt anything.** Read the failure first:
+
+| Symptom in the pages run | Meaning | Fix |
+|---|---|---|
+| `deploy`: "The job was not acquired by Runner of type hosted", "Internal server error" | GitHub's runners, not our file | **Actions → open the pages run → Re-run jobs → Re-run all jobs.** Takes ~40s. |
+| Run status `Cancelled`, "a higher priority waiting request … exists" | queue confusion during an incident | same re-run |
+| `build` step itself slow then `Timeout reached, aborting!` | genuinely too big | then, and only then, look at payload size |
+
+Check https://www.githubstatus.com/api/v2/summary.json **before** theorising. On 6 Aug 2026 I blamed file size and recompressed 62 images; the build was never the problem — the deploy runner was, and a re-run fixed it in forty seconds.
+
 ## Data shape (inside the payload)
 - Node: `{name, years, note, note_fr, src[], profile{}, unions[{s, sy, n, n_fr, c[]}], g:"m"|"f", img}`
 - Card source: `{l, u?, q?}` — `q` is a **verbatim** family quote; labels for family records must be specific: `"Email to Cory from <name>, <D Mon YYYY>"`.

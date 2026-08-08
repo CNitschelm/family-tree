@@ -20,3 +20,32 @@ NOT-ADDED-PEOPLE.md
 CHANGES.md
 AUDIT-LOG.txt
 CORY-LINE-RESEARCH.md
+
+# 7 Aug 2026 — remediation working files (contain names)
+AUDIT-2026-08-07-COLD-REVIEW.md
+REMEDIATION-PLAN.md
+MASTER-DEFECTS-*.md
+DIFF-vs-published.md
+CHANGE-LOG-*.md
+DECISIONS.md
+PHASE-1-REPORT.md
+patches/
+patches-*.tar.gz
+published-data.new
+checks/findings.json
+checks/claim-index.json
+_to_delete/
+
+# 7 Aug 2026 wave 3 — more working files that carry names
+PHASE-3-SEAMS.md
+PHASE-5-REPORT.md
+SOURCE-FACTS.md
+AUDIT-WAVE2-FINDINGS.md
+WRITER-BRIEF.md
+AUDITOR-BRIEF.md
+DIFF-slice-*.md
+slice-*-cards.txt
+phase4-audit-kit.tar.gz
+checks-*.tar.gz
+checks/*.json
+AUDIT-PHASE4-FINDINGS.md
