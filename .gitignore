@@ -49,3 +49,9 @@ phase4-audit-kit.tar.gz
 checks-*.tar.gz
 checks/*.json
 AUDIT-PHASE4-FINDINGS.md
+VALIDATE-PROMPT.md
+GRADE-2026-08-08.md
+SYSTEM-PROPOSAL.md
+STEWARD-FINDINGS.md
+sources.tar.gz
+sources/*.md
