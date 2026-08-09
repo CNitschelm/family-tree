@@ -55,3 +55,8 @@ SYSTEM-PROPOSAL.md
 STEWARD-FINDINGS.md
 sources.tar.gz
 sources/*.md
+SOURCE-ARCHIVE-PLAN.md
+source-archive-kit.tar.gz
+sources/MANIFEST.json
+archive/
+sources/urls.tsv
