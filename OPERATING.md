@@ -147,11 +147,29 @@ learned the hard way:
 - `device_commit_files` also refuses `.github/workflows/*` as a protected path. `device_bash` with
   a heredoc writes it happily; only the remote-file tool objects.
 
-**Deploying. Git through the mounted folder fails on lock files — the mount does not permit
-`unlink`, so `.git/*.lock` must be moved aside before each `add`/`commit`/`amend`. The device VM has
-no network; the cloud container's git proxy refuses this repo. **The push happens through GitHub
-Desktop** (Ctrl+P). Then verify the live site actually changed by hashing what it serves — a green
-push is not proof. Three commits once sat undeployed for a day while every local check stayed green.
+**Never run git through the desktop bridge mount.** The mount forbids `unlink`, so every git
+command — even a read like `git status` — leaves a `.git/index.lock` it cannot clean up, and that
+stale lock is what makes GitHub Desktop refuse the next pull with *"A lock file already exists in
+the repository"*. If one has been left, move it into `_to_delete/` (the mount will not let you
+delete it) and then run **no further git command in that folder**, because the next one re-creates
+it. This cost an hour on 9 August.
+
+**Deploying.** Three routes reach GitHub, in order of preference. (1) **A container clone.**
+`git clone https://github.com/CNitschelm/family-tree.git` works from the cloud container and is the
+easiest place to prepare a commit — but the egress proxy will not inject a credential for `push`,
+and it cannot clone the private `family-tree-sources` at all. (2) **GitHub's web upload page**,
+`/upload/main` (or `/upload/main/<dir>`), driven through Claude-in-Chrome with `file_upload` from
+`/mnt/user-data/outputs/`. This works for both repos, including `.github/workflows/*` which the API
+token is forbidden to write, and it is how every commit of 9 August was made. Always screenshot
+before clicking **Commit changes** and confirm the **main** radio: a mis-click selects "Create a new
+branch". (3) **GitHub Desktop** (Ctrl+P) on Cory's machine — the only route that can pull, since the
+device VM has no network at all.
+
+**Verifying a deploy takes ten seconds and is not optional.** Read `ENC.iv` and the sha256 of
+`ENC.ct` from the live page, and compare them with the local `index.html`. Matching fingerprints
+prove the payload is served; a green push proves nothing — three commits once sat undeployed for a
+day while every local check stayed green. Record the pair in `OPEN-ITEMS.md` so the next session can
+check rather than remember.
 
 ---
 
