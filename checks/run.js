@@ -579,13 +579,16 @@ for (const _p of people) {
   (_p.node.unions || []).forEach(u => push(u.s));
 }
 
+// Each pair must be a mirror. Where one half matched a word the other half did not — EN
+// lacking 'impossible' while FR had it, FR carrying 'approfondi' with no EN counterpart — the
+// check reported a parity failure that was really a gap in this table.
 const INTENSIFIERS = [
-  { k: 'exhaustive',  en: /\bexhaustive(?:ly)?\b/i,            fr: /\bexhaustif|\bexhaustive|\bapprofondi|\bsyst[ée]matique/i },
+  { k: 'exhaustive',  en: /\bexhaustive(?:ly)?\b|\bsystematic(?:ally)?\b|\bthorough(?:ly)?\b/i, fr: /\bexhaustif|\bexhaustive|\bapprofondi|\bsyst[ée]matique/i },
   { k: 'independent', en: /\bindependent(?:ly)?\b/i,           fr: /\bind[ée]pendant/i },
   { k: 'only/single', en: /\b(?:a single|only one|the only|sole|exactly one|just one|but one|a lone|one and only)\b/i, fr: /\b(?:un seul|une seule|le seul|la seule|seulement|qu'un seul|qu'une seule|unique)\b/i },
   { k: 'never',       en: /\bnever\b/i,                        fr: /\bjamais\b/i },
-  { k: 'cannot',      en: /\bcannot\b|\bcan't\b/i,            fr: /\bne peut\b|\bimpossible\b/i },
-  { k: 'proved',      en: /\bprove[dn]?\b/i,                    fr: /\bprouv|\bd[ée]montr/i },
+  { k: 'cannot',      en: /\bcannot\b|\bcan't\b|\bimpossible\b/i, fr: /\bne peut\b|\bne peuvent\b|\bne saurait\b|\bimpossible\b/i },
+  { k: 'proved',      en: /\bprove[dn]?\b|\bdemonstrat(?:e[ds]?|ing)\b/i, fr: /\bprouv|\bd[ée]montr/i },
   { k: 'documented',  en: /\bdocumented\b/i,                    fr: /\bdocument[ée]/i }
 ];
 

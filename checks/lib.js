@@ -100,7 +100,11 @@ function sentences(s) {
   const prot = t
     .replace(/\b([A-Z])\./g, '$1')
     .replace(/\b(Mr|Mrs|Ms|Dr|St|Ste|Jr|Sr|vol|no|p|pp|c|ca|approx|Rev|Co|Inc|etc|cf|al|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\./gi, '$1');
-  const parts = prot.split(/(?<=[.!?])["')\]]?\s+(?=[A-ZÀ-Ý"'(—])/);
+  // The FR half of this site is punctuated with guillemets. They were missing from both
+  // character classes, so a sentence ending '… fausse. »' never closed and one beginning
+  // '« Germany » pour…' never opened: every French field that quotes under-counted, and the
+  // EN/FR sentence-parity check reported the difference as a translation gap. It was not.
+  const parts = prot.split(/(?<=[.!?])\s*["'»)\]]?\s+(?=[A-ZÀ-Ý"'«(—])/);
   return parts.map(x => x.replace(//g, '.').trim()).filter(Boolean);
 }
 
