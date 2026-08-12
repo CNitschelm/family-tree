@@ -510,6 +510,44 @@ ok(allNodes.every(n => !n.p.mn || n.p.mn_fr), "person map notes bilingual");
   ok(need.every(k => I18N.en[k] && I18N.fr[k]), "map strings present in en and fr");
 }
 
+/* ---------- 13. Commit hygiene ----------
+ * The repo is PUBLIC: anyone can read commit messages without the password,
+ * and GitHub Actions run titles republish them. On 12 Aug 2026 the entire
+ * history had to be rewritten because messages carried names and quotes.
+ * This scans commits not yet on origin/main against the payload's own name
+ * index. It prints the offending words only outside CI (CI logs are public). */
+section("Commit hygiene");
+{
+  let msgs = null;
+  try {
+    const cp = require("child_process");
+    const out = cp.execFileSync("git",
+      ["log", "--format=%h%x1f%B%x1e", "origin/main..HEAD"],
+      { cwd: ROOT, env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" }, stdio: ["ignore", "pipe", "ignore"] })
+      .toString("utf8");
+    msgs = out.split("\x1e").map(s => s.trim()).filter(Boolean)
+      .map(s => { const i = s.indexOf("\x1f"); return { sha: s.slice(0, i), body: s.slice(i + 1) }; });
+  } catch (_) { /* no git, no origin, or detached CI checkout — nothing to scan */ }
+  if (msgs === null || !msgs.length) {
+    console.log("  --  no unpushed commits to scan");
+  } else {
+    const nameTok = new Set();
+    const addTok = s => String(s || "").split(/[^\p{L}]+/u).forEach(w => {
+      if (w.length >= 3) { nameTok.add(w.toLowerCase()); nameTok.add(norm(w)); }
+    });
+    allNodes.forEach(n => { addTok(n.p.name); (n.p.unions || []).forEach(u => addTok(u.s)); });
+    const hits = [];
+    msgs.forEach(m => {
+      const words = m.body.split(/[^\p{L}]+/u).filter(w => w.length >= 3);
+      const bad = [...new Set(words.filter(w => nameTok.has(w.toLowerCase()) || nameTok.has(norm(w))))];
+      if (bad.length) hits.push({ sha: m.sha, bad });
+    });
+    ok(!hits.length, "unpushed commit messages carry no person names (" + msgs.length + " scanned)" +
+      (hits.length ? " — " + hits.map(h => h.sha + ": " + h.bad.length + " name token(s)" +
+        (process.env.CI ? "" : " [" + h.bad.join(", ") + "]")).join("; ") : ""));
+  }
+}
+
 report();
 
 })().catch(e => { console.error("FATAL: " + (e && e.message)); process.exit(1); });

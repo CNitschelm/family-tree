@@ -19,12 +19,19 @@ Cory's interest is **depth of coverage and history**, not breadth. Do not add ne
 | `tools/crypt.js` | `decrypt` / `encrypt` the payload. | ✅ |
 | `tools/photo.js` | Embed a card portrait: `node tools/photo.js "<name>" <file> [birthyear]` | ✅ |
 | `OPEN-ITEMS.md` | **Living action list** — read at the start of a session, update at the end. | ❌ (names) |
+| `CHANGE-LOG-COMMITS.md` | Narrative changelog. The story of each change lives here, **not** in commit messages. | ❌ (names) |
 | `bio-research-notes.md` | Research log, newest entry at top. | ❌ (names) |
 | `AUDITOR-NOTES.md` / `AUDIT-PROMPT.md` | For the independent auditor. | ❌ (names) |
 | `evidence/` | Original document crops. | ❌ |
 
 ## Privacy invariant (non-negotiable)
 The repo's **plaintext layer must contain no personal data**. Every name, date and note lives inside the AES-GCM ciphertext. Before any commit: `node tests/run.js` — it fails if PII leaks into the plaintext. Never commit `.password`, `data.json`, `evidence/`, or any research `.md` listed above.
+
+## Commit messages are public — no personal data (rule added 12 Aug 2026)
+The repo is public: anyone can read commit messages without the password, and GitHub Actions run titles republish them. The pre-12-Aug-2026 history was rewritten to scrub messages that carried names and quoted family correspondence; the verbatim originals are archived in `CHANGE-LOG-COMMITS.md`.
+- Every commit message is **one neutral line** describing the mechanical change — "Update site data payload", "Update checks and tooling". No person names, no dates of life, no quotes, no narrative. This applies on **every** push route: GitHub Desktop, `mcp__GitHub__push_files`, and the web upload page all compose messages.
+- The narrative that used to live in commit messages goes in `CHANGE-LOG-COMMITS.md` (gitignored) — append an entry there in the same session that makes the commit, in the same shape: date, files touched, full story.
+- `tests/run.js` fails if an unpushed commit message contains a name from the payload (it prints the words locally, only counts in CI).
 
 ## Standard edit loop
 ```

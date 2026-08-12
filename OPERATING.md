@@ -107,6 +107,11 @@ independence that makes the audit step work.
   Plain provenance is welcome: "the family site gives 1989; the gravestone gives 1988".
 - Never add a person without asking. Never pass `--newsalt`.
 - The repo's plaintext layer carries no personal data. Everything with a name in it is git-ignored.
+- **Commit messages are public and carry no personal data.** One neutral line ("Update site data
+  payload") — no names, no quotes, no narrative, on every push route; GitHub shows messages to
+  anyone and Actions run titles republish them. The story goes in `CHANGE-LOG-COMMITS.md`
+  (gitignored), appended in the same session. `tests/run.js` scans unpushed messages against the
+  payload's name index. The history was scrubbed of names on 12 Aug 2026 — do not reintroduce them.
 
 ---
 
@@ -123,7 +128,7 @@ node checks/dossier.js "<name>"      # one card whole, both languages, with its 
 node checks/run.js --json out.json   # the machine pass (flag is --json, not --out)
 node checks/sources.js               # S1 — prose against the fact sheets
 node checks/patch.js patches/x.json  # apply, byte-exact or reject
-node tests/run.js                    # must be 119/119
+node tests/run.js                    # must be all green (120 with a password; commit-message scan included)
 node tools/crypt.js encrypt          # salt unchanged; family devices stay unlocked
 node checks/manifest.js              # regenerate sources/urls.tsv for the source archive
 ```
@@ -139,7 +144,9 @@ learned the hard way:
 
 - `mcp__GitHub__push_files` writes any number of files in one commit and needs nothing from Cory.
   It is the default. It cannot create a repository and it **cannot write `.github/workflows/*`** —
-  both return 403, because the token is an App installation without those scopes.
+  both return 403, because the token is an App installation without those scopes. Its commit
+  message falls under the public-message rule (Settled decisions): one neutral line, no names —
+  this route bypasses the local test that would otherwise catch a violation.
 - For a workflow file, use the **GitHub web upload page** through Claude-in-Chrome:
   `github.com/<owner>/<repo>/upload/main/.github/workflows`, then `file_upload` the file from
   `/mnt/user-data/outputs/`. Click the commit button by element `ref`, not by screen coordinate —
