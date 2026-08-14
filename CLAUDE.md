@@ -24,14 +24,49 @@ Cory's interest is **depth of coverage and history**, not breadth. Do not add ne
 | `AUDITOR-NOTES.md` / `AUDIT-PROMPT.md` | For the independent auditor. | ❌ (names) |
 | `evidence/` | Original document crops. | ❌ |
 
-## Privacy invariant (non-negotiable)
-The repo's **plaintext layer must contain no personal data**. Every name, date and note lives inside the AES-GCM ciphertext. Before any commit: `node tests/run.js` — it fails if PII leaks into the plaintext. Never commit `.password`, `data.json`, `evidence/`, or any research `.md` listed above.
+## Privacy invariant (non-negotiable) — read this before every commit
 
-## Commit messages are public — no personal data (rule added 12 Aug 2026)
-The repo is public: anyone can read commit messages without the password, and GitHub Actions run titles republish them. The pre-12-Aug-2026 history was rewritten to scrub messages that carried names and quoted family correspondence; the verbatim originals are archived in `CHANGE-LOG-COMMITS.md`.
-- Every commit message is **one neutral line** describing the mechanical change — "Update site data payload", "Update checks and tooling". No person names, no dates of life, no quotes, no narrative. This applies on **every** push route: GitHub Desktop, `mcp__GitHub__push_files`, and the web upload page all compose messages.
-- The narrative that used to live in commit messages goes in `CHANGE-LOG-COMMITS.md` (gitignored) — append an entry there in the same session that makes the commit, in the same shape: date, files touched, full story.
-- `tests/run.js` fails if an unpushed commit message contains a name from the payload (it prints the words locally, only counts in CI).
+**Nothing outside the AES-GCM ciphertext may name a person.** Not the site's plaintext
+layer, not a code comment, not a test fixture, not a regex, not a commit message. Two
+reasons it is stricter than it looks:
+
+1. The repo is **public**. Anyone can read every tracked file without the password.
+2. **GitHub Pages serves every file in the repo.** `…github.io/family-tree/tests/run.js`
+   returns 200 to anyone holding the family link. The plaintext files are not "developer
+   only" — they are part of the published site.
+
+`node tests/run.js` enforces this (§14) across **all tracked files**, using the payload's
+own names. It is not advisory: it fails the build. Deliberate exceptions live in one
+`ALLOW` set in that test — `nitschelm`, `schweitzer`, `sartre` (the site is openly this
+family's tree) and `cory` (the owner's own name, already public as the account name).
+Adding to `ALLOW` is a privacy decision; do not do it to make a test pass.
+
+Never commit `.password`, `data.json`, `evidence/`, or any research `.md`. `.gitignore` is
+**deny-by-default** — everything is ignored unless explicitly un-ignored, so a new research
+file cannot be committed by accident. Adding a real site file means adding a `!` line.
+
+*History: on 12 Aug 2026 commit messages had to be rewritten and on 14 Aug the whole repo
+had to be replaced, because names leaked into places nobody was checking. Both were
+avoidable. The checks below exist so it does not happen a third time.*
+
+## Commit messages are public — no personal data
+
+Anyone can read commit messages without the password, and Actions run titles republish
+them. Run records and titles **never expire**, and a force-push does not remove the old
+commits — GitHub keeps serving them by SHA indefinitely. There is no clean way back.
+
+- Every commit message is **one neutral line** describing the mechanical change —
+  "Update site data payload", "Update checks and tooling". No person names, no dates of
+  life, no places, no quotes, no narrative. One line: no body, ever.
+- This applies on **every** push route: GitHub Desktop, `mcp__GitHub__push_files`, and the
+  web upload page all compose messages. The API route bypasses the local test — on that
+  route the rule is the only guard.
+- The narrative goes in `CHANGE-LOG-COMMITS.md` (gitignored) — append an entry in the same
+  session, in the same shape: date, files touched, the full story. That file is the real
+  changelog; write it as fully as you like.
+- `tests/run.js` §13 fails if an unpushed commit message contains a name from the payload,
+  and §14 fails if any tracked file does. Both print the offending words locally and only
+  counts in CI, because CI logs are public.
 
 ## Standard edit loop
 ```

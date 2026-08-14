@@ -58,7 +58,7 @@ out.push('**Measured precision.** All 60 high-severity findings from the previou
   'repeat; source-count assertions demoted to worksheet). Eleven of the 22 false positives disappear under those fixes, ' +
   'so the current high tier should run near **38/49 ≈ 78%**. It is not 100%: read the evidence line before editing.');
 out.push('');
-out.push('The one contested block: the four **Laura** C1 findings. The human cold review (item 10) says the tooltip and ' +
+out.push('The one contested block: the four C1 findings on the widowhood reading. The human cold review (item 10) says the tooltip and ' +
   'the map pin assert the mother-reading flatly while the bio hedges it. All four machine auditors independently read the ' +
   'pin and tooltip as claiming only the *mother\'s* widowhood, which the bio also states flatly, and called them FALSE. ' +
   'Cory, or a fifth reader, settles this one.');
@@ -72,7 +72,7 @@ out.push([
   '- **A wrong fact stated consistently everywhere.** If the tooltip, bio, map note and pin all repeat the same error, every check passes.',
   '- **Prose quality** — a dangling modifier, a lost antecedent, a name the reader meets first in a sentence denying it. Cold-review items 23, 25, 26, 27, 28, 29, 31 are all of this kind and none is machine-detectable.',
   '- **Whether a hedge is the right hedge.** C1 finds a hedge on one field and certainty on another; it cannot tell which one is correct.',
-  '- **Cross-card prose claims.** This tree has four Jean Georges, five Jean Martins and two Frédéric (Fritz). A name in prose is not an identifier, so C5 was rebuilt to use the drawn parent/child structure only. Cold-review items 1, 9, 15, 22 (one card asserting what another card holds) are flagged as `C2x` for a human, not resolved.',
+  '- **Cross-card prose claims.** This tree reuses given names heavily across generations. A name in prose is not an identifier, so C5 was rebuilt to use the drawn parent/child structure only. Cold-review items 1, 9, 15, 22 (one card asserting what another card holds) are flagged as `C2x` for a human, not resolved.',
   '- **Translation faithfulness.** C6h is a reading queue, not a verdict: EN and FR express negation and emphasis too differently for a word list to judge.',
   '- **Anything about a person the tree does not draw.** The family-count checks are worksheets for that reason.'
 ].join(String.fromCharCode(10)));

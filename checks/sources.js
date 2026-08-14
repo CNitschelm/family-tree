@@ -29,7 +29,9 @@ const NAMED = {
   'archives-alsace': /\bArchives d['’]Alsace\b|\bEDEPOT\b|\bAD Bas-Rhin\b|\boriginal register\b|\bregistre original\b/i,
   'us-records': /\bcensus\b|\brecensement\b|\bdeath index\b|\bmarriage index\b|\bFindAGrave\b|\bnaturalisation\b|\bnaturalization\b|\btract book\b|\bland patent\b/i,
   newspapers: /\bEvening Herald\b|\bFree Trader\b|\bKeene Sentinel\b|\bcounty book\b|\blivre du comté\b|\bRuth King\b/i,
+  /* ft-allow-names-begin: named institutions and published works, not family */
   'published-works': /\bNouveau dictionnaire de biographie alsacienne\b|\bNDBA\b|\bNeue Deutsche Biographie\b|\bNobel\b|\bMaison Albert Schweitzer\b|\bGoethe\b/i,
+  /* ft-allow-names-end */
   'family-papers': /\bfamily bible\b|\bbible de famille\b|\bBan de la Roche\b|\baffidavit\b|\bfamily records\b|\bdocuments de la famille\b/i,
 };
 

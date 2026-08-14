@@ -1452,7 +1452,7 @@ let sugItems = [], sugIdx = 0, deb;
 const norm = s => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,""); /* é→e, ü→u … */
 function searchMatches(q){
   /* every word must appear somewhere in the name, in any order and as a partial:
-     "charlie nit" finds "Charlie James Nitschelm"; "nitschelm ge" finds the Georges */
+     two partial words match one full name in any order, as fragments                */
   const toks = norm(q).split(/\s+/).filter(Boolean);
   if(!toks.length) return [];
   const hit = (hay)=> toks.every(t=>hay.includes(t));

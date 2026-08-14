@@ -101,7 +101,7 @@ const SOURCE_TYPES = [
     inv: /death|d[ée]c[èe]s|certificate|register|SSDI|index|FindAGrave|record/i },
   { key: 'ssdi', prose: /\bSSDI\b|\bsocial security\b/i, inv: /SSDI|Social Security|SSA/i },
   { key: 'familysite', prose: /\bfamily (?:web)?site\b|\bastrosurf\b|\bsite familial\b/i,
-    inv: /astrosurf|family site|site familial|Geneanet|Hoffman|famille|Christian/i },
+    inv: /astrosurf|family site|site familial|Geneanet|Hoffman|famille/i },
   { key: 'onlinetree', prose: /\bonline family tree\b|\bcompiled tree\b|\bmember tree\b|\barbre en ligne\b/i,
     inv: /Geneanet|astrosurf|FamilySearch|Ancestry|member tree|arbre|family tree/i },
   { key: 'deed', prose: /\b(?:the )?deed\b|\bland patent\b|\bland (?:entry|record)\b|\btract book\b/i,

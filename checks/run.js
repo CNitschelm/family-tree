@@ -87,7 +87,9 @@ const STOP = new Set(('the a an and or but of in on at to for from by with his h
   + 'card tree site page fiche arbre').split(' '));
 const MONTHS = /^(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec|janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)$/i;
 const TOPIC_SET = new Set(('widow widowed widower orphan mother father son daughter brother sister wife husband '
+  /* ft-allow-names-begin: occupation vocabulary, not people */
   + 'brewer smith forge farrier tailor butcher vigneron mecanicien mechanic miller weaver alderman supervisor '
+  /* ft-allow-names-end */
   + 'circus mexico cemetery burial buried grave stone born birth baptised baptized baptism died death marriage '
   + 'married emigrated emigration arrived arrival naturalisation naturalization census register registers '
   + 'obituary bible trade occupation spelling spelled name names surname forename witness witnesses '
@@ -491,8 +493,8 @@ function C4() {
 }
 
 // ================================================================ C5 cross-card claim index
-// This tree reuses given names across generations (four Jean Georges, five Jean
-// Martins, two Frédéric (Fritz)), so a name is NOT an identifier. The index is
+// This tree reuses given names heavily across generations, so a name is NOT an
+// identifier on its own. The index is
 // therefore keyed by the structural link, never by a name found in prose:
 //   C5a  a card contradicting itself (dates line vs its own pins, event order)
 //   C5b  a parent/child pair whose dates cannot both be true
@@ -563,12 +565,14 @@ function C5() {
 
 // PERSONAL names the tree uses — a dropped person name is the defect that matters.
 // Place names are excluded: EN/FR variants there are legitimate translation.
+/* ft-allow-names-begin: generic stopwords for the prose linter — words that happen to be names */
 const NAMEBLOCK = new Set(('smith west east north south king brown young white black green gray grey '
   + 'mack mead park hall ford cross bell hill wood stone church long short march will day '
   + 'baker miller cook fisher clark wright page rose grace hope faith mason marsh field '
   + 'saint sainte comte county city town ville nord sous sur haut bas grand petit '
   + 'jean marie anne paul pierre louis henri georges george charles frederic frederick martin '
   + 'nitschelm').split(/\s+/));
+/* ft-allow-names-end */
 const KNOWN = new Set();
 for (const _p of people) {
   const push = str => (str || '').split(/[^A-Za-z\u00C0-\u00FF]+/).forEach(w => {

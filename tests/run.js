@@ -227,7 +227,7 @@ ok(allNodes.every(n => !n.p.note || (n.p.note_fr && n.p.note_fr.length > 0)),
 ok(allNodes.every(n => (n.p.unions || []).every(u => !u.n || (u.n_fr && u.n_fr.length > 0))),
   "every union note has a French translation");
 /* commentary like "Married into the X family" is fine; a NAMED spouse in a
- * note ("Remarried Kathleen…", "first wife Anne…") belongs on the card */
+ * note ("Remarried <given name>…", "first wife <given name>…") belongs on the card */
 ok(allNodes.every(n => !/(re)?married\s+[A-Z]|\b(wife|husband|spouse)\s+[A-ZÉ]/.test(n.p.note || "")),
   "no marriages hidden in notes — they belong on cards as unions");
 
@@ -424,27 +424,34 @@ ok(rows.length >= 380, rows.length + " place-events recorded");
      and must not creep back in. */
   /* keyed by name+years, not by node index: adding a person must not silently
      re-point a banned entry at somebody else's legitimate pin. */
-  const banned = [
-    "Charlie James Nitschelm|b. 1998:work:newmexico",
-    "Aubrey Nitschelm|:arrival:valdemunster",
-    "Frédéric (Fritz) Nitschelm|1876–1953:work:bellecour",
-    "Frédéric (Fritz) Nitschelm|1876–1953:work:perrache",
-    "Jean Martin Nitschelm|1764–1847:residence:montbeliard",
-    "Frédéric (Fritz) Nitschelm|1840–1914:work:strietmuhle",
-    "Meylert M. Armstrong IV|1962–2008:death:keenenh",
-    "Johann Ludwig Schweitzer|1759–1827:work:pfaffenhoffen",
-    "David West|:arrival:chicago",
-    "Jean Martin Nitschelm|1756–1786:residence:valdemunster",
-    "Jean Martin Nitschelm|1808–1899:residence:strasbourg",
-    "Adrian (Edwin?) Nitschelm|1870–1949:residence:shrewsbury",
-    "Jean Georges Nitschelm|1729–1804:emigration:lehavre",
-    "Jean Georges Nitschelm|1792–1858:work:washington",
-    "Georges Nitschelm|1875–?:work:munster"];
-  const held = new Set();
-  allNodes.forEach(n => (n.p.pl || []).forEach(r =>
-    held.add(n.p.name + "|" + (n.p.years || "") + ":" + r.t + ":" + r.k)));
-  const back = banned.filter(b => held.has(b));
-  ok(!back.length, "pins removed by the presence audit have not returned" + (back.length ? " — " + back.join(", ") : ""));
+  /* Stored as SHA-256 prefixes, not names: this file is public AND is served by
+     GitHub Pages at the site URL, so a name here is readable without the password.
+     The key is name|years:event:place, hashed the same way on both sides. */
+  const banned = new Set([
+    "2fbba1d19c48486e",
+    "52def1506355b35b",
+    "65a3dd05046e891b",
+    "35436718de1e89ef",
+    "133b3105be385923",
+    "b1f9dc6b36248cd0",
+    "aa6c35fea30720bd",
+    "e48933596abded0e",
+    "8c49462c33740700",
+    "e02b0bd3900c7b12",
+    "19f05b2f5b17c654",
+    "8bd960838b4945c7",
+    "9d7069241abf3542",
+    "b93dcf6e1a1b820a",
+    "98d71e3f2bd23232"
+  ]);
+  const h16 = k => require("crypto").createHash("sha256").update(k, "utf8").digest("hex").slice(0, 16);
+  const back = [];
+  allNodes.forEach(n => (n.p.pl || []).forEach(r => {
+    const key = n.p.name + "|" + (n.p.years || "") + ":" + r.t + ":" + r.k;
+    if (banned.has(h16(key))) back.push(key);
+  }));
+  ok(!back.length, "pins removed by the presence audit have not returned" +
+    (back.length ? " — " + back.length + (process.env.CI ? "" : ": " + back.join(", ")) : ""));
 }
 ok(rows.every(r => GAZ[r.k]), "every place-event resolves to a gazetteer entry");
 ok(rows.every(r => ["doc", "inf", "apx"].includes(r.c)), "every place-event states its certainty");
@@ -545,6 +552,97 @@ section("Commit hygiene");
     ok(!hits.length, "unpushed commit messages carry no person names (" + msgs.length + " scanned)" +
       (hits.length ? " — " + hits.map(h => h.sha + ": " + h.bad.length + " name token(s)" +
         (process.env.CI ? "" : " [" + h.bad.join(", ") + "]")).join("; ") : ""));
+  }
+}
+
+/* ---------- 14. No person names anywhere in the plaintext repo ----------
+ * The ciphertext protects the data. Every OTHER tracked file is public AND is
+ * served by GitHub Pages at the site URL, so a name in a comment, a fixture or
+ * a regex is readable by anyone holding the family link — no password, no
+ * GitHub account. On 14 Aug 2026 this found a living relative's full name,
+ * birth year and workplace sitting in this file's own fixture list, and three
+ * more first names in checks/. The privacy invariant in CLAUDE.md said the
+ * plaintext layer carries no personal data; nothing enforced it outside
+ * index.html. This is the enforcement. Offending words print only outside CI —
+ * CI logs are public. */
+section("No names in the plaintext repo");
+{
+  const cp = require("child_process"), fsx = require("fs");
+  /* deliberate, public by design: the site is openly this family's tree — the
+   * repo name, the README, the page title and the branch buttons all say so. */
+  const ALLOW = new Set([
+    "nitschelm", "schweitzer", "sartre",  /* the site says all three on its own front page */
+    "cory"                                /* the owner's own name; the account is CNitschelm */
+  ]);
+  /* a line carrying this marker is exempt: generic vocabulary, stopword lists and
+   * named institutions collide with real names by coincidence. Adding one is a
+   * privacy decision — say in the comment why the words are not people. */
+  const LINE_OK = /ft-allow-names\b/;
+  /* multi-line vocabulary lists use ft-allow-names-begin / -end around the block */
+  const unclosed = [];
+  const stripAllowed = (txt, fname) => {
+    const out = []; let skip = false;
+    for (const line of txt.split("\n")) {
+      if (/ft-allow-names-begin/.test(line)) { skip = true; continue; }
+      if (/ft-allow-names-end/.test(line))   { skip = false; continue; }
+      if (!skip && !LINE_OK.test(line)) out.push(line);
+    }
+    /* an unterminated block would exempt the whole rest of the file in silence,
+     * which is exactly the kind of quiet hole this section exists to prevent */
+    if (skip) unclosed.push(fname);
+    return out.join("\n");
+  };
+  let files = null;
+  try {
+    files = cp.execFileSync("git", ["ls-files"], { cwd: ROOT, stdio: ["ignore", "pipe", "ignore"] })
+      .toString("utf8").trim().split("\n").filter(Boolean);
+  } catch (_) { /* no git — nothing to scan */ }
+  if (!files) {
+    console.log("  --  git unavailable — skipping");
+  } else {
+    /* three tiers, narrowest first: a full name is unambiguous, a long surname
+     * nearly so, and a living person's given name is the one that matters most. */
+    const fullNames = new Set(), surnames = new Set(), livingGiven = new Set();
+    const addName = (raw, node) => {
+      const name = String(raw || "").trim();
+      if (!name) return;
+      const toks = name.split(/\s+/).filter(t => /\p{L}/u.test(t));
+      if (toks.length > 1) fullNames.add(name.toLowerCase());
+      const last = toks[toks.length - 1];
+      if (last && last.length >= 5) surnames.add(norm(last).toLowerCase());
+      if (node) {
+        const years = String(node.years || "");
+        const birth = (years.match(/(\d{4})/) || [])[1];
+        const died  = /\d{4}\s*[–-]\s*\d{4}/.test(years);
+        if (birth && +birth >= 1930 && !died) {
+          toks.slice(0, -1).forEach(t => { if (t.length >= 4) livingGiven.add(norm(t).toLowerCase()); });
+        }
+      }
+    };
+    allNodes.forEach(n => { addName(n.p.name, n.p); (n.p.unions || []).forEach(u => addName(u.s, null)); });
+    [...ALLOW].forEach(a => { surnames.delete(a); livingGiven.delete(a); });
+
+    const hits = [];
+    for (const f of files) {
+      let text;
+      try { text = fsx.readFileSync(require("path").join(ROOT, f), "utf8"); } catch (_) { continue; }
+      if (f === "index.html") text = text
+        .replace(/const ENC = \{[\s\S]*?\};/, "")
+        .replace(/const MAPLBL = "[\s\S]*?";/, "");   /* world city labels, not people */
+      text = stripAllowed(text, f);
+      const low = text.toLowerCase();
+      const bad = new Set();
+      fullNames.forEach(n => { if (low.includes(n)) bad.add(n); });
+      const words = new Set(norm(text).toLowerCase().split(/[^\p{L}]+/u).filter(w => w.length >= 4));
+      surnames.forEach(sn => { if (words.has(sn)) bad.add(sn); });
+      livingGiven.forEach(g => { if (words.has(g)) bad.add(g); });
+      if (bad.size) hits.push({ f, bad: [...bad] });
+    }
+    ok(!unclosed.length, "every ft-allow-names block is closed" +
+      (unclosed.length ? " — unterminated in " + unclosed.join(", ") : ""));
+    ok(!hits.length, "no person names in the " + files.length + " tracked files" +
+      (hits.length ? " — " + hits.length + " file(s)" +
+        (process.env.CI ? "" : ": " + hits.map(h => h.f + " [" + h.bad.join(", ") + "]").join("; ")) : ""));
   }
 }
 

@@ -1,63 +1,22 @@
-# local secrets and working files — never commit
-.password
-data.json
-*.bak
-*.new
-~$*.docx
+# DENY BY DEFAULT. Nothing in this folder is committed unless it is listed below.
+# Rationale (14 Aug 2026): the old gitignore named research files one by one, so any
+# NEW file carrying names was tracked by default and one slip put it in a public repo.
+# Inverting it makes an accidental commit of research material impossible.
+*
+!*/
 
-# local research documents (contain names — the repo stays PII-free)
-Family-Tree-Audit-*.docx
-East-West-Connection-*.docx
-Family-History-*.docx
-bio-research-notes.md
-OPEN-ITEMS.md
-AUDITOR-NOTES.md
-AUDIT-PROMPT.md
-evidence/
-AUDIT-REPORT-*.md
-TRIMMED-PEOPLE.md
-NOT-ADDED-PEOPLE.md
-CHANGES.md
-AUDIT-LOG.txt
-CORY-LINE-RESEARCH.md
+# --- the entire published site and its tooling: 26 files, nothing else ---
+!/.gitignore
+!/.gitattributes
+!/.github/workflows/test.yml
+!/README.md
+!/CLAUDE.md
+!/OPERATING.md
+!/index.html
+!/favicon.png
+!/checks/*.js
+!/tests/run.js
+!/tools/*.js
 
-# 7 Aug 2026 — remediation working files (contain names)
-AUDIT-2026-08-07-COLD-REVIEW.md
-REMEDIATION-PLAN.md
-MASTER-DEFECTS-*.md
-DIFF-vs-published.md
-CHANGE-LOG-*.md
-DECISIONS.md
-PHASE-1-REPORT.md
-patches/
-patches-*.tar.gz
-published-data.new
-checks/findings.json
-checks/claim-index.json
-_to_delete/
-
-# 7 Aug 2026 wave 3 — more working files that carry names
-PHASE-3-SEAMS.md
-PHASE-5-REPORT.md
-SOURCE-FACTS.md
-AUDIT-WAVE2-FINDINGS.md
-WRITER-BRIEF.md
-AUDITOR-BRIEF.md
-DIFF-slice-*.md
-slice-*-cards.txt
-phase4-audit-kit.tar.gz
-checks-*.tar.gz
-checks/*.json
-AUDIT-PHASE4-FINDINGS.md
-VALIDATE-PROMPT.md
-FIX-14.md
-GRADE-2026-08-08.md
-SYSTEM-PROPOSAL.md
-STEWARD-FINDINGS.md
-sources.tar.gz
-sources/*.md
-SOURCE-ARCHIVE-PLAN.md
-source-archive-kit.tar.gz
-sources/MANIFEST.json
-archive/
-sources/urls.tsv
+# Adding a file to the site? Add an explicit "!" line for it here, and only after
+# checking it carries no personal data — `node tests/run.js` enforces that.

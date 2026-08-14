@@ -76,7 +76,27 @@ const VIEWER = [
 // A marker is a string the real page must contain. Surnames first — nearly every source here is
 // cited because it names one of these people. Then per-URL identifiers, so a register viewer that
 // at least proves WHICH register is not scored the same as one that proves nothing.
-const SURNAMES = /nitschel|nutschel|neytschel|nuschel|schweitzer|caquelin|widemann|zindl|zundel|kempf|haberer|habrar|steininger|hardenbrook|dillingham|moulton|paradis|brockway|germond|huffschmid|holweck|banzet|spenl|spendler|bresch|hurter|wetzel|teed|lieb|queck|toole|blaker|marchal|sartre/i;
+/* Surnames are derived from the decrypted payload, never hardcoded: this file is
+   public and is served by GitHub Pages, so a name list here is a name list online.
+   Stems are cut to 6 characters so OCR variants still match, as the old list did. */
+const SURNAMES = (() => {
+  let stems = [];
+  try {
+    const L = require('./lib.js');
+    const { people } = L.load();
+    const set = new Set();
+    Object.values(people || {}).forEach(p => {
+      String((p && p.name) || '').split(/\s+/).forEach(t => {
+        const w = t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z]/g, '');
+        if (w.length >= 5) set.add(w.slice(0, 6).toLowerCase());
+      });
+    });
+    stems = [...set];
+  } catch (e) {
+    console.error('SURNAMES: payload unavailable (' + e.message + ') — marker test degraded');
+  }
+  return stems.length ? new RegExp(stems.join('|'), 'i') : /$^/;
+})();
 
 function urlMarkers(url) {
   const out = [];

@@ -20,7 +20,7 @@ const CLASS = [
   ['register', /registers? \(Baradel\)|registres? \(Baradel\)|Baradel|Munster registers|Gunsbach registers|parish registers|registres paroissiaux/i],
   ['index',    /corynitschelm|LinkedIn|R[ée]sum[ée]|portfolio|personal site|Site personnel|census|recensement|SSDI|Social Security|death (?:index|record|certificate|register|return)|naturali|declaration of intent|passenger|manifest|FindAGrave|find a grave|memorial|obituar|n[ée]crolog|newspaper|Free Trader|Register|Sentinel|Tribune|Journal|Herald|Republican|biographical record|county (?:book|record)|marriage (?:index|record|licen|certificate)|directory|annuaire|Nobel|BnF|INSEE|matchID|deces\.matchid|state file|court|probate|land|patent|tract|homestead|inventor|notari/i],
   ['compiled', /astrosurf|Geneanet|family site|site familial|Hoffman|family tree|arbre|member tree|compiled|Ancestry|FamilySearch tree/i],
-  ['family',   /Email to Cory|family correspondence|correspondance|bible|letter|courriel|family records|family papers|Elise|Jeanette|Allen/i]
+  ['family',   /Email (?:to|from)\b|family correspondence|correspondance|bible|letter|courriel|family records|family papers/i]
 ];
 
 function classify(text) {

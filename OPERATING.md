@@ -106,12 +106,20 @@ independence that makes the audit step work.
 - Never narrate the editing process to the reader: no "this card", "cette fiche", "as shown here".
   Plain provenance is welcome: "the family site gives 1989; the gravestone gives 1988".
 - Never add a person without asking. Never pass `--newsalt`.
-- The repo's plaintext layer carries no personal data. Everything with a name in it is git-ignored.
+- **Nothing outside the ciphertext names a person** — not the plaintext layer, not a code comment,
+  not a test fixture, not a regex. Every tracked file is public *and* is served by GitHub Pages at
+  the family's own site URL, so a name in `tests/run.js` is as exposed as one on the front page.
+  `tests/run.js` §14 fails the build if any tracked file contains a payload name; `.gitignore` is
+  deny-by-default so research files cannot be committed by accident.
 - **Commit messages are public and carry no personal data.** One neutral line ("Update site data
-  payload") — no names, no quotes, no narrative, on every push route; GitHub shows messages to
-  anyone and Actions run titles republish them. The story goes in `CHANGE-LOG-COMMITS.md`
-  (gitignored), appended in the same session. `tests/run.js` scans unpushed messages against the
-  payload's name index. The history was scrubbed of names on 12 Aug 2026 — do not reintroduce them.
+  payload") — no names, no dates of life, no places, no quotes, no narrative, no body, on every
+  push route. `mcp__GitHub__push_files` bypasses the local test, so there the rule is the only
+  guard. The story goes in `CHANGE-LOG-COMMITS.md` (gitignored), appended in the same session;
+  `tests/run.js` §13 scans unpushed messages against the payload's name index.
+- **Why both rules are absolute:** messages were rewritten on 12 Aug 2026 and the entire repo had
+  to be deleted and rebuilt on 14 Aug, because a force-push does not remove anything — GitHub
+  serves orphaned commits by SHA indefinitely, and Actions run titles never expire. There is no
+  quiet fix after the fact. Do not reintroduce names.
 
 ---
 
