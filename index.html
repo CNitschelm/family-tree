@@ -703,12 +703,36 @@ const ENC = {v:1, iter:600000, salt:"k21mbnJCWfejWfW0Ibhgjg==", iv:"LYYWBwZi5nnt
 const b64b = s => Uint8Array.from(atob(s), c=>c.charCodeAt(0));
 async function deriveKey(pw){
   const km = await crypto.subtle.importKey("raw", new TextEncoder().encode(pw), "PBKDF2", false, ["deriveKey"]);
-  return crypto.subtle.deriveKey({name:"PBKDF2", salt:b64b(ENC.salt), iterations:ENC.iter, hash:"SHA-256"}, km, {name:"AES-GCM", length:256}, true, ["decrypt"]);
+  return crypto.subtle.deriveKey({name:"PBKDF2", salt:b64b(ENC.salt), iterations:ENC.iter, hash:"SHA-256"}, km, {name:"AES-GCM", length:256}, false, ["decrypt"]);
 }
 async function decryptData(key){
   const pt = await crypto.subtle.decrypt({name:"AES-GCM", iv:b64b(ENC.iv)}, key, b64b(ENC.ct));
   return JSON.parse(new TextDecoder().decode(pt));
 }
+/* The unlock key is cached so family devices stay unlocked. It is held as a
+   NON-EXTRACTABLE CryptoKey in IndexedDB, never as bytes in localStorage:
+   github.io project sites all share the origin https://cnitschelm.github.io, so
+   any other page published under this account can read this origin's storage.
+   A raw key there could be copied off the device and reused anywhere; a
+   non-extractable handle cannot leave the browser that created it. */
+const KEYDB = "ft-keydb", KEYSTORE = "k";
+function idb(){
+  return new Promise((res, rej) => {
+    const rq = indexedDB.open(KEYDB, 1);
+    rq.onupgradeneeded = () => rq.result.createObjectStore(KEYSTORE);
+    rq.onsuccess = () => res(rq.result);
+    rq.onerror = () => rej(rq.error);
+  });
+}
+function idbTx(mode, fn){
+  return idb().then(db => new Promise((res, rej) => {
+    const tx = db.transaction(KEYSTORE, mode), rq = fn(tx.objectStore(KEYSTORE));
+    rq.onsuccess = () => res(rq.result);
+    rq.onerror = () => rej(rq.error);
+  }));
+}
+const keyPut = k => idbTx("readwrite", st => st.put(k, "key"));
+const keyGet = () => idbTx("readonly", st => st.get("key"));
 const lockEl = document.getElementById("lock");
 function showLock(){
   document.getElementById("lockmsg").textContent = T("pwmsg");
@@ -722,7 +746,7 @@ async function tryUnlock(){
   try{
     const key = await deriveKey(pwEl.value);
     const data = await decryptData(key);
-    try{ localStorage.setItem("ft-key", btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.exportKey("raw", key))))); }catch(_){}
+    try{ await keyPut(key); }catch(_){}
     lockEl.style.display = "none";
     boot(data);
   }catch(_){
@@ -740,11 +764,24 @@ try{
 }catch(_){}
 (async function(){
   try{
-    const raw = localStorage.getItem("ft-key");
-    if(!raw) return showLock();
-    const key = await crypto.subtle.importKey("raw", b64b(raw), {name:"AES-GCM"}, true, ["decrypt"]);
+    let key = null;
+    try{ key = await keyGet(); }catch(_){}
+    if(!key){
+      /* one-time migration off the old localStorage copy: re-import the bytes as
+         non-extractable, keep the handle, and erase the bytes from this device */
+      const raw = localStorage.getItem("ft-key");
+      if(!raw) return showLock();
+      key = await crypto.subtle.importKey("raw", b64b(raw), {name:"AES-GCM"}, false, ["decrypt"]);
+      const data = await decryptData(key);          /* prove it works before erasing */
+      try{ await keyPut(key); localStorage.removeItem("ft-key"); }catch(_){}
+      return boot(data);
+    }
     boot(await decryptData(key));
-  }catch(_){ try{ localStorage.removeItem("ft-key"); }catch(__){} showLock(); }
+  }catch(_){
+    try{ localStorage.removeItem("ft-key"); }catch(__){}
+    try{ await idbTx("readwrite", st => st.delete("key")); }catch(__){}
+    showLock();
+  }
 })();
 
 function boot(DATA){
