@@ -620,6 +620,35 @@ section("No names in the plaintext repo");
       }
     };
     allNodes.forEach(n => { addName(n.p.name, n.p); (n.p.unions || []).forEach(u => addName(u.s, null)); });
+    /* Correspondents named in source labels are people too — and they are NOT
+     * nodes in the tree, so the pass above is blind to them. Labels introduce
+     * them in a few fixed shapes ("Email to X from Y", "photographed by Y",
+     * "via Y"); only correspondence-ish labels are read, which keeps place
+     * names, publications and institutions out of the index. */
+    let fromLabels = 0;
+    try {
+      const CORRESPONDENCE = /email|courriel|letter|correspondence|correspondance|photograph|bible|\bvia\b/i;
+      const NAMED_BY = /\b(?:from|by|via|to)\s+((?:[A-ZÀ-Þ][\p{L}'’-]+(?:\s+|$)){2,4})/gu;
+      const labels = [];
+      (function walkLabels(o) {
+        if (!o || typeof o !== "object") return;
+        if (Array.isArray(o)) return o.forEach(walkLabels);
+        if (typeof o.l === "string") labels.push(o.l);
+        Object.values(o).forEach(walkLabels);
+      })(get("DATA"));
+      labels.filter(l => CORRESPONDENCE.test(l)).forEach(l => {
+        let m; NAMED_BY.lastIndex = 0;
+        while ((m = NAMED_BY.exec(l))) {
+          const phrase = m[1].trim().replace(/[,(].*$/, "").trim();
+          const toks = phrase.split(/\s+/).filter(Boolean);
+          if (toks.length < 2) continue;
+          fullNames.add(phrase.toLowerCase());
+          const last = toks[toks.length - 1];
+          if (last.length >= 5) surnames.add(norm(last).toLowerCase());
+          fromLabels++;
+        }
+      });
+    } catch (e) { console.error("   label scan unavailable: " + e.message); }
     [...ALLOW].forEach(a => { surnames.delete(a); livingGiven.delete(a); });
 
     const hits = [];
@@ -641,6 +670,7 @@ section("No names in the plaintext repo");
     ok(!unclosed.length, "every ft-allow-names block is closed" +
       (unclosed.length ? " — unterminated in " + unclosed.join(", ") : ""));
     ok(!hits.length, "no person names in the " + files.length + " tracked files" +
+      " (index: " + fullNames.size + " full names incl. " + fromLabels + " from source labels)" +
       (hits.length ? " — " + hits.length + " file(s)" +
         (process.env.CI ? "" : ": " + hits.map(h => h.f + " [" + h.bad.join(", ") + "]").join("; ")) : ""));
   }
