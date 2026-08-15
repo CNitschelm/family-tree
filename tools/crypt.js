@@ -87,8 +87,33 @@ async function key(pw, salt, iter, usages) {
     if (check.length !== out.length || !check.trimEnd().endsWith("</html>")) {
       console.error("FAILED: staging write verification"); process.exit(1);
     }
-    fs.rmSync(HTML, { force: true });
-    fs.renameSync(HTML + ".new", HTML);
+    /* The rename is the happy path. Some mounts (the Cowork bridge) refuse to
+     * unlink or rename and throw EPERM — which used to leave a COMPLETE .new
+     * file beside an UNCHANGED index.html and a non-zero exit, i.e. a run that
+     * looks failed but has already done all the real work. Fall back to an
+     * in-place overwrite, and then PROVE it landed: this mount has silently
+     * capped grown files at the old length before, so the read-back below is
+     * the whole point of the fallback, not a formality. */
+    try {
+      fs.rmSync(HTML, { force: true });
+      fs.renameSync(HTML + ".new", HTML);
+    } catch (e) {
+      if (!["EPERM", "EACCES", "EBUSY", "ENOTSUP"].includes(e.code)) throw e;
+      console.log("note: this mount refuses rename (" + e.code + ") — overwriting in place and verifying.");
+      const fd = fs.openSync(HTML, "w");
+      try { fs.writeSync(fd, out); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+      const back = fs.readFileSync(HTML, "utf8");
+      if (back.length !== out.length || !back.trimEnd().endsWith("</html>")) {
+        console.error("FAILED: in-place overwrite was truncated — " + back.length +
+          " of " + out.length + " bytes landed.");
+        console.error("The complete file is still at " + HTML + ".new — move it over by hand, then re-run the tests.");
+        process.exit(1);
+      }
+      /* best-effort: the same mount may refuse this too. It is gitignored, so a
+       * leftover is harmless — but say so, because a stale one is confusing. */
+      try { fs.rmSync(HTML + ".new", { force: true }); }
+      catch (_) { console.log("note: could not remove " + HTML + ".new (gitignored, safe to leave)."); }
+    }
     console.log("re-encrypted DATA into index.html (" + ct.length + " bytes). Run tests, then commit.");
     console.log(newSalt
       ? "note: NEW SALT — every family member must re-enter the password."
