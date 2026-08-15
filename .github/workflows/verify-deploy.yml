@@ -1,0 +1,89 @@
+name: verify-deploy
+
+# Proves the LIVE site is serving the payload this repo just committed.
+#
+# WHY THIS EXISTS. A green push is not proof of a deploy. Three commits once sat
+# undeployed for a day while every local check was green and the site quietly served
+# an old payload. CLAUDE.md has said "always verify the live site" since then, and it
+# still happened again, because prose guidance gets skimmed. This does not get skimmed.
+#
+# It matters most for UNATTENDED runs: scheduled tasks push here with nobody watching,
+# and the next session starts cold with no memory that anything went wrong.
+#
+# PRIVACY: this job prints ONLY base64 IVs, byte counts and elapsed seconds. Never a
+# name, never payload content. Actions logs are public and run records never expire.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for Pages to serve this commit's payload
+        env:
+          SITE: https://cnitschelm.github.io/family-tree/
+        run: |
+          set -uo pipefail
+
+          expected=$(grep -o 'iv:"[^"]*"' index.html | head -1 | sed 's/iv:"//;s/"//')
+          if [ -z "$expected" ]; then
+            echo "::error::No ENC block found in the committed index.html."
+            exit 1
+          fi
+          echo "committed payload iv: $expected"
+          echo "committed bytes:      $(wc -c < index.html)"
+
+          # Pages usually publishes in well under a minute, but a busy runner queue can
+          # take several. Poll generously: a check that goes red on a slow-but-healthy
+          # deploy is worse than no check, because it teaches everyone to ignore it.
+          deadline=$(( SECONDS + 600 ))
+          attempt=0
+          while [ $SECONDS -lt $deadline ]; do
+            attempt=$(( attempt + 1 ))
+            body=$(curl -fsSL --max-time 90 -H 'Cache-Control: no-cache' \
+                     "${SITE}?cb=${GITHUB_SHA}-${attempt}" 2>/dev/null) || body=""
+            if [ -n "$body" ]; then
+              live=$(printf '%s' "$body" | grep -o 'iv:"[^"]*"' | head -1 | sed 's/iv:"//;s/"//')
+              echo "attempt ${attempt} (${SECONDS}s): live iv = ${live:-<none>}"
+              if [ "$live" = "$expected" ]; then
+                echo "MATCH after ${SECONDS}s — the live site is serving this commit's payload."
+                echo "live bytes: $(printf '%s' "$body" | wc -c)"
+                exit 0
+              fi
+            else
+              echo "attempt ${attempt} (${SECONDS}s): site not reachable yet"
+            fi
+            sleep 20
+          done
+
+          # Timed out. Say what this does and does NOT prove, because the last time a
+          # deploy looked wrong the cause was assumed to be payload size and 62 images
+          # were recompressed for nothing — the runner was the problem, and a re-run
+          # fixed it in forty seconds.
+          echo "::error::Live site still not serving this commit's payload after ${SECONDS}s."
+          cat <<'EOF'
+          INCONCLUSIVE vs BROKEN — do not guess.
+
+          This means the live payload did not match within the timeout. It does NOT by
+          itself mean the file is too big or the payload is malformed.
+
+          Check, in this order, and change NOTHING until you have:
+            1. https://www.githubstatus.com/api/v2/summary.json
+            2. Actions -> the pages-build-deployment run for this commit.
+               - "job was not acquired by Runner" / "Internal server error"
+               - status Cancelled, "a higher priority waiting request exists"
+               Both are GitHub's runners, not this repo: Re-run all jobs (~40s).
+            3. Only if the BUILD step itself ran long and then aborted on a timeout
+               should payload size be considered at all.
+
+          Re-running this workflow is safe and is usually the right next step.
+          EOF
+          exit 1

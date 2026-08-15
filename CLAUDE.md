@@ -68,6 +68,15 @@ commits — GitHub keeps serving them by SHA indefinitely. There is no clean way
   and §14 fails if any tracked file does. Both print the offending words locally and only
   counts in CI, because CI logs are public.
 
+## Run this first, every session
+```
+node tools/doctor.js                 # local state: stale data.json, git locks, unpushed commits
+```
+Exits 1 on a blocker. It reports only **local** state — it deliberately does not check the
+live site (the `verify-deploy` workflow does) or whether the data is correct (`tests/` and
+`checks/` do). A green doctor means nothing is silently broken underneath you; it does not
+mean safe to deploy.
+
 ## Standard edit loop
 ```
 node tools/crypt.js decrypt          # → data.json   (NEVER pass --newsalt: it locks out family devices)
@@ -75,9 +84,26 @@ node <script that mutates data.json>
 node tools/crypt.js encrypt          # → index.html
 node tests/run.js                    # must be all-green before deploy
 ```
+
+**`encrypt` will refuse if `data.json` did not come from the `index.html` now on disk.**
+`decrypt` records a fingerprint of the payload it read into `.data-stamp` (gitignored);
+`encrypt` checks it. That refusal is not in your way — it means the working copy is stale
+and encrypting would silently revert whatever landed in `index.html` since. **Do not reach
+for `--force` to get past it.** Back up `data.json`, run `decrypt` again, re-apply the edit.
+*This exists because on 15 Aug 2026 the `data.json` in this repo was a week and 1.4 MB
+behind the payload, and nothing detected it — the suites check the shape of the data, not
+whether it is the current data, so every test would have passed on top of a silent revert.*
 Deploy = GitHub Desktop: Fetch → commit → Ctrl+P push. Verify with the GitHub MCP `list_commits`.
 
 ### Deploying is not done when the push succeeds
+The **`verify-deploy` workflow** now proves this automatically on every push to `main`: it polls
+the live site for up to ten minutes and fails if the served payload's `ENC.iv` never matches the
+committed one. It prints only IVs and byte counts — Actions logs are public. On failure, read its
+output before touching anything; it distinguishes "GitHub's runners" from "our file" and tells you
+to re-run first. **Check that run before assuming a deploy landed.** Two mount facts it exists to
+survive: this sandbox has no push credentials (pushing happens in GitHub Desktop), and it cannot
+unlink, so `.git/*.lock` files accumulate and block every git write until cleared.
+
 A green `list_commits` only proves the commit reached `main`. **Always verify the live site actually changed.** Fetch `https://cnitschelm.github.io/family-tree/` and compare `index.html`'s byte length and payload head against the local file. Three commits once sat undeployed for a day while the site quietly served an old payload and every local check was green.
 
 **If the site is behind, do NOT rewrite, recompress or re-encrypt anything.** Read the failure first:

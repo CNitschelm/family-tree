@@ -14,11 +14,55 @@
 "use strict";
 const fs = require("fs");
 const path = require("path");
-const { webcrypto } = require("node:crypto");
+const { webcrypto, createHash } = require("node:crypto");
 const subtle = webcrypto.subtle;
 
 const ROOT = path.join(__dirname, "..");
 const JSON_FILE = path.join(ROOT, "data.json");
+/* Provenance stamp for data.json: which index.html payload it was decrypted FROM.
+ * gitignored by the deny-by-default rule, like data.json itself. */
+const STAMP_FILE = path.join(ROOT, ".data-stamp");
+
+/* A payload's identity: the IV is unique per encryption, so if index.html's IV has
+ * changed since we decrypted, index.html has been re-encrypted behind our back and
+ * the data.json in hand no longer descends from it. */
+const fingerprint = enc => enc.iv + ":" + createHash("sha256").update(enc.ct).digest("hex").slice(0, 16);
+
+/* WHY THIS EXISTS. On 15 Aug 2026 the data.json sitting in this repo was 3,745,108
+ * bytes while the payload inside index.html was 5,175,444 — a week stale, because a
+ * previous session had left it behind. Editing that file and running `encrypt` would
+ * have silently reverted a week of work, and every test would still have passed: the
+ * suites check the SHAPE of the data, not whether it is the CURRENT data. Nothing
+ * anywhere caught it. This guard is the thing that catches it. */
+function readStamp() {
+  try { return fs.readFileSync(STAMP_FILE, "utf8").trim(); } catch (_) { return null; }
+}
+function writeStamp(enc) {
+  fs.writeFileSync(STAMP_FILE, fingerprint(enc) + "\n");
+}
+function assertFresh(cur, forced) {
+  const stamp = readStamp();
+  const now = fingerprint(cur);
+  if (stamp === now) return;
+  const why = stamp === null
+    ? "data.json has no provenance stamp — nothing records which index.html it came from."
+    : "data.json was decrypted from a DIFFERENT index.html than the one on disk now.";
+  if (forced) {
+    console.log("WARNING: " + why + " Proceeding because --force was passed.");
+    return;
+  }
+  console.error("REFUSED: " + why);
+  console.error("");
+  console.error("  Encrypting now would overwrite the current payload with whatever is in");
+  console.error("  data.json, and the tests would NOT catch it — they check the shape of the");
+  console.error("  data, not whether it is current.");
+  console.error("");
+  console.error("  If your edits are unsaved elsewhere, back up data.json first, then:");
+  console.error("    node tools/crypt.js decrypt     # refresh from index.html, re-apply edits");
+  console.error("  If you are certain data.json is the version you want to publish:");
+  console.error("    node tools/crypt.js encrypt --force");
+  process.exit(1);
+}
 
 /* The Cowork sandbox mount can serve stale (or falsely missing) entries for a
  * cached exact path; unseen case variants bypass the cache. On case-sensitive
@@ -64,6 +108,7 @@ async function key(pw, salt, iter, usages) {
     const pt = await subtle.decrypt({ name: "AES-GCM", iv: b(obj.iv) }, k, b(obj.ct));
     const data = JSON.parse(Buffer.from(pt).toString("utf8"));
     fs.writeFileSync(JSON_FILE, JSON.stringify(data, null, 1));
+    writeStamp(obj); /* record which payload this data.json descends from */
     console.log("wrote data.json — edit it, then run: node tools/crypt.js encrypt");
   } else if (mode === "encrypt") {
     const data = JSON.parse(fs.readFileSync(JSON_FILE, "utf8"));
@@ -71,6 +116,8 @@ async function key(pw, salt, iter, usages) {
      * working across data updates; only the IV must be fresh per encryption.
      * (Changing the password? Delete the salt reuse by passing --newsalt.) */
     const { obj: cur, raw } = readEnc(html);
+    /* Before anything else: is data.json actually a descendant of THIS index.html? */
+    assertFresh(cur, process.argv.includes("--force"));
     const newSalt = process.argv.includes("--newsalt");
     const salt = newSalt ? webcrypto.getRandomValues(new Uint8Array(16)) : b(cur.salt);
     const iter = newSalt ? 600000 : cur.iter; /* OWASP-recommended PBKDF2-SHA256 count */
@@ -114,6 +161,9 @@ async function key(pw, salt, iter, usages) {
       try { fs.rmSync(HTML + ".new", { force: true }); }
       catch (_) { console.log("note: could not remove " + HTML + ".new (gitignored, safe to leave)."); }
     }
+    /* data.json now descends from the payload we just wrote — re-stamp it, so a second
+     * encrypt in the same session is not refused by the freshness guard above. */
+    writeStamp({ iv: Buffer.from(iv).toString("base64"), ct: Buffer.from(ct).toString("base64") });
     console.log("re-encrypted DATA into index.html (" + ct.length + " bytes). Run tests, then commit.");
     console.log(newSalt
       ? "note: NEW SALT — every family member must re-enter the password."

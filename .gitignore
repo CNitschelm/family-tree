@@ -9,6 +9,7 @@
 !/.gitignore
 !/.gitattributes
 !/.github/workflows/test.yml
+!/.github/workflows/verify-deploy.yml
 !/README.md
 !/CLAUDE.md
 !/OPERATING.md
