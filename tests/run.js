@@ -350,6 +350,15 @@ ok(/const MAPGEO = \{/.test(html), "basemap geometry present in the plaintext la
 ok(html.includes('id="mapview"') && html.includes('id="mapcanvas"'), "map view markup present");
 ok(!/\bMAPGEO\b[\s\S]{0,400}?(Nitschelm|Gunsbach|Amboy)/.test(html),
   "basemap block carries no family place names");
+/* The map overlays are children of #mapview, so their wheel events bubble into
+   the zoom handler. Without the guard, two fingers on a trackpad over the
+   journey sheet zoomed the map instead of scrolling the text. */
+ok(/const MAP_OVERLAYS = "[^"]*#mapsheet[^"]*"/.test(html),
+  "map overlay selector defined");
+ok(/mapEl\.addEventListener\("wheel"[\s\S]{0,600}?closest\(MAP_OVERLAYS\)\)\s*return;[\s\S]{0,80}?e\.preventDefault\(\)/.test(html),
+  "map zoom ignores wheel events that land on an overlay, and bails before preventDefault");
+ok(/#mapsheet\{[^}]*overscroll-behavior:contain/.test(html),
+  "journey sheet contains its own scroll");
 {
   /* the encoder is delta + zig-zag base64 varints; decode it here the same way
      the page does, so a change to either side fails loudly */
