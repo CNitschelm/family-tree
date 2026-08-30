@@ -1,0 +1,5 @@
+#!/bin/sh
+# Refuses any commit message that carries a person's name, or that is longer
+# than one line. See tools/check-commit-msg.js for the reasoning.
+# Wired up with: git config core.hooksPath githooks
+exec node "$(dirname "$0")/../tools/check-commit-msg.js" "$1"

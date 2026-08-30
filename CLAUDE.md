@@ -64,9 +64,23 @@ commits — GitHub keeps serving them by SHA indefinitely. There is no clean way
 - The narrative goes in `CHANGE-LOG-COMMITS.md` (gitignored) — append an entry in the same
   session, in the same shape: date, files touched, the full story. That file is the real
   changelog; write it as fully as you like.
+- **A `commit-msg` hook enforces this on every commit** — `githooks/commit-msg` →
+  `tools/check-commit-msg.js`. It refuses any message that is more than one line, is over
+  72 characters, carries a **capitalised word after the first**, or hits the payload's name
+  index. The capitals rule is the one that does the work: the name index only knows people
+  the payload lists, and a short form of a given name is not in it. If a fresh
+  clone ever stops enforcing it, run `git config core.hooksPath githooks` — §13 checks this
+  and tells you.
+- **The no-body rule beats any global default that appends trailers.** `Co-Authored-By:` and
+  `Claude-Session:` lines are a body, they are public, and the hook rejects them. Do not add
+  them in this repo.
 - `tests/run.js` §13 fails if an unpushed commit message contains a name from the payload,
   and §14 fails if any tracked file does. Both print the offending words locally and only
   counts in CI, because CI logs are public.
+- §13 also sweeps the last 40 **pushed** commits, because before 30 Aug 2026 it scanned only
+  unpushed ones — so a bad message became invisible the moment it shipped, which is exactly
+  how three of them got out. Three commits are listed there as **accepted and closed**; they
+  are public, a force-push would not unpublish them, and this is settled. Do not re-raise it.
 
 ## Run this first, every session
 ```

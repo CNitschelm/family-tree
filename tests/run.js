@@ -531,7 +531,16 @@ ok(allNodes.every(n => !n.p.mn || n.p.mn_fr), "person map notes bilingual");
  * and GitHub Actions run titles republish them. On 12 Aug 2026 the entire
  * history had to be rewritten because messages carried names and quotes.
  * This scans commits not yet on origin/main against the payload's own name
- * index. It prints the offending words only outside CI (CI logs are public). */
+ * index. It prints the offending words only outside CI (CI logs are public).
+ *
+ * 30 Aug 2026: this used to scan ONLY unpushed commits, which meant that the
+ * moment a bad message was pushed the check could never see it again — and two
+ * of them reached the public history exactly that way. It now also sweeps the
+ * recent PUSHED history, and asserts that the commit-msg hook is actually
+ * wired up, because a guard nobody runs is not a guard. The two known-bad
+ * commits are listed as accepted so this does not re-report them every run;
+ * they are public, a force-push would not unpublish them, and the decision to
+ * leave them is recorded in OPEN-ITEMS N18. */
 section("Commit hygiene");
 {
   let msgs = null;
@@ -561,6 +570,64 @@ section("Commit hygiene");
     ok(!hits.length, "unpushed commit messages carry no person names (" + msgs.length + " scanned)" +
       (hits.length ? " — " + hits.map(h => h.sha + ": " + h.bad.length + " name token(s)" +
         (process.env.CI ? "" : " [" + h.bad.join(", ") + "]")).join("; ") : ""));
+  }
+
+  /* ---- the commit-msg guard must be installed ---- */
+  {
+    const cp = require("child_process");
+    let hooksPath = "";
+    try {
+      hooksPath = cp.execFileSync("git", ["config", "core.hooksPath"],
+        { cwd: ROOT, env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" },
+          stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+    } catch (_) { /* unset */ }
+    const hookFile = path.join(ROOT, "githooks", "commit-msg");
+    const guard = path.join(ROOT, "tools", "check-commit-msg.js");
+    ok(hooksPath === "githooks" && fs.existsSync(hookFile) && fs.existsSync(guard),
+      "commit-msg guard is wired up" +
+      (hooksPath === "githooks" ? "" : " — RUN: git config core.hooksPath githooks"));
+  }
+
+  /* ---- recent pushed history, so a leak cannot hide behind having shipped ---- */
+  {
+    /* Public and accepted: leaving them is deliberate (OPEN-ITEMS N18). A
+     * force-push does not unpublish a commit — GitHub serves old SHAs by hash
+     * indefinitely — so rewriting would cost a history break and fix nothing. */
+    const ACCEPTED = new Set([
+      "cb70716c1cdac729e3ecab70e9864d422beee475",
+      "0c1a36a082a228cb3edf9f0d2c3fed843397bc5d",
+      "d37f3afb0d527439641e6d10b8907885285b91e9",
+    ]);
+    let pushed = null;
+    try {
+      const cp = require("child_process");
+      const out = cp.execFileSync("git",
+        ["log", "--format=%H%x1f%B%x1e", "-n", "40", "origin/main"],
+        { cwd: ROOT, env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" },
+          stdio: ["ignore", "pipe", "ignore"] }).toString("utf8");
+      pushed = out.split("\x1e").map(x => x.trim()).filter(Boolean)
+        .map(x => { const i = x.indexOf("\x1f"); return { sha: x.slice(0, i), body: x.slice(i + 1) }; })
+        .filter(c => !ACCEPTED.has(c.sha));
+    } catch (_) { /* no origin ref locally — nothing to sweep */ }
+    if (pushed === null) {
+      console.log("  --  no origin/main ref to sweep");
+    } else {
+      const nameTok2 = new Set();
+      const addTok2 = str => String(str || "").split(/[^\p{L}]+/u).forEach(w => {
+        if (w.length >= 3) { nameTok2.add(w.toLowerCase()); nameTok2.add(norm(w)); }
+      });
+      allNodes.forEach(n => { addTok2(n.p.name); (n.p.unions || []).forEach(u => addTok2(u.s)); });
+      const leaks = [];
+      pushed.forEach(c => {
+        const words = c.body.split(/[^\p{L}]+/u).filter(w => w.length >= 3);
+        const bad = [...new Set(words.filter(w => nameTok2.has(w.toLowerCase()) || nameTok2.has(norm(w))))];
+        if (bad.length) leaks.push({ sha: c.sha.slice(0, 7), bad });
+      });
+      ok(!leaks.length,
+        "pushed commit messages carry no NEW person names (" + pushed.length +
+        " scanned, " + ACCEPTED.size + " accepted)" +
+        (leaks.length ? " — " + leaks.map(h => h.sha + (process.env.CI ? "" : " [" + h.bad.join(", ") + "]")).join("; ") : ""));
+    }
   }
 }
 
