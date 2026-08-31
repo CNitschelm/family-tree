@@ -1,5 +1,15 @@
 # Working rules for this project
 
+> **Read `notes/` first.** It mirrors this project's Cowork project-memory files: deploying,
+> the map view, the machine checks, the Aug 2026 remediation, the privacy stance, the key
+> cache, the security work, and the Chicago naturalisation research. A session started from
+> a scheduled task carries **no project association and cannot reach project memory at all**
+> — the read fails with "this session is not associated with a project on this device", and
+> nothing can bind a session to a project after the fact. `notes/` is the copy that works
+> either way. It is gitignored by the deny-by-default rule below (check with
+> `git check-ignore -v notes/`), so it is never published. The desktop store remains the
+> master copy — when something changes, update both.
+
 ## Standing priorities (Cory, 31 Jul 2026 — applies to every task here)
 1. **Thoroughness and accuracy first.** Never trade correctness for a shortcut.
 2. **Then token efficiency.**
