@@ -312,7 +312,7 @@ function C3() {
   }
 }
 
-const DOCCLASS = /register|registre|acte|act n|act \d|census|recensement|certificate|obituar|n[ée]crolog|gravestone|headstone|FindAGrave|tombe|bible|deed|patent|naturali|manifest|passenger|SSDI|Social Security|record|index|EDEPOT|archives6[78]|AD Bas-Rhin|AD Haut-Rhin|scan|image|Kirchenbuch|BMS|declaration|oath|will\b|inventory|inventaire|marriage licen|Email to Cory|letter|biograph|Nobel|BnF|Biblioth|Encyclop|Acad[ée]mie|Institut|Foundation|Society|Museum|Archiv|directory|annuaire|newspaper|gazette|journal|press|university|college|Who's Who|published|imprim/i;
+const DOCCLASS = /register|registre|acte|act n|act \d|census|recensement|certificate|obituar|n[ée]crolog|gravestone|headstone|FindAGrave|tombe|bible|deed|patent|naturali|manifest|passenger|SSDI|Social Security|record|index|EDEPOT|archives6[78]|AD Bas-Rhin|AD Haut-Rhin|scan|image|Kirchenbuch|BMS|declaration|oath|will\b|inventory|inventaire|marriage licen|Email to Cory|letter|biograph|Nobel|BnF|Biblioth|Encyclop|Acad[ée]mie|Institut|Foundation|Society|Museum|Archiv|directory|annuaire|newspaper|gazette|journal|press|university|college|Who's Who|published|imprim|personal site|site personnel|portfolio|r[ée]sum[ée]|LinkedIn/i;
 function C3d() {
   for (const p of people) {
     const inv = L.sourceInventory(p);
@@ -630,7 +630,7 @@ function C6() {
       // Vocabulary-level parity is unreliable across two languages: emitted as a
       // reading queue, not as a defect. (Cold audit, 7 Aug: ~15% precision.)
       const eh = hasHedge(en, 'en'), fh = hasHedge(fr, 'fr');
-      if (eh.length && !fh.length) F('C6h', 'review', p, label, `EN hedges ("${eh[0]}") — check the FR carries the same doubt`, { en, fr });
+      if (eh.length && !fh.length && !eh.some(h => fr.includes(h))) F('C6h', 'review', p, label, `EN hedges ("${eh[0]}") — check the FR carries the same doubt`, { en, fr });
       if (fh.length && !eh.length) F('C6h', 'review', p, label, `FR hedges ("${fh[0]}") — check the EN carries the same doubt`, { en, fr });
       const es = L.sentences(en).length, fsn = L.sentences(fr).length;
       if (es !== fsn) F('C6', 'low', p, label, `sentence count EN ${es} vs FR ${fsn}`, { en, fr });
@@ -687,6 +687,9 @@ function C8() {
     const places = [...keys].map(k => ({ k, g: gaz[k] })).filter(x => x.g && x.g.lat != null);
     const re = new RegExp('\\b(' + Object.keys(L.NUMWORD).join('|') + '|\\d{1,4})(?:[-\\s](' + Object.keys(L.NUMWORD).join('|') + '))?\\s*(miles?|km\\b|kilometres?|kilometers?|kilom[eè]tres?)', 'gi');
     for (const f of L.fields(p)) for (const s of L.sentences(f.text)) {
+      // a distance quoted verbatim from a document or a family message is the document's text, not
+      // the site's own claim: report it for review, never as a high (N8 — "one-fourth mile west of Wood river")
+      const quotedField = f.kind === 'doctr' || f.kind === 'srcquote';
       for (const m of L.norm(s).matchAll(re)) {
         const n = L.wordToNum([m[1], m[2]].filter(Boolean).join('-'));
         if (n == null) continue;
@@ -697,7 +700,7 @@ function C8() {
         if (!all.length) continue;
         all.sort((a, b) => Math.abs(a.d - km) - Math.abs(b.d - km));
         if (Math.abs(all[0].d - km) > Math.max(km * 0.3, 1.0))
-          F('C8', 'high', p, f.path, `"${m[0].trim()}" (=${km.toFixed(1)} km) disagrees with the site's own gazetteer — the prose or the coordinates are wrong`,
+          F('C8', quotedField ? 'review' : 'high', p, f.path, `"${m[0].trim()}" (=${km.toFixed(1)} km) disagrees with the site's own gazetteer — ${quotedField ? 'quoted from a document, verify but do not "correct"' : 'the prose or the coordinates are wrong'}`,
             { sentence: s, nearest: all.slice(0, 5).map(x => `${x.s}=${x.d.toFixed(1)}km`) });
       }
     }
