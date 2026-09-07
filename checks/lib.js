@@ -213,6 +213,7 @@ function yearsOf(node) {
   if (m) return { b: +m[1], d: m[2] === '?' ? null : +m[2] };
   m = y.match(/^b\.\s*(\d{4})$/i); if (m) return { b: +m[1], d: null };
   m = y.match(/^d\.\s*(\d{4})$/i); if (m) return { b: null, d: +m[1] };
+  m = y.match(/^c\.?\s*(\d{4})\s*[–—-]\s*(\d{4}|\?)$/i); if (m) return { b: +m[1], d: m[2] === '?' ? null : +m[2], approx: true };
   m = y.match(/^c\.?\s*(\d{4})/i); if (m) return { b: +m[1], d: null, approx: true };
   m = y.match(/(\d{4})/); return m ? { b: +m[1], d: null, loose: true } : { b: null, d: null };
 }
