@@ -583,9 +583,13 @@ section("Commit hygiene");
     } catch (_) { /* unset */ }
     const hookFile = path.join(ROOT, "githooks", "commit-msg");
     const guard = path.join(ROOT, "tools", "check-commit-msg.js");
-    ok(hooksPath === "githooks" && fs.existsSync(hookFile) && fs.existsSync(guard),
+    /* core.hooksPath is per-clone and never set on a CI checkout; there, only the
+     * tracked hook and guard files can be checked. (Every Actions run since this
+     * test was added went red on exactly that line.) */
+    const wired = process.env.GITHUB_ACTIONS ? true : hooksPath === "githooks";
+    ok(wired && fs.existsSync(hookFile) && fs.existsSync(guard),
       "commit-msg guard is wired up" +
-      (hooksPath === "githooks" ? "" : " — RUN: git config core.hooksPath githooks"));
+      (wired ? "" : " — RUN: git config core.hooksPath githooks"));
   }
 
   /* ---- recent pushed history, so a leak cannot hide behind having shipped ---- */
