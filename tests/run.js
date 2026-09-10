@@ -160,7 +160,7 @@ ok(/^\d{4}-\d{2}-\d{2}$/.test(SYNCED), "SYNCED is YYYY-MM-DD (" + SYNCED + ")");
 /* anchors: branch navigation ids live INSIDE the encrypted data */
 ok(["trunk", "fr", "east", "west", "schw"].every(a => allNodes.some(n => n.p.anchor === a)),
   "all 5 navigation anchors present in encrypted data");
-ok(["fr", "east", "west", "schw"].every(k => BRANCH_HEADS[k]), "branch heads resolve via anchors");
+ok(["fr", "east", "west", "ohio", "schw"].every(k => BRANCH_HEADS[k]), "branch heads resolve via anchors");
 /* people are referenced structurally, never by name, to keep this file PII-free */
 const creator = allNodes.find(n => /creator of this website/i.test(n.p.note || ""));
 ok(!!creator, "site-creator credit exists");
@@ -203,8 +203,8 @@ ok(allNodes.some(n => n.p.years === "1729–1804") && !allNodes.some(n => n.p.ye
   "base carries the corrected West keystone years (1729–1804, no 1734)");
 ok(!allNodes.some(n => n.p.years === "1713–?" && n.p.anchor === "west"),
   "the superseded 1713 bridge person is gone from the corrected base");
-ok(allNodes.filter(n => n.p._g26).length === 2 && allNodes.filter(n => n.p._n26).length === 53,
-  "provenance tags: 2 grafted-chain people, 53 post-original additions (messages + register children)");
+ok(allNodes.filter(n => n.p._g26).length === 8 && allNodes.filter(n => n.p._n26).length === 53,
+  "provenance tags: 8 grafted-chain people, 53 post-original additions (messages + register children)");
 ok(allNodes.every(n => n.p.g === "f" || n.p.g === "m"),
   "every person carries a sex field (genogram avatar shapes)");
 /* original-document images shown inside bios: embedded, captioned and transcribed in both languages */
@@ -251,11 +251,11 @@ ok(visCount() === expectEast,
   "east-only = branch + direct line only, no sibling heads (" + visCount() + " = " + expectEast + ")");
 
 activeFilters.add("legacy");
-["fr", "west", "schw"].forEach(k => activeFilters.add(k));
+["fr", "west", "ohio", "schw"].forEach(k => activeFilters.add(k));
 setOpenFromFilters();
 ok(visCount() === allNodes.length, "legacy + all branches = whole tree");
 
-["legacy", "fr", "east", "west", "schw"].forEach(k => activeFilters.delete(k));
+["legacy", "fr", "east", "west", "ohio", "schw"].forEach(k => activeFilters.delete(k));
 setOpenFromFilters();
 ok(visCount() === 1, "all filters off = root only");
 initView();
