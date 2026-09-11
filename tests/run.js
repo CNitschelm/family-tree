@@ -251,11 +251,11 @@ ok(visCount() === expectEast,
   "east-only = branch + direct line only, no sibling heads (" + visCount() + " = " + expectEast + ")");
 
 activeFilters.add("legacy");
-["fr", "west", "ohio", "doubs", "schw"].forEach(k => activeFilters.add(k));
+["fr", "west", "ohio", "doubs", "colmar", "schw"].forEach(k => activeFilters.add(k));
 setOpenFromFilters();
 ok(visCount() === allNodes.length, "legacy + all branches = whole tree");
 
-["legacy", "fr", "east", "west", "ohio", "doubs", "schw"].forEach(k => activeFilters.delete(k));
+["legacy", "fr", "east", "west", "ohio", "doubs", "colmar", "schw"].forEach(k => activeFilters.delete(k));
 setOpenFromFilters();
 ok(visCount() === 1, "all filters off = root only");
 initView();
