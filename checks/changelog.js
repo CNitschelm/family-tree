@@ -13,7 +13,7 @@ const BATCH = {
   'w2': 'Phase 1 writer — the Rothau branch',
   'w3': 'Phase 1 writer — Ottawa / Illinois',
   'w4': 'Phase 1 writer — Emile Paul',
-  'w5': 'Phase 1 writer — Hans Jacob / Jean Jacques / André',
+  'w5': 'Phase 1 writer — the early Munster generations',
   'w6': 'Phase 1 writer — Jean Georges 1821 / Barbe',
   'w7': 'Phase 1 writer — the short West cards',
   'w8': 'Phase 1 writer — the cousin branch and the Alsace line',
