@@ -2,4 +2,91 @@
 # Refuses any commit message that carries a person's name, or that is longer
 # than one line. See tools/check-commit-msg.js for the reasoning.
 # Wired up with: git config core.hooksPath githooks
-exec node "$(dirname "$0")/../tools/check-commit-msg.js" "$1"
+#
+# The node guard is the real one and runs whenever node is on PATH. It is not
+# on PATH inside GitHub Desktop's bundled git on Windows, and that is the
+# environment every deploy goes through: from 12 Sep 2026 the hook could not
+# run there at all, so it blocked the commit instead of checking it. The shell
+# fallback below enforces the same four rules with sed/grep/tr, which git ships
+# with, and it FAILS CLOSED exactly as the node guard does: where it cannot
+# check, it refuses. It is the stricter of the two — it also rejects any
+# non-ASCII subject, and it has no encrypted-payload fallback, so a working
+# copy without data.json is refused rather than waved through.
+dir=$(dirname "$0")
+if command -v node >/dev/null 2>&1; then
+  exec node "$dir/../tools/check-commit-msg.js" "$1"
+fi
+
+die() { printf '\ncommit-msg: %s\n\n' "$1" >&2; exit 1; }
+MAX_LEN=72
+TECH="github actions pages readme json html css aes gcm ci en fr node npm js url urls pbkdf2 svg jpeg png dom api http https utf claude cowork windows linux"
+
+[ -n "$1" ] || die "no message file given (the hook passes it as \$1)."
+
+# 1. one line - git's own comment block and blank lines do not count
+count=$(grep -v '^#' "$1" | grep -c '[^[:space:]]')
+[ "$count" -eq 0 ] && die "empty commit message."
+if [ "$count" -gt 1 ]; then
+  die "commit messages in this repo are ONE LINE - no body, ever.
+  This applies to trailers too (Co-Authored-By, Claude-Session): they are a body,
+  they are public, and CLAUDE.md overrides any global default that adds them.
+  The narrative belongs in CHANGE-LOG-COMMITS.md, which is gitignored."
+fi
+subject=$(grep -v '^#' "$1" | grep '[^[:space:]]' | head -n 1 | sed 's/[[:space:]]*$//')
+
+# 2. length
+len=$(printf '%s' "$subject" | wc -m | tr -d '[:space:]')
+[ "$len" -gt "$MAX_LEN" ] && die "commit subject is $len chars; the limit is $MAX_LEN.
+  A long subject is nearly always narrative. Describe the mechanical change:
+  \"Update site data payload\", \"Update checks and tooling\"."
+
+# the shell rules below reason about ASCII letters only, so anything else is
+# refused rather than mis-parsed - a mechanical subject never needs it
+case $subject in
+  *[!\ -~]*) die "subject carries a non-ASCII character. The shell guard refuses
+  what it cannot parse. Write the subject in plain ASCII." ;;
+esac
+
+# 3. no capitalised word after the first
+offenders=""
+n=0
+for w in $(printf '%s' "$subject" | tr -c "A-Za-z0-9'-" ' '); do
+  n=$((n + 1))
+  [ "$n" -eq 1 ] && continue
+  bare=${w%%[-\']*}
+  [ ${#bare} -ge 2 ] || continue
+  lower=$(printf '%s' "$bare" | tr 'A-Z' 'a-z')
+  case " $TECH " in *" $lower "*) continue ;; esac
+  upper=$(printf '%s' "$bare" | tr 'a-z' 'A-Z')
+  [ "$bare" = "$upper" ] && continue
+  head1=$(printf '%s' "$bare" | cut -c1)
+  [ "$head1" = "$(printf '%s' "$head1" | tr 'A-Z' 'a-z')" ] || offenders="$offenders $bare"
+done
+[ -n "$offenders" ] && die "capitalised word(s) after the first:$offenders
+  Proper nouns do not belong in a public commit subject - that is how names
+  leak. Describe the mechanical change instead:
+  \"Update site data payload\", \"Update checks and tooling\"."
+
+# 4. no token that appears as a person's name in the payload
+data="$dir/../data.json"
+[ -r "$data" ] || die "no readable data.json, so the name index cannot be built
+  and this commit is REFUSED. A privacy guard that cannot check must not pass.
+  Fix: run \`node tools/crypt.js decrypt\`, then commit again."
+names=$(grep -o '"\(name\|s\)":"[^"]*"' "$data" \
+  | sed 's/^"[a-z]*":"//; s/"$//' \
+  | tr -c 'A-Za-z' '\n' | tr 'A-Z' 'a-z' | grep '^[a-z][a-z][a-z]' | sort -u)
+[ -n "$names" ] && [ "$(printf '%s\n' "$names" | wc -l)" -ge 20 ] || die "the name index came
+  out empty or implausibly small, so this commit is REFUSED. A privacy guard
+  that cannot check must not pass."
+bad=""
+for w in $(printf '%s' "$subject" | tr -c 'A-Za-z' ' '); do
+  lw=$(printf '%s' "$w" | tr 'A-Z' 'a-z')
+  [ ${#lw} -ge 3 ] || continue
+  if printf '%s\n' "$names" | grep -qx "$lw"; then bad="$bad $lw"; continue; fi
+  if [ ${#lw} -ge 4 ] && printf '%s\n' "$names" | grep -q "^$lw."; then bad="$bad $lw"; fi
+done
+[ -n "$bad" ] && die "this message names someone from the payload:$bad
+  The repo is PUBLIC and a force-push does not take it back - GitHub keeps
+  serving old SHAs by hash indefinitely. There is no clean way back.
+  Use a neutral mechanical line and put the story in CHANGE-LOG-COMMITS.md."
+exit 0
