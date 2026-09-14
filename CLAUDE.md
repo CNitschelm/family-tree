@@ -142,8 +142,16 @@ Check https://www.githubstatus.com/api/v2/summary.json **before** theorising. On
 
 ## Data shape (inside the payload)
 - Node: `{name, years, note, note_fr, src[], profile{}, unions[{s, sy, n, n_fr, c[]}], g:"m"|"f", img}`
+- Quick facts on the bio card: `occ` / `occ_fr` (a short trade noun phrase, no trailing period) and
+  `occ_c: "doc"|"inf"|"apx"` on the **node** — graded on the evidence for the TRADE, not for the place
+  it was practised. Every other row of the strip (born, died, lived, age at death, children,
+  descendants) is computed at render time from `pl`, `years` and the drawn tree — never stored.
 - Card source: `{l, u?, q?}` — `q` is a **verbatim** family quote; labels for family records must be specific: `"Email to Cory from <name>, <D Mon YYYY>"`.
-- Profile: `{headline, headline_fr, bio[], bio_fr[], sources[{label,label_fr,url}], docs[{img,u,cap,cap_fr,tr,tr_fr}]}`
+- Profile: `{headline, headline_fr, bio[], bio_fr[], hl[], hl_fr[], sources[{label,label_fr,url}], docs[{img,u,cap,cap_fr,tr,tr_fr}]}`
+- `hl` / `hl_fr` are the card's **highlight bullets** — at most three, one sentence each, and they may
+  only restate what that card's own bio already says, at the same certainty. They exist only where a
+  bio exists. `tests/run.js` enforces the shape; the hedge discipline is enforced by a cold-audit pass,
+  not by the linter (see [[machine-checks]] for why C1 is deliberately blind to them).
 - `docs[].img` is a base64 data-URI; every doc needs a **bilingual caption and transcription**.
 - Provenance tags: `_n26` (added 2026 from family messages), `_g26` (grafted register chain). Test asserts their counts.
 - `_legacy` block stores original-site values so `?legacy=1` can revert the tree exactly. Any correction to a pre-2026 person needs a matching `_legacy.vals` entry keyed `"years|name"`.

@@ -36,6 +36,12 @@ function fields(p) {
   add('profile.headline_fr', 'fr', 'headline', pr.headline_fr);
   (pr.bio || []).forEach((t, i) => add(`bio[${i}]`, 'en', 'bio', t, { i }));
   (pr.bio_fr || []).forEach((t, i) => add(`bio_fr[${i}]`, 'fr', 'bio', t, { i }));
+  // the card's highlight lines and written trade (Sep 2026): short restatements of the bio,
+  // linted like tooltips so a bullet can never assert flat what the bio hedges
+  (pr.hl || []).forEach((t, i) => add(`hl[${i}]`, 'en', 'hl', t, { i }));
+  (pr.hl_fr || []).forEach((t, i) => add(`hl_fr[${i}]`, 'fr', 'hl', t, { i }));
+  add('occ', 'en', 'occ', n.occ);
+  add('occ_fr', 'fr', 'occ', n.occ_fr);
   (pr.sources || []).forEach((s, i) => {
     add(`profile.sources[${i}].label`, 'en', 'psource', s.label, { i });
     add(`profile.sources[${i}].label_fr`, 'fr', 'psource', s.label_fr, { i });
@@ -68,6 +74,9 @@ function pairs(p) {
   P('note', n.note, n.note_fr, 'tooltip');
   P('mn', n.mn, n.mn_fr, 'mapnote');
   P('headline', pr.headline, pr.headline_fr, 'headline');
+  (pr.hl || []).forEach((t, i) => P(`hl[${i}]`, t, (pr.hl_fr || [])[i], 'hl'));
+  if ((pr.hl_fr || []).length > (pr.hl || []).length) P(`hl[${(pr.hl || []).length}]`, undefined, pr.hl_fr[(pr.hl || []).length], 'hl');
+  P('occ', n.occ, n.occ_fr, 'occ');
   const nb = Math.max((pr.bio || []).length, (pr.bio_fr || []).length);
   for (let i = 0; i < nb; i++) P(`bio[${i}]`, (pr.bio || [])[i], (pr.bio_fr || [])[i], 'bio');
   (pr.sources || []).forEach((s, i) => P(`profile.sources[${i}]`, s.label, s.label_fr, 'psource'));

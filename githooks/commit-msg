@@ -67,13 +67,17 @@ done
   leak. Describe the mechanical change instead:
   \"Update site data payload\", \"Update checks and tooling\"."
 
-# 4. no token that appears as a person's name in the payload
+# 4. no token that appears as a person's name in the payload.
+# The pattern tolerates whitespace after the colon: `tools/crypt.js decrypt` writes
+# data.json with JSON.stringify(data, null, 1), so the keys come out as `"name": "…"`.
+# Matching only the compact `"name":"…"` form made this guard refuse every commit that
+# followed the documented edit loop — it found no names and, correctly, failed closed.
 data="$dir/../data.json"
 [ -r "$data" ] || die "no readable data.json, so the name index cannot be built
   and this commit is REFUSED. A privacy guard that cannot check must not pass.
   Fix: run \`node tools/crypt.js decrypt\`, then commit again."
-names=$(grep -o '"\(name\|s\)":"[^"]*"' "$data" \
-  | sed 's/^"[a-z]*":"//; s/"$//' \
+names=$(grep -o '"\(name\|s\)": *"[^"]*"' "$data" \
+  | sed 's/^"[a-z]*": *"//; s/"$//' \
   | tr -c 'A-Za-z' '\n' | tr 'A-Z' 'a-z' | grep '^[a-z][a-z][a-z]' | sort -u)
 [ -n "$names" ] && [ "$(printf '%s\n' "$names" | wc -l)" -ge 20 ] || die "the name index came
   out empty or implausibly small, so this commit is REFUSED. A privacy guard

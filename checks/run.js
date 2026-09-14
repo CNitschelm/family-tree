@@ -120,13 +120,18 @@ function overlap(a, b) {
   for (const [k, w] of a) if (b.has(k)) { s += Math.min(w, b.get(k)); shared.push(k); }
   return { score: s, shared };
 }
-const SHORT_KINDS = new Set(['tooltip', 'mapnote', 'headline', 'pin', 'union']);
+const SHORT_KINDS = new Set(['tooltip', 'mapnote', 'headline', 'pin', 'union', 'occ']);
+/* C1 is blind to hl: a bullet restates a field of the same card, so it shares tokens with the
+ * sentence it summarises, and a bullet that correctly carries the card's hedge reads to C1 as a
+ * conflict with the flat sentence next to the hedge. Measured 13 Sep 2026: 25 high findings, 25
+ * false positives, 0 true. The cold-audit pass is the control for hedge-dropping in bullets. */
+const C1_BLIND = new Set(['hl']);
 const NOT_FLAT = new Set(['doccap', 'psource', 'srclabel']);   // labels, not claims
 
 // ================================================================ C1 hedge/assert
 function C1() {
   for (const p of people) {
-    const fs_ = L.fields(p).filter(f => !['srclabel', 'psource', 'doctr', 'srcquote'].includes(f.kind));
+    const fs_ = L.fields(p).filter(f => !['srclabel', 'psource', 'doctr', 'srcquote'].includes(f.kind) && !C1_BLIND.has(f.kind));
     const units = [];
     for (const f of fs_) for (const s of L.sentences(f.text)) {
       const h = hasHedge(s, f.lang);
@@ -176,7 +181,7 @@ function C2() {
   for (const p of people) {
     const inv = L.sourceInventory(p);
     const invText = inv.map(i => i.text).join(' \n ');
-    const fs_ = L.fields(p).filter(f => ['tooltip', 'mapnote', 'headline', 'bio', 'union', 'pin'].includes(f.kind));
+    const fs_ = L.fields(p).filter(f => ['tooltip', 'mapnote', 'headline', 'bio', 'union', 'pin', 'hl'].includes(f.kind));
     const reported = new Set();
     for (const f of fs_) for (const s of L.sentences(f.text)) {
       // (a) source-type invoked but not carried
@@ -367,7 +372,7 @@ function C4() {
       if (b) { const d = L.findDates(b.d)[0]; if (d) return d; }
       return y.b ? { y: y.b, m: null, d: null, approx: true } : null;
     })();
-    for (const f of L.fields(p).filter(x => ['bio', 'mapnote', 'tooltip', 'union', 'pin', 'doctr', 'srcquote', 'doccap'].includes(x.kind))) {
+    for (const f of L.fields(p).filter(x => ['bio', 'mapnote', 'tooltip', 'union', 'pin', 'doctr', 'srcquote', 'doccap', 'hl'].includes(x.kind))) {
       if (f.lang !== 'en') continue;
       const quoted = f.kind === 'doctr' || f.kind === 'srcquote';
       const paraDates = L.findDates(f.text);
@@ -654,7 +659,8 @@ function C6() {
         F('C6h', 'review', p, label,
           `load-bearing word(s) matched in one language only — EN: ${iEN.join(', ') || '\u2014'} | FR: ${iFR.join(', ') || '\u2014'}`, { en, fr });
       const r = en.length / fr.length;
-      if (r < 0.55 || r > 1.6) F('C6', 'med', p, label, `length ratio EN/FR ${r.toFixed(2)}`, { en, fr });
+      /* a trade is a noun phrase of one to three words; "Farrier"/"Maréchal-ferrant" is 0.44 and fine */
+      if ((r < 0.55 || r > 1.6) && pr.kind !== 'occ') F('C6', 'med', p, label, `length ratio EN/FR ${r.toFixed(2)}`, { en, fr });
     }
   }
 }
@@ -793,7 +799,7 @@ function X13() {
   for (const p of people) {
     const mine = countsFor(p);
     const seen = {};   // relation -> Set of asserted numbers, for X13b
-    for (const f of L.fields(p).filter(x => ['bio', 'mapnote', 'tooltip', 'union'].includes(x.kind) && x.lang === 'en')) {
+    for (const f of L.fields(p).filter(x => ['bio', 'mapnote', 'tooltip', 'union', 'hl'].includes(x.kind) && x.lang === 'en')) {
       for (const sen of L.sentences(f.text)) {
         for (const m of L.norm(sen).matchAll(RE)) {
           const n = L.wordToNum([m[1], m[2]].filter(Boolean).join('-'));

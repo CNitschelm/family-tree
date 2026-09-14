@@ -181,6 +181,27 @@ ok(profiled.every(n => {
 }), "profile bios are bilingual, paragraph for paragraph");
 ok(profiled.every(n => (n.p.profile.timeline || []).every(t => t.y && t.t && t.t_fr)),
   "profile timeline entries bilingual");
+/* card quick facts (Sep 2026): the written trade sits on the node and is graded like a map pin;
+ * the highlight bullets sit in the profile and restate the bio, so they exist only where a bio does */
+const withOcc = allNodes.filter(n => n.p.occ);
+ok(withOcc.length >= 60, "occupation lines present (" + withOcc.length + ")");
+ok(withOcc.every(n => n.p.occ_fr && n.p.occ_fr.length > 0), "occupation lines bilingual");
+ok(allNodes.every(n => !n.p.occ_fr || n.p.occ), "no French trade without an English one");
+ok(withOcc.every(n => ["doc", "inf", "apx"].includes(n.p.occ_c)),
+  "every occupation carries a certainty grade the card can render");
+ok(withOcc.every(n => n.p.occ.length <= 64 && !/[.;]$/.test(n.p.occ)),
+  "occupation lines are short noun phrases, not sentences");
+const withHl = allNodes.filter(n => (n.p.profile || {}).hl);
+ok(withHl.length >= 90, "highlight bullets present (" + withHl.length + " cards)");
+ok(withHl.every(n => {
+  const h = n.p.profile.hl, f = n.p.profile.hl_fr;
+  return Array.isArray(h) && Array.isArray(f) && h.length === f.length && h.length >= 1 && h.length <= 3;
+}), "highlights bilingual bullet for bullet, at most three");
+ok(withHl.every(n => n.p.profile.hl.concat(n.p.profile.hl_fr)
+  .every(b => typeof b === "string" && b.trim().length > 20 && !/[*`]|\]\(/.test(b))),
+  "highlight bullets are plain prose (no markdown, no stubs)");
+ok(withHl.every(n => (n.p.profile.bio || []).length),
+  "highlights only where a bio exists to support them");
 ok(profiled.every(n => (n.p.profile.links || []).every(l => /^https:\/\//.test(l.url))),
   "profile links are https");
 /* THE STANDARD: every bio must cite its sources (url optional — e.g. family correspondence) */
