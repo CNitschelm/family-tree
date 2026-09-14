@@ -623,7 +623,7 @@ const I18N = {
       hint:"Click a person to open their family and trace their line · click the background or “Reset” to start over · drag / scroll to move",
       pwmsg:"This family tree is password protected.", pwbtn:"Unlock", pwerr:"Wrong password — try again.",
       stats_people:"people", stats_gens:"generations", stats_since:"records since",
-      profile_timeline:"Career", profile_links:"Links", profile_btn:"Bio", profile_sources:"Sources", profile_docs:"The original record", profile_transcript:"What it says", profile_doc_src:"see the register", profile_father:"Father", profile_mother:"Mother", profile_nobio:"No life story has been written for this person yet — what is known is on their card and in the records below.", profile_quotes:"In the family’s own words", profile_records:"Records for this person",
+      profile_timeline:"Career", profile_links:"Links", profile_btn:"Bio", profile_sources:"Sources", profile_docs:"The original record", profile_transcript:"What it says", profile_doc_src:"see the register", profile_father:"Father", profile_mother:"Mother", profile_nobio:"No life story has been written for this person yet — what is known is on their card and in the records below.", profile_quotes:"In the family’s own words",
       review_new:"added", review_fix:"corrected", review_old:"replaced",
       legacy_view:"Legacy view", updated_view:"Updated view", collapse:"Collapse header", expand:"Show controls",
       intro_title:"Welcome to the Nitschelm Family Tree", intro_go:"skip for now", tour:"Tour",
@@ -664,7 +664,7 @@ const I18N = {
       hint:"Cliquez sur une personne pour ouvrir sa famille et suivre sa lignée · cliquez sur le fond ou « Réinitialiser » pour recommencer · glissez / molette pour naviguer",
       pwmsg:"Cet arbre généalogique est protégé par mot de passe.", pwbtn:"Déverrouiller", pwerr:"Mot de passe incorrect — réessayez.",
       stats_people:"personnes", stats_gens:"générations", stats_since:"actes depuis",
-      profile_timeline:"Parcours", profile_links:"Liens", profile_btn:"Bio", profile_sources:"Sources", profile_docs:"Le document original", profile_transcript:"Ce qu’il dit", profile_doc_src:"voir le registre", profile_father:"Père", profile_mother:"Mère", profile_nobio:"Aucune notice n’a encore été rédigée pour cette personne — ce que l’on sait figure sur sa carte et dans les documents ci-dessous.", profile_quotes:"Dans les mots de la famille", profile_records:"Documents sur cette personne",
+      profile_timeline:"Parcours", profile_links:"Liens", profile_btn:"Bio", profile_sources:"Sources", profile_docs:"Le document original", profile_transcript:"Ce qu’il dit", profile_doc_src:"voir le registre", profile_father:"Père", profile_mother:"Mère", profile_nobio:"Aucune notice n’a encore été rédigée pour cette personne — ce que l’on sait figure sur sa carte et dans les documents ci-dessous.", profile_quotes:"Dans les mots de la famille",
       review_new:"ajouté", review_fix:"corrigé", review_old:"remplacé",
       legacy_view:"Vue d'origine", updated_view:"Vue à jour", collapse:"Replier l'en-tête", expand:"Afficher les contrôles",
       intro_title:"Bienvenue dans l'arbre familial Nitschelm", intro_go:"passer pour l'instant", tour:"Visite",
@@ -1400,17 +1400,53 @@ function openProfile(n){
     h += `<h3>${T("profile_quotes")}</h3><div class="pquotes">` +
       quotes.map(s=>`<blockquote>“${esc(s.q)}”<cite>${esc(s.l)}</cite></blockquote>`).join("") + `</div>`;
   }
-  /* every card source, with links, lives here */
-  if(p.src && p.src.length){
-    h += `<h3>${T("profile_records")}</h3><div class="psrc">` +
-      p.src.map(s=>s.u ? `<div><a href="${esc(s.u)}" target="_blank" rel="noopener">${esc(s.l)} ↗</a></div>` : `<div>${esc(s.l)}</div>`).join("") + `</div>`;
-  }
-  if(pr.sources && pr.sources.length){
-    h += `<h3>${T("profile_sources")}</h3><div class="psrc">` +
-      pr.sources.map(s=>{
-        const lab = esc(pickL(s.label, s.label_fr));
-        return s.url ? `<div><a href="${esc(s.url)}" target="_blank" rel="noopener">${lab} ↗</a></div>` : `<div>${lab}</div>`;
-      }).join("") + `</div>`;
+  /* ---- every source the card holds, in ONE list ----
+     `src` sits on the node and exists for everybody; `profile.sources` exists only where a bio does.
+     They had a heading each and largely restated one another — two thirds of the src rows repeated a
+     profile source in slightly different words, and on 39 cards every row was doubled. Merged here at
+     render time: THE PAYLOAD IS UNCHANGED, so this is reversible and nothing is lost from the data.
+
+     Same URL means the same source, always, and two rows that both carry a URL are never merged when
+     those URLs differ — six pages of one museum site share the head "Maison …, Gunsbach" and must stay
+     six rows. With no URL to compare, two rows match only when the head of the label (the citation,
+     before the em-dash commentary this site writes after it) is identical AND carries a digit, so a
+     bare institution name can never collapse distinct documents. The longest wording wins, because it
+     is the most specific; a French label is kept whenever either row had one. */
+  {
+    const sNorm = t => String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "")
+      .toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const sHead = t => { const n = sNorm(String(t || "").split(/\s[—–]\s|\s-\s/)[0]);
+                         return n.length >= 12 ? n : sNorm(t); };
+    const sUrl  = u => u ? String(u).trim().toLowerCase().replace(/^https?:\/\/(www\.)?/, "").replace(/\/+$/, "") : "";
+    const byU = new Map(), byH = new Map(), srcRows = [];
+    const addSrc = (en, fr, url) => {
+      en = String(en || "").trim(); fr = String(fr || "").trim(); url = String(url || "").trim();
+      if(!en && !fr) return;
+      const uk = sUrl(url), hk = sHead(en) || sHead(fr);
+      let row = uk ? byU.get(uk) : null;
+      if(!row && hk && /\d/.test(hk)){
+        const cand = byH.get(hk);
+        if(cand && !(cand.url && url && sUrl(cand.url) !== uk)) row = cand;
+      }
+      if(!row){ row = {en, fr, url}; srcRows.push(row); }
+      else {
+        if(en.length > row.en.length) row.en = en;   /* the fuller citation is the more useful one */
+        if(fr && !row.fr) row.fr = fr;
+        if(url && !row.url) row.url = url;
+      }
+      if(uk) byU.set(uk, row);
+      [sHead(row.en), hk, sHead(row.fr)].forEach(k => { if(k && /\d/.test(k) && !byH.has(k)) byH.set(k, row); });
+    };
+    (p.src || []).forEach(x => addSrc(x.l, "", x.u));
+    (pr.sources || []).forEach(x => addSrc(x.label, x.label_fr, x.url));
+    if(srcRows.length){
+      h += `<h3>${T("profile_sources")}</h3><div class="psrc">` +
+        srcRows.map(r => {
+          const lab = esc(pickL(r.en, r.fr) || r.en);
+          return r.url ? `<div><a href="${esc(r.url)}" target="_blank" rel="noopener">${lab} ↗</a></div>`
+                       : `<div>${lab}</div>`;
+        }).join("") + `</div>`;
+    }
   }
   if((p.pl || []).length) h += `<button class="pmapbtn" data-mapgo="1">${T("profile_viewmap")}</button>`;
   document.getElementById("pbody").innerHTML = h;
