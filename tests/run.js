@@ -214,12 +214,8 @@ ok(profiled.every(n => {
 ok(allNodes.every(n => Array.isArray(n.p.src) && n.p.src.length > 0), "every person has at least one card source");
 ok(allNodes.every(n => (n.p.src || []).every(s => s.l && typeof s.l === "string" && (!s.u || /^https?:\/\//.test(s.u)))),
   "card sources well-formed (label required, url http(s) when present)");
-/* corrected-base architecture: the payload IS the up-to-date tree; _legacy holds reversions */
-const DL = get("DATA")._legacy;
-ok(!!DL && DL.vals && DL.phantom && DL.phantomParent, "_legacy block present (vals + phantom + parent key)");
-ok(!!(DL.banner && DL.banner_fr && DL.lbanner && DL.lbanner_fr), "_legacy banners bilingual (diff + legacy view)");
-ok(Object.keys(DL.vals).every(k => allNodes.some(n => ((n.p.years||"")+"|"+(n.p.name||"")) === k)),
-  "every _legacy reversion key resolves to a person in the corrected base");
+/* corrected-base architecture: the payload IS the up-to-date tree (the _legacy reversion block was removed 19 Sep 2026) */
+ok(!get("DATA")._legacy, "no _legacy reversion block in the payload");
 ok(allNodes.some(n => n.p.years === "1729–1804") && !allNodes.some(n => n.p.years === "1734–1804"),
   "base carries the corrected West keystone years (1729–1804, no 1734)");
 ok(!allNodes.some(n => n.p.years === "1713–?" && n.p.anchor === "west"),

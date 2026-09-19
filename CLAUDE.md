@@ -154,7 +154,7 @@ Check https://www.githubstatus.com/api/v2/summary.json **before** theorising. On
   not by the linter (see [[machine-checks]] for why C1 is deliberately blind to them).
 - `docs[].img` is a base64 data-URI; every doc needs a **bilingual caption and transcription**.
 - Provenance tags: `_n26` (added 2026 from family messages), `_g26` (grafted register chain). Test asserts their counts.
-- `_legacy` block stores original-site values so `?legacy=1` can revert the tree exactly. Any correction to a pre-2026 person needs a matching `_legacy.vals` entry keyed `"years|name"`.
+- The `_legacy` reversion block and the `?legacy=1` view were removed on 19 Sep 2026 (Cory: version history is the record). Corrections no longer need a legacy entry.
 
 ## Content conventions
 - **Tooltips = one sentence.** A quick factoid only; everything else belongs in the bio. Sources never appear in tooltips.
