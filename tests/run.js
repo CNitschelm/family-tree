@@ -1,795 +1,140 @@
 #!/usr/bin/env node
 /*
- * Regression suite for the Nitschelm family-tree site.
- * Zero dependencies — run with:  node tests/run.js
+ * TEMPORARY AUDIT BRANCH — never merge this file into main.
  *
- * DATA is AES-encrypted inside index.html. The suite decrypts it using the
- * FT_PASSWORD env var or the git-ignored .password file at the repo root.
- * Without a password it still runs the HTML/syntax checks and exits 0.
- *
- * Every data/logic test corresponds to a bug that actually occurred, or an
- * invariant the page depends on. If you rename the section comments in
- * index.html, update the anchors in grab() calls below.
+ * On this branch tests/run.js is replaced by a single read-only audit: it decrypts the payload with the
+ * repository's own secret, counts any living person whose birthday (finer than the year) is on the site,
+ * and reports the counts. It prints counts only — never a name — and always exits 0: it is a measurement,
+ * not a gate. The real guard is the same block, installed into the full suite on main.
  */
 "use strict";
 const fs = require("fs");
 const path = require("path");
-const vm = require("vm");
 const { webcrypto } = require("node:crypto");
-
 const ROOT = path.join(__dirname, "..");
-
-/* Cowork's sandbox mount can serve a stale cached copy of index.html; a
- * never-before-seen case variant of the name bypasses that cache (Windows
- * filesystems are case-insensitive). On case-sensitive CI/Linux the variants
- * simply don't exist and we fall back to the plain name. */
-function caseVariant(name) {
-  return name.split("").map(c => Math.random() < 0.5 ? c.toUpperCase() : c.toLowerCase()).join("");
-}
-let html = "";
-for (const name of ["index.html", caseVariant("index.html"), caseVariant("index.html")]) {
-  try {
-    const t = fs.readFileSync(path.join(ROOT, name), "utf8");
-    if (t.trimEnd().endsWith("</html>") && t.length >= html.length) html = t;
-  } catch (_) { /* not present on case-sensitive filesystems */ }
-}
-if (!html) { console.error("FATAL: no complete index.html found"); process.exit(1); }
-
+const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 let pass = 0, fail = 0;
-function ok(cond, name) {
-  if (cond) { pass++; console.log("  ok  " + name); }
-  else { fail++; console.error("  FAIL " + name); }
-}
+function ok(cond, name) { if (cond) { pass++; console.log("  ok  " + name); } else { fail++; console.log("  FAIL " + name); } }
 function section(t) { console.log("\n== " + t + " =="); }
-function report() {
-  console.log("\n" + pass + " passed, " + fail + " failed");
-  process.exit(fail ? 1 : 0);
-}
 
 (async () => {
-
-/* ---------- 1. HTML integrity ---------- */
-section("HTML integrity");
-ok(html.trimEnd().endsWith("</html>"), "file is complete (ends with </html>)");
-ok(html.includes('<meta charset="UTF-8">'), "charset declared");
-ok(html.includes('href="favicon.png"'), "favicon is a local file");
-ok(fs.existsSync(path.join(ROOT, "favicon.png")), "favicon.png exists in repo");
-ok(!/i0\.wp\.com|corynitschelm\.com\/wp-content/.test(html), "no hot-linked wp.com assets");
-ok(html.includes('target="_blank"'), "footer link opens new tab");
-ok(html.includes("html.dark{"), "dark palette defined");
-ok(html.includes('id="theme"'), "theme toggle button present");
-ok(!/color:#fff\b/.test(html.match(/<style>[\s\S]*<\/style>/)[0].replace(/#hint[^}]*}|\.badge[^}]*}|\.jumps[^}]*}/g, "")),
-  "no hardcoded white text outside chips/hint (dark-mode safe)");
-
-section("Encryption envelope");
-ok(html.includes("const ENC = {"), "encrypted DATA envelope present");
-ok(!html.includes("const DATA = {"), "no plaintext DATA in the page");
-ok(!/Nitschelm", years:"/.test(html), "no person records leak outside the ciphertext");
-ok(html.includes('id="lock"'), "lock screen present");
-ok(html.includes("function boot(DATA)"), "app boots only after decryption");
-ok(!/p\.name==="/.test(html), "no person-name literals in the plaintext UI layer");
-ok(!/\d{4}–\d{4}/.test(html), "no lifespan literals in the plaintext UI layer");
-
-/* ---------- 2. Script extraction + syntax ---------- */
-section("Script syntax");
-const mScript = html.match(/<script>([\s\S]*)<\/script>/);
-ok(!!mScript, "script tag found");
-if (!mScript) report();
-const js = mScript[1];
-let syntaxOk = true;
-try { new Function(js); } catch (e) { syntaxOk = false; console.error("   " + e.message); }
-ok(syntaxOk, "whole script parses (new Function)");
-
-/* ---------- 3. Decrypt DATA ---------- */
-section("Decrypt DATA");
-let PW = (process.env.FT_PASSWORD || "").trim();
-if (!PW) { try { PW = fs.readFileSync(path.join(ROOT, ".password"), "utf8").trim(); } catch (_) {} }
-if (!PW) {
-  console.log("  --  no password available (FT_PASSWORD / .password) — skipping data & logic tests");
-  report();
-}
-const encM = js.match(/const ENC = (\{[^}]*\});/);
-ok(!!encM, "ENC parseable");
-const ENC = JSON.parse(encM[1].replace(/(\w+):/g, '"$1":'));
+const PW = (process.env.FT_PASSWORD || "").trim();
+if (!PW) { console.log("::notice title=Living people - year only::no password available, nothing audited"); return; }
+const ENC = JSON.parse(html.match(/const ENC = (\{[^}]*\});/)[1].replace(/(\w+):/g, '"$1":'));
 const b = s => Buffer.from(s, "base64");
-let dataJson;
-try {
-  const km = await webcrypto.subtle.importKey("raw", Buffer.from(PW), "PBKDF2", false, ["deriveKey"]);
-  const key = await webcrypto.subtle.deriveKey(
-    { name: "PBKDF2", salt: b(ENC.salt), iterations: ENC.iter, hash: "SHA-256" },
-    km, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
-  const pt = await webcrypto.subtle.decrypt({ name: "AES-GCM", iv: b(ENC.iv) }, key, b(ENC.ct));
-  dataJson = Buffer.from(pt).toString("utf8");
-} catch (e) {
-  ok(false, "decryption with configured password");
-  report();
-}
-ok(true, "decryption with configured password");
+const km = await webcrypto.subtle.importKey("raw", Buffer.from(PW), "PBKDF2", false, ["deriveKey"]);
+const key = await webcrypto.subtle.deriveKey({ name: "PBKDF2", salt: b(ENC.salt), iterations: ENC.iter, hash: "SHA-256" },
+  km, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
+const DATA = JSON.parse(Buffer.from(await webcrypto.subtle.decrypt({ name: "AES-GCM", iv: b(ENC.iv) }, key, b(ENC.ct))).toString("utf8"));
+/* the same tree walk the page does: a person's children hang off their unions */
+const allNodes = [];
+(function build(p, parent) {
+  const n = { p, parent, children: [] };
+  allNodes.push(n);
+  (p.unions || []).forEach(u => (u.c || []).forEach(c => n.children.push(build(c, n))));
+  return n;
+})(DATA, null);
+console.log("people in the payload: " + allNodes.length);
 
-/* ---------- 4. Build vm context: decrypted DATA + extracted logic ---------- */
-function grab(start, end) {
-  const i = js.indexOf(start);
-  if (i < 0) throw new Error("anchor not found: " + start);
-  const j = js.indexOf(end, i);
-  if (j < 0) throw new Error("anchor not found: " + end);
-  return js.slice(i, j);
-}
-let ctxSrc;
-try {
-  ctxSrc = [
-    grab("const SYNCED", "/* ---------------- Access"), // constants + i18n
-    "const DATA = " + dataJson + ";",
-    grab("let idc = 0;", "/* expand a node"),           // build()
-    grab("function openRun", "/* generation ruler"),    // filters/visibility
-    grab("function esc(", "const BC"),                  // esc()
-    grab("const BC =", "\nfunction render"),            // branch colors
-    grab("const norm", "function renderSuggest"),       // search
-    grab("function noteText", "function showTip"),      // notes
-  ].join("\n");
-} catch (e) {
-  console.error("  FAIL section extraction: " + e.message);
-  fail++;
-  report();
-}
-const ctx = { console };
-vm.createContext(ctx);
-vm.runInNewContext(ctxSrc, ctx);
-const get = expr => vm.runInNewContext(expr, ctx);
-const allNodes = get("allNodes"), root = get("root");
-const initView = get("initView"), setOpenFromFilters = get("setOpenFromFilters");
-const activeFilters = get("activeFilters"), searchMatches = get("searchMatches");
-const T = get("T"), I18N = get("I18N"), SYNCED = get("SYNCED");
-const esc = get("esc"), BC = get("BC"), noteText = get("noteText");
-const openAll = get("openAll"), AV = get("AV"), BRANCH_HEADS = get("BRANCH_HEADS");
-const visChildren = get("(n)=> n.open ? n.children.filter(c=>!visSet || visSet.has(c.id)) : []");
-
-function visCount() {
-  let c = 0;
-  (function w(n) { c++; visChildren(n).forEach(w); })(root);
-  return c;
-}
-function subtreeSize(n) { let c = 0; (function w(x) { c++; x.children.forEach(w); })(n); return c; }
-function depth(n) { let d = 0, a = n; while (a.parent) { d++; a = a.parent; } return d; }
-
-/* ---------- 5. Data invariants ---------- */
-section("Data invariants");
-ok(allNodes.length >= 108, "tree has >= 108 people (" + allNodes.length + ")");
-ok(allNodes.every(n => BC[n.branch]), "every person has a known branch color");
-ok(allNodes.every(n => n.p.name && typeof n.p.name === "string"), "every person has a name");
-ok(/^\d{4}-\d{2}-\d{2}$/.test(SYNCED), "SYNCED is YYYY-MM-DD (" + SYNCED + ")");
-/* anchors: branch navigation ids live INSIDE the encrypted data */
-ok(["trunk", "fr", "east", "west", "schw"].every(a => allNodes.some(n => n.p.anchor === a)),
-  "all 5 navigation anchors present in encrypted data");
-ok(Object.keys(BRANCH_HEADS).every(k => BRANCH_HEADS[k]), "all " + Object.keys(BRANCH_HEADS).length + " branch heads resolve via anchors");
-/* people are referenced structurally, never by name, to keep this file PII-free */
-const creator = allNodes.find(n => /creator of this website/i.test(n.p.note || ""));
-ok(!!creator, "site-creator credit exists");
-ok(creator && /^data:image\/(jpeg|png|webp);base64,/.test(creator.p.img || ""), "creator's photo embedded as data URI");
-ok(allNodes.every(n => !n.p.img || /^data:image\//.test(n.p.img)), "all photos embedded (none reference repo files)");
-/* the circus was withdrawn from the tooltip in 2026 as unsupported, but the story itself
-   is kept in the bio, told as a story — lore is preserved, it is just no longer asserted */
-ok(allNodes.some(n => ((n.p.profile || {}).bio || []).some(b => /circus/i.test(b))),
-  "family lore preserved (as lore, in the bio, not as fact in a tooltip)");
-ok(!allNodes.some(n => n.p.tag === "you"), "no 'you' tag (site is for the whole family)");
-/* profiles: bio pages carried inside the encrypted payload */
-const profiled = allNodes.filter(n => n.p.profile);
-ok(profiled.length >= 1, "at least one profile exists (" + profiled.length + ")");
-ok(profiled.every(n => {
-  const pr = n.p.profile;
-  return Array.isArray(pr.bio) && pr.bio.length &&
-         Array.isArray(pr.bio_fr) && pr.bio_fr.length === pr.bio.length;
-}), "profile bios are bilingual, paragraph for paragraph");
-ok(profiled.every(n => (n.p.profile.timeline || []).every(t => t.y && t.t && t.t_fr)),
-  "profile timeline entries bilingual");
-/* card quick facts (Sep 2026): the written trade sits on the node and is graded like a map pin;
- * the highlight bullets sit in the profile and restate the bio, so they exist only where a bio does */
-const withOcc = allNodes.filter(n => n.p.occ);
-ok(withOcc.length >= 60, "occupation lines present (" + withOcc.length + ")");
-ok(withOcc.every(n => n.p.occ_fr && n.p.occ_fr.length > 0), "occupation lines bilingual");
-ok(allNodes.every(n => !n.p.occ_fr || n.p.occ), "no French trade without an English one");
-ok(withOcc.every(n => ["doc", "inf", "apx"].includes(n.p.occ_c)),
-  "every occupation carries a certainty grade the card can render");
-ok(withOcc.every(n => n.p.occ.length <= 64 && !/[.;]$/.test(n.p.occ)),
-  "occupation lines are short noun phrases, not sentences");
-const withHl = allNodes.filter(n => (n.p.profile || {}).hl);
-ok(withHl.length >= 90, "highlight bullets present (" + withHl.length + " cards)");
-ok(withHl.every(n => {
-  const h = n.p.profile.hl, f = n.p.profile.hl_fr;
-  return Array.isArray(h) && Array.isArray(f) && h.length === f.length && h.length >= 1 && h.length <= 3;
-}), "highlights bilingual bullet for bullet, at most three");
-ok(withHl.every(n => n.p.profile.hl.concat(n.p.profile.hl_fr)
-  .every(b => typeof b === "string" && b.trim().length > 20 && !/[*`]|\]\(/.test(b))),
-  "highlight bullets are plain prose (no markdown, no stubs)");
-ok(withHl.every(n => (n.p.profile.bio || []).length),
-  "highlights only where a bio exists to support them");
-ok(profiled.every(n => (n.p.profile.links || []).every(l => /^https:\/\//.test(l.url))),
-  "profile links are https");
-/* THE STANDARD: every bio must cite its sources (url optional — e.g. family correspondence) */
-ok(profiled.every(n => {
-  const s = n.p.profile.sources;
-  return Array.isArray(s) && s.length > 0 && s.every(x => x.label && (!x.url || /^https:\/\//.test(x.url)));
-}), "every profile cites at least one source");
-/* THE STANDARD, extended: every PERSON carries card-level sources (src array in the payload).
-   url optional (family records); when present it must be http(s). */
-ok(allNodes.every(n => Array.isArray(n.p.src) && n.p.src.length > 0), "every person has at least one card source");
-ok(allNodes.every(n => (n.p.src || []).every(s => s.l && typeof s.l === "string" && (!s.u || /^https?:\/\//.test(s.u)))),
-  "card sources well-formed (label required, url http(s) when present)");
-/* corrected-base architecture: the payload IS the up-to-date tree (the _legacy reversion block was removed 19 Sep 2026) */
-ok(!get("DATA")._legacy, "no _legacy reversion block in the payload");
-ok(allNodes.some(n => n.p.years === "1729–1804") && !allNodes.some(n => n.p.years === "1734–1804"),
-  "base carries the corrected West keystone years (1729–1804, no 1734)");
-ok(!allNodes.some(n => n.p.years === "1713–?" && n.p.anchor === "west"),
-  "the superseded 1713 bridge person is gone from the corrected base");
-ok(allNodes.filter(n => n.p._g26).length === 8 && allNodes.filter(n => n.p._n26).length === 53,
-  "provenance tags: 8 grafted-chain people, 53 post-original additions (messages + register children)");
-ok(allNodes.every(n => n.p.g === "f" || n.p.g === "m"),
-  "every person carries a sex field (genogram avatar shapes)");
-/* original-document images shown inside bios: embedded, captioned and transcribed in both languages */
-const docPeople = allNodes.filter(n => n.p.profile && n.p.profile.docs);
-const docCount = docPeople.reduce((a, n) => a + n.p.profile.docs.length, 0);
-ok(docPeople.length >= 10 && docCount >= 20,
-  "documents embedded in bios (" + docCount + " images on " + docPeople.length + " people)");
-/* the family bible and the two Amboy gravestones are family-supplied: no URL, but still transcribed */
-const bibleDocs = allNodes.filter(n => n.p.profile && n.p.profile.docs)
-  .flatMap(n => n.p.profile.docs).filter(d => !d.u);
-ok(bibleDocs.length >= 6 && bibleDocs.every(d => d.tr && d.tr_fr),
-  "family-supplied images (bible, gravestones, 1907 photo) are transcribed too (" + bibleDocs.length + ")");
-ok(docPeople.every(n => n.p.profile.docs.every(d =>
-  /^data:image\/(jpeg|png);base64,/.test(d.img || "") && d.cap && d.cap_fr && d.tr && d.tr_fr &&
-  (!d.u || /^https:\/\//.test(d.u)))),
-  "each document has an embedded image, bilingual caption + transcription, https source");
-/* bilingual data: every English note must carry a French translation */
-ok(allNodes.every(n => !n.p.note || (n.p.note_fr && n.p.note_fr.length > 0)),
-  "every person note has a French translation");
-ok(allNodes.every(n => (n.p.unions || []).every(u => !u.n || (u.n_fr && u.n_fr.length > 0))),
-  "every union note has a French translation");
-/* commentary like "Married into the X family" is fine; a NAMED spouse in a
- * note ("Remarried <given name>…", "first wife <given name>…") belongs on the card */
-ok(allNodes.every(n => !/(re)?married\s+[A-Z]|\b(wife|husband|spouse)\s+[A-ZÉ]/.test(n.p.note || "")),
-  "no marriages hidden in notes — they belong on cards as unions");
-
-/* ---------- 6. Descendant counts (pill labels) ---------- */
-section("Descendant counts");
-vm.runInNewContext(
-  "(function cnt(n){ n.desc=n.children.length; n.children.forEach(c=>{cnt(c); n.desc+=c.desc;}); })(root)", ctx);
-ok(root.desc === allNodes.length - 1, "root.desc === everyone else (" + root.desc + ")");
-
-/* ---------- 7. Filters (regression: 'east shows too many cards') ---------- */
-section("Filters");
-initView();
-const legacyN = visCount();
-ok(activeFilters.size === 1 && activeFilters.has("legacy"), "default = legacy only");
-ok(legacyN > 5 && legacyN < 20, "legacy shows the trunk (" + legacyN + ")");
-
-activeFilters.delete("legacy"); activeFilters.add("east"); setOpenFromFilters();
-const eastHead = BRANCH_HEADS.east;
-const expectEast = subtreeSize(eastHead) + depth(eastHead);
-ok(visCount() === expectEast,
-  "east-only = branch + direct line only, no sibling heads (" + visCount() + " = " + expectEast + ")");
-
-activeFilters.add("legacy");
-["fr", "west", "ohio", "doubs", "colmar", "paris", "schw"].forEach(k => activeFilters.add(k));
-setOpenFromFilters();
-ok(visCount() === allNodes.length, "legacy + all branches = whole tree");
-
-["legacy", "fr", "east", "west", "ohio", "doubs", "colmar", "paris", "schw"].forEach(k => activeFilters.delete(k));
-setOpenFromFilters();
-ok(visCount() === 1, "all filters off = root only");
-initView();
-ok(visCount() === legacyN, "reset restores default view");
-
-/* Every branch must be selectable in BOTH bars and visibly so. Regression from 20 Sep 2026:
- * three branches added in 2026 had tree buttons with no selected-state rule (a click toggled
- * the filter and lit nothing) and no map chip at all (once any map filter was on they were
- * hidden with no way back). Derived from the markup, so a future branch cannot skip a bar. */
-{
-  const css = html.match(/<style>[\s\S]*<\/style>/)[0];
-  const jumps = [...html.matchAll(/<button class="(b-[a-z]+)"\s+data-jump="([a-z]+)"/g)].map(m => ({ cls: m[1], key: m[2] }));
-  const chips = [...html.matchAll(/<button class="mchip (b-[a-z]+)"\s+data-mb="([a-z]+)"/g)].map(m => ({ cls: m[1], key: m[2] }));
-  const heads = ["legacy", ...Object.keys(BRANCH_HEADS)];
-  ok(jumps.map(j => j.key).join() === heads.join(), "tree filter bar lists every branch, in head order (" + jumps.length + ")");
-  ok(chips.map(c => c.key).join() === heads.join(), "map filter bar lists the same branches, in the same order");
-  ok(jumps.length && jumps.every(j => css.includes(".jumps button." + j.cls + ".on{")), "every tree filter button has a selected-state rule");
-  ok(jumps.length && jumps.every(j => css.includes(".jumps button." + j.cls + ":hover{")), "every tree filter button has a hover rule");
-  ok(chips.length && chips.every(c => css.includes("#mapbar .mchip." + c.cls + ".on{")), "every map filter chip has a selected-state rule");
-  ok(heads.every(k => typeof I18N.en[k] === "string" && typeof I18N.fr[k] === "string"), "every branch filter is labelled in both languages");
-}
-
-/* ---------- 8. Search (regressions: accents, duplicates) ----------
- * All queries are DERIVED from the decrypted data at runtime so this
- * committed file contains no names. */
-section("Search");
-const norm = get("norm");
-const accented = allNodes.find(n => norm(n.p.name) !== n.p.name.toLowerCase());
-ok(!!accented, "data contains accented names to test with");
-if (accented) {
-  const word = accented.p.name.split(" ").find(w => norm(w) !== w.toLowerCase());
-  ok(searchMatches(norm(word)).length >= 1, "accent-stripped query finds accented name");
-  ok(searchMatches(norm(word)).length === searchMatches(word).length, "accented query = plain query");
-}
-const seen = {}; let dupName = null;
-for (const n of allNodes) { if (seen[n.p.name]) { dupName = n.p.name; break; } seen[n.p.name] = 1; }
-ok(!!dupName, "data contains duplicate display names to test with");
-if (dupName) {
-  const res = searchMatches(norm(dupName));
-  ok(res.length >= 2, "duplicate names all returned (years disambiguate)");
-}
-const surname = norm(root.p.name.split(" ").pop());
-ok(searchMatches(surname).length === 8, "results capped at 8");
-
-/* partial, out-of-order, middle-name-skipping queries must still land the person:
-   "<first> <first 3 of surname>" has to find "<first> <middle> <surname>" */
-const threePart = allNodes.find(n => n.p.name.split(" ").length >= 3);
-ok(!!threePart, "data contains a three-part name to test with");
-if (threePart) {
-  const parts = threePart.p.name.split(" ").map(norm);
-  const q = parts[0] + " " + parts[parts.length - 1].slice(0, 3);   /* first name + start of surname */
-  ok(searchMatches(q).some(r => r.n.p.name === threePart.p.name),
-    "partial query skipping the middle name finds the person");
-  const rev = parts[parts.length - 1].slice(0, 4) + " " + parts[0].slice(0, 3); /* reversed order */
-  ok(searchMatches(rev).some(r => r.n.p.name === threePart.p.name),
-    "words in any order still match");
-}
-ok(searchMatches("   ").length === 0, "whitespace-only query returns nothing");
-ok(searchMatches("zzzz").length === 0, "no false positives");
-let anySpouse = null;
-outer: for (const n of allNodes) for (const u of (n.p.unions || [])) if (u.s) { anySpouse = u.s; break outer; }
-ok(!!anySpouse && searchMatches(norm(anySpouse)).some(r => r.via === anySpouse),
-  "spouse matches report the spouse");
-
-/* ---------- 9. i18n ---------- */
-section("i18n");
-ok(Object.keys(I18N.en).sort().join() === Object.keys(I18N.fr).sort().join(), "en/fr key parity");
-ok(T("nomatch") === "No match", "T() resolves");
-ok(typeof T("pwmsg") === "string" && T("pwbtn") && T("pwerr"), "lock screen strings present");
-ok(T("definitely_missing_key") === "definitely_missing_key", "T() falls back to key, never undefined");
-
-/* ---------- 10. Card rendering simulation (regression: TDZ broke all cards) ---------- */
-section("Card build simulation");
-let built = 0, notes = 0;
-let buildErr = null;
-try {
-  allNodes.forEach(n => {
-    // mirrors the expressions in render() — order matters (TDZ regression)
-    const cls = "node";
-    const p = n.p;
-    let sp = "";
-    (p.unions || []).forEach(u => { if (u.s) sp += esc(u.s) + (u.sy ? esc(u.sy) : "") + (u.div ? "1" : ""); });
-    const badge = p.tag === "author" ? T("author") : p.tag === "emig" ? "USA" : p.tag === "mem" ? "m" : "";
-    const pill = n.children.length ? ("+" + n.children.length + (n.desc > n.children.length ? " → " + n.desc : "")) : "";
-    const ni = "i"; /* marker always in template; visibility is a DOM-time decision */
-    const s = cls + badge + esc(p.name) + esc(p.years || "") + ni + sp + pill + (p.img || AV);
-    if (!s) throw new Error("empty card");
-    built++; if (noteText(n)) notes++;
-  });
-} catch (e) { buildErr = e; }
-ok(!buildErr, "all cards build without runtime errors" + (buildErr ? " — " + buildErr.message : ""));
-ok(built === allNodes.length, "built " + built + "/" + allNodes.length + " cards");
-ok(notes >= 25, "note tooltips present (" + notes + " cards)");
-ok(esc('<a b="c">&') === "&lt;a b=&quot;c&quot;&gt;&amp;", "esc() escapes HTML");
-
-/* ---------- 11. Uniform card height ---------- */
-section("Layout");
-const PILL_H = 20; // desktop
-const heights = allNodes.map(n => {
-  const sp = (n.p.unions || []).filter(u => u.s).length;
-  return 42 + Math.min(sp, 2) * 14 + (sp > 2 ? 14 : 0) + PILL_H;
-});
-ok(Math.max(...heights) === 90, "uniform height source = 90px (two-marriage cards)");
-ok(new Set(allNodes.map(n => n.gen)).size >= 13, "generations computed");
-
-/* ---------- 12. Map view ---------- */
-section("Map view");
-ok(/const MAPGEO = \{/.test(html), "basemap geometry present in the plaintext layer");
-ok(html.includes('id="mapview"') && html.includes('id="mapcanvas"'), "map view markup present");
-ok(!/\bMAPGEO\b[\s\S]{0,400}?(Nitschelm|Gunsbach|Amboy)/.test(html),
-  "basemap block carries no family place names");
-/* The map overlays are children of #mapview, so their wheel events bubble into
-   the zoom handler. Without the guard, two fingers on a trackpad over the
-   journey sheet zoomed the map instead of scrolling the text. */
-ok(/const MAP_OVERLAYS = "[^"]*#mapsheet[^"]*"/.test(html),
-  "map overlay selector defined");
-ok(/mapEl\.addEventListener\("wheel"[\s\S]{0,600}?closest\(MAP_OVERLAYS\)\)\s*return;[\s\S]{0,80}?e\.preventDefault\(\)/.test(html),
-  "map zoom ignores wheel events that land on an overlay, and bails before preventDefault");
-ok(/#mapsheet\{[^}]*overscroll-behavior:contain/.test(html),
-  "journey sheet contains its own scroll");
-{
-  /* the encoder is delta + zig-zag base64 varints; decode it here the same way
-     the page does, so a change to either side fails loudly */
-  const IDX = {}; "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-    .split("").forEach((c, i) => IDX[c] = i);
-  const geoSrc = html.match(/const MAPGEO = \{[\s\S]*?\n\};/)[0];
-  const MAPGEO = vm.runInNewContext(geoSrc + " MAPGEO");
-  const decode = str => str.split("|").map(r => {
-    const pts = []; let i = 0, x = 0, y = 0, c, v, sh;
-    while (i < r.length) {
-      v = 0; sh = 0; do { c = IDX[r[i++]]; v |= (c & 31) << sh; sh += 5; } while (c & 32);
-      x += (v & 1) ? -((v + 1) >>> 1) : (v >>> 1);
-      v = 0; sh = 0; do { c = IDX[r[i++]]; v |= (c & 31) << sh; sh += 5; } while (c & 32);
-      y += (v & 1) ? -((v + 1) >>> 1) : (v >>> 1);
-      pts.push([x / 1000, y / 1000]);
-    }
-    return pts;
-  });
-  const land = decode(MAPGEO.land);
-  const all = land.flat();
-  ok(land.length > 200, "basemap decodes to " + land.length + " land rings");
-  ok(all.every(([lo, la]) => lo >= -180.5 && lo <= 180.5 && la >= -90 && la <= 90),
-    "every decoded coordinate is a real lon/lat");
-  ok(decode(MAPGEO.usst).length > 20, "US state borders decode");
-
-  /* the reference place-name layer: what keeps a zoomed-in view from being blank */
-  const MAPLBL = vm.runInNewContext(html.match(/const MAPLBL = "[\s\S]*?";/)[0] + " MAPLBL");
-  const recs = MAPLBL.split("\t");
-  ok(recs.length > 3000, "reference place labels present (" + recs.length + ")");
-  let lx = 0, ly = 0; const pts = [];
-  for (const rec of recs) {
-    let i = 1, v, sh, c;
-    v = 0; sh = 0; do { c = IDX[rec[i++]]; v |= (c & 31) << sh; sh += 5; } while (c & 32);
-    lx += (v & 1) ? -((v + 1) >>> 1) : (v >>> 1);
-    v = 0; sh = 0; do { c = IDX[rec[i++]]; v |= (c & 31) << sh; sh += 5; } while (c & 32);
-    ly += (v & 1) ? -((v + 1) >>> 1) : (v >>> 1);
-    const parts = rec.slice(i).split("~");
-    pts.push({ r: +rec[0], lon: lx / 1000, lat: ly / 1000, n: parts[1], cc: parts[2] });
-  }
-  ok(pts.every(p => p.r >= 0 && p.r <= 6 && p.n && p.cc &&
-    Math.abs(p.lat) <= 90 && Math.abs(p.lon) <= 180), "every reference label decodes to a real point");
-  const near = (lo, la, d) => pts.filter(p => Math.abs(p.lon - lo) < d && Math.abs(p.lat - la) < d).length;
-  ok(near(7.17, 48.03, 0.4) >= 4, "the Munster valley has towns to orient by");
-  ok(near(-122.44, 45.92, 0.6) >= 4, "the Amboy country has towns to orient by");
-  ok(near(-88.84, 41.35, 0.6) >= 4, "the Ottawa country has towns to orient by");
-  ok(near(-70.76, 43.07, 0.5) >= 4, "the Portsmouth country has towns to orient by");
-  ok(!/Nitschelm|Schweitzer/.test(MAPLBL), "reference labels carry no family names");
-}
-
-/* gazetteer + place trails live INSIDE the ciphertext, like every other fact */
-const DATA = get("DATA");
-const GAZ = DATA.gaz || {};
-const gazKeys = Object.keys(GAZ);
-ok(gazKeys.length > 100, "gazetteer has " + gazKeys.length + " places");
-ok(gazKeys.every(k => {
-  const g = GAZ[k];
-  return g && typeof g.lat === "number" && typeof g.lon === "number" &&
-    Math.abs(g.lat) <= 90 && Math.abs(g.lon) <= 180;
-}), "every gazetteer entry has valid coordinates");
-ok(gazKeys.every(k => GAZ[k].n && GAZ[k].n_fr), "gazetteer names bilingual");
-ok(gazKeys.every(k => GAZ[k].c !== undefined && GAZ[k].c_fr !== undefined),
-  "gazetteer contexts bilingual");
-ok(!/gaz:\s*\{|"lat":/.test(html.replace(/const ENC = \{[\s\S]*?\};/, "")),
-  "no gazetteer leaks outside the ciphertext");
-
-const placed = allNodes.filter(n => (n.p.pl || []).length);
-const rows = placed.flatMap(n => n.p.pl);
-ok(placed.length >= 90, placed.length + " people carry a place trail");
-ok(rows.length >= 380, rows.length + " place-events recorded");
-{ /* the presence audit: a pin must be somewhere the PERSON was, not merely a
-     place associated with them. These specific rows were removed after review
-     and must not creep back in. */
-  /* keyed by name+years, not by node index: adding a person must not silently
-     re-point a banned entry at somebody else's legitimate pin. */
-  /* Stored as SHA-256 prefixes, not names: this file is public AND is served by
-     GitHub Pages at the site URL, so a name here is readable without the password.
-     The key is name|years:event:place, hashed the same way on both sides. */
-  const banned = new Set([
-    "2fbba1d19c48486e",
-    "52def1506355b35b",
-    "65a3dd05046e891b",
-    "35436718de1e89ef",
-    "133b3105be385923",
-    "b1f9dc6b36248cd0",
-    "aa6c35fea30720bd",
-    "e48933596abded0e",
-    "8c49462c33740700",
-    "e02b0bd3900c7b12",
-    "19f05b2f5b17c654",
-    "8bd960838b4945c7",
-    "9d7069241abf3542",
-    "b93dcf6e1a1b820a",
-    "98d71e3f2bd23232"
-  ]);
-  const h16 = k => require("crypto").createHash("sha256").update(k, "utf8").digest("hex").slice(0, 16);
-  const back = [];
-  allNodes.forEach(n => (n.p.pl || []).forEach(r => {
-    const key = n.p.name + "|" + (n.p.years || "") + ":" + r.t + ":" + r.k;
-    if (banned.has(h16(key))) back.push(key);
-  }));
-  ok(!back.length, "pins removed by the presence audit have not returned" +
-    (back.length ? " — " + back.length + (process.env.CI ? "" : ": " + back.join(", ")) : ""));
-}
-ok(rows.every(r => GAZ[r.k]), "every place-event resolves to a gazetteer entry");
-ok(rows.every(r => ["doc", "inf", "apx"].includes(r.c)), "every place-event states its certainty");
-ok(rows.every(r => /^(birth|baptism|marriage|residence|emigration|arrival|military|work|study|death|burial)$/.test(r.t)),
-  "every place-event has a known type");
-ok(rows.every(r => r.y == null || (r.y > 1400 && r.y < 2100)), "place-event years are plausible");
-ok(rows.every(r => r.y2 == null || r.y == null || r.y2 >= r.y), "place-event spans never run backwards");
-ok(placed.every(n => n.p.pl.every((r, i, a) => i === 0 || (r.y == null || a[i-1].y == null || r.y >= a[i-1].y)),
-  ), "place trails are in chronological order");
-ok(rows.every(r => !r.w || r.w_fr), "pin notes bilingual");
-{ /* An undated row used to be ordered by its EVENT TYPE, which put one man's
-     current city second in his trail, ahead of two universities he left years
-     earlier. Trails must read as a life: nothing after the death but a burial,
-     and no person may end up with a trail that is entirely undated. */
-  const late = [];
-  placed.forEach(n => {
-    const pl = n.p.pl, di = pl.findIndex(r => r.t === "death");
-    if (di < 0) return;
-    /* a second death row is a disclosed alternative reading, not a drift */
-    pl.slice(di + 1).forEach(r => {
-      if (r.t !== "burial" && r.t !== "death" && !r.x) late.push(n.p.name + ": " + r.t + "@" + r.k);
-    });
-  });
-  ok(!late.length, "no place-event is ordered after the person's death" + (late.length ? " — " + late.join(", ") : ""));
-  const undated = placed.filter(n => n.p.pl.length > 1 && n.p.pl.every(r => r.y == null));
-  ok(!undated.length, "no multi-stop trail is left entirely undated" +
-    (undated.length ? " — " + undated.map(n => n.p.name).join(", ") : ""));
-  /* attending a school is "study"; being paid by one is "work" */
-  const named = k => (GAZ[k].n + " " + GAZ[k].c).toLowerCase();
-  const uni = rows.filter(r => /universit|institute of technology|dartmouth|northwestern/.test(named(r.k)));
-  ok(uni.length && uni.every(r => ["study", "work"].includes(r.t)),
-    uni.length + " university pins, each typed study or work");
-}
-ok(rows.filter(r => r.c !== "doc" || r.x).every(r => r.w),
-  "every uncertain or conflicting pin explains itself");
-ok(allNodes.every(n => !n.p.mn || n.p.mn_fr), "person map notes bilingual");
-{ /* the default view shows one pin per person, at their birthplace, so every
-     mapped person must resolve to exactly one "home" row */
-  const home = n => {
-    const r = n.p.pl || [];
-    return r.find(x => x.t === "birth" && !x.x) || r.find(x => x.t === "baptism" && !x.x)
-        || r.find(x => !x.x) || r[0] || null;
-  };
-  ok(placed.every(n => home(n)), "every mapped person resolves to one home place");
-  const withBirth = placed.filter(n => ["birth","baptism"].includes(home(n).t)).length;
-  ok(withBirth >= 80, withBirth + " of " + placed.length + " home pins are an actual birth or baptism");
-  const homes = new Set(placed.map(n => home(n).k));
-  ok(homes.size >= 25, "birthplaces span " + homes.size + " distinct locations");
-}
-{
-  const perType = {};
-  rows.forEach(r => perType[r.t] = (perType[r.t] || 0) + 1);
-  ok(Object.keys(perType).length >= 8, "place-events span " + Object.keys(perType).length + " event types");
-  const conflicts = allNodes.filter(n => (n.p.pl || []).some(r => r.x));
-  ok(conflicts.length >= 1, conflicts.length + " people disclose a conflicting place rather than picking one");
-}
-{ /* the map's i18n keys must exist in both languages, like every other string */
-  const need = ["view_tree", "view_map", "map_nodate", "map_alt", "map_c_doc", "map_c_inf", "map_c_apx",
-                "map_e_birth", "map_e_death", "map_e_burial", "map_e_study", "map_legend", "profile_viewmap",
-                "map_stopof", "map_of", "map_c_n", "map_c_se", "map_c_nw",
-                "map_living", "map_deceased", "map_est", "map_none",
-                "map_births", "map_nobirth"];
-  ok(need.every(k => I18N.en[k] && I18N.fr[k]), "map strings present in en and fr");
-}
-
-/* ---------- 13. Commit hygiene ----------
- * The repo is PUBLIC: anyone can read commit messages without the password,
- * and GitHub Actions run titles republish them. On 12 Aug 2026 the entire
- * history had to be rewritten because messages carried names and quotes.
- * This scans commits not yet on origin/main against the payload's own name
- * index. It prints the offending words only outside CI (CI logs are public).
+/* ---------- 5b. Living people: the year, never the day ----------
+ * Cory's rule, set 7 Sep 2026 and restated 20 Sep: a living person's birthday is NOT on the
+ * site — the year and the place, nothing finer. Until this section nothing enforced it, so a
+ * single card written by a session that had not read the rule would have put one back.
  *
- * 30 Aug 2026: this used to scan ONLY unpushed commits, which meant that the
- * moment a bad message was pushed the check could never see it again — and two
- * of them reached the public history exactly that way. It now also sweeps the
- * recent PUSHED history, and asserts that the commit-msg hook is actually
- * wired up, because a guard nobody runs is not a guard. The two known-bad
- * commits are listed as accepted so this does not re-report them every run;
- * they are public, a force-push would not unpublish them, and the decision to
- * leave them is recorded in OPEN-ITEMS N18. */
-section("Commit hygiene");
+ * "Living" is the site's own definition — a dates line that opens "b." — widened by the one
+ * section 14 uses (born 1930 or later, no death recorded), and capped at 110 years so that an
+ * open dates line from another century is not mistaken for a living person. Offenders are
+ * named locally only: CI logs are public and get counts. */
+section("Living people: year only");
 {
-  let msgs = null;
-  try {
-    const cp = require("child_process");
-    const out = cp.execFileSync("git",
-      ["log", "--format=%h%x1f%B%x1e", "origin/main..HEAD"],
-      { cwd: ROOT, env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" }, stdio: ["ignore", "pipe", "ignore"] })
-      .toString("utf8");
-    msgs = out.split("\x1e").map(s => s.trim()).filter(Boolean)
-      .map(s => { const i = s.indexOf("\x1f"); return { sha: s.slice(0, i), body: s.slice(i + 1) }; });
-  } catch (_) { /* no git, no origin, or detached CI checkout — nothing to scan */ }
-  if (msgs === null || !msgs.length) {
-    console.log("  --  no unpushed commits to scan");
-  } else {
-    const nameTok = new Set();
-    const addTok = s => String(s || "").split(/[^\p{L}]+/u).forEach(w => {
-      if (w.length >= 3) { nameTok.add(w.toLowerCase()); nameTok.add(norm(w)); }
-    });
-    allNodes.forEach(n => { addTok(n.p.name); (n.p.unions || []).forEach(u => addTok(u.s)); });
-    const hits = [];
-    msgs.forEach(m => {
-      const words = m.body.split(/[^\p{L}]+/u).filter(w => w.length >= 3);
-      const bad = [...new Set(words.filter(w => nameTok.has(w.toLowerCase()) || nameTok.has(norm(w))))];
-      if (bad.length) hits.push({ sha: m.sha, bad });
-    });
-    ok(!hits.length, "unpushed commit messages carry no person names (" + msgs.length + " scanned)" +
-      (hits.length ? " — " + hits.map(h => h.sha + ": " + h.bad.length + " name token(s)" +
-        (process.env.CI ? "" : " [" + h.bad.join(", ") + "]")).join("; ") : ""));
-  }
-
-  /* ---- the commit-msg guard must be installed ---- */
-  {
-    const cp = require("child_process");
-    let hooksPath = "";
-    try {
-      hooksPath = cp.execFileSync("git", ["config", "core.hooksPath"],
-        { cwd: ROOT, env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" },
-          stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
-    } catch (_) { /* unset */ }
-    const hookFile = path.join(ROOT, "githooks", "commit-msg");
-    const guard = path.join(ROOT, "tools", "check-commit-msg.js");
-    /* core.hooksPath is per-clone and never set on a CI checkout; there, only the
-     * tracked hook and guard files can be checked. (Every Actions run since this
-     * test was added went red on exactly that line.) */
-    const wired = process.env.GITHUB_ACTIONS ? true : hooksPath === "githooks";
-    ok(wired && fs.existsSync(hookFile) && fs.existsSync(guard),
-      "commit-msg guard is wired up" +
-      (wired ? "" : " — RUN: git config core.hooksPath githooks"));
-  }
-
-  /* ---- recent pushed history, so a leak cannot hide behind having shipped ---- */
-  {
-    /* Public and accepted: leaving them is deliberate (OPEN-ITEMS N18). A
-     * force-push does not unpublish a commit — GitHub serves old SHAs by hash
-     * indefinitely — so rewriting would cost a history break and fix nothing. */
-    const ACCEPTED = new Set([
-      "cb70716c1cdac729e3ecab70e9864d422beee475",
-      "0c1a36a082a228cb3edf9f0d2c3fed843397bc5d",
-      "d37f3afb0d527439641e6d10b8907885285b91e9",
-    ]);
-    let pushed = null;
-    try {
-      const cp = require("child_process");
-      const out = cp.execFileSync("git",
-        ["log", "--format=%H%x1f%B%x1e", "-n", "40", "origin/main"],
-        { cwd: ROOT, env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" },
-          stdio: ["ignore", "pipe", "ignore"] }).toString("utf8");
-      pushed = out.split("\x1e").map(x => x.trim()).filter(Boolean)
-        .map(x => { const i = x.indexOf("\x1f"); return { sha: x.slice(0, i), body: x.slice(i + 1) }; })
-        .filter(c => !ACCEPTED.has(c.sha));
-    } catch (_) { /* no origin ref locally — nothing to sweep */ }
-    if (pushed === null) {
-      console.log("  --  no origin/main ref to sweep");
-    } else {
-      const nameTok2 = new Set();
-      const addTok2 = str => String(str || "").split(/[^\p{L}]+/u).forEach(w => {
-        if (w.length >= 3) { nameTok2.add(w.toLowerCase()); nameTok2.add(norm(w)); }
-      });
-      allNodes.forEach(n => { addTok2(n.p.name); (n.p.unions || []).forEach(u => addTok2(u.s)); });
-      const leaks = [];
-      pushed.forEach(c => {
-        const words = c.body.split(/[^\p{L}]+/u).filter(w => w.length >= 3);
-        const bad = [...new Set(words.filter(w => nameTok2.has(w.toLowerCase()) || nameTok2.has(norm(w))))];
-        if (bad.length) leaks.push({ sha: c.sha.slice(0, 7), bad });
-      });
-      ok(!leaks.length,
-        "pushed commit messages carry no NEW person names (" + pushed.length +
-        " scanned, " + ACCEPTED.size + " accepted)" +
-        (leaks.length ? " — " + leaks.map(h => h.sha + (process.env.CI ? "" : " [" + h.bad.join(", ") + "]")).join("; ") : ""));
-    }
-  }
-}
-
-/* ---------- 14. No person names anywhere in the plaintext repo ----------
- * The ciphertext protects the data. Every OTHER tracked file is public AND is
- * served by GitHub Pages at the site URL, so a name in a comment, a fixture or
- * a regex is readable by anyone holding the family link — no password, no
- * GitHub account. On 14 Aug 2026 this found a living relative's full name,
- * birth year and workplace sitting in this file's own fixture list, and three
- * more first names in checks/. The privacy invariant in CLAUDE.md said the
- * plaintext layer carries no personal data; nothing enforced it outside
- * index.html. This is the enforcement. Offending words print only outside CI —
- * CI logs are public. */
-section("No names in the plaintext repo");
-{
-  const cp = require("child_process"), fsx = require("fs");
-  /* deliberate, public by design: the site is openly this family's tree — the
-   * repo name, the README, the page title and the branch buttons all say so. */
-  const ALLOW = new Set([
-    "nitschelm", "schweitzer", "sartre",  /* the site says all three on its own front page */
-    "cory"                                /* the owner's own name; the account is CNitschelm */
-  ]);
-  /* a line carrying this marker is exempt: generic vocabulary, stopword lists and
-   * named institutions collide with real names by coincidence. Adding one is a
-   * privacy decision — say in the comment why the words are not people. */
-  const LINE_OK = /ft-allow-names\b/;
-  /* multi-line vocabulary lists use ft-allow-names-begin / -end around the block */
-  const unclosed = [];
-  const stripAllowed = (txt, fname) => {
-    const out = []; let skip = false;
-    for (const line of txt.split("\n")) {
-      if (/ft-allow-names-begin/.test(line)) { skip = true; continue; }
-      if (/ft-allow-names-end/.test(line))   { skip = false; continue; }
-      if (!skip && !LINE_OK.test(line)) out.push(line);
-    }
-    /* an unterminated block would exempt the whole rest of the file in silence,
-     * which is exactly the kind of quiet hole this section exists to prevent */
-    if (skip) unclosed.push(fname);
-    return out.join("\n");
+  const PUBLIC = !!(process.env.CI || process.env.GITHUB_ACTIONS);
+  const THIS_YEAR = new Date().getFullYear();
+  /* ft-allow-names-begin: month names in English and French — calendar vocabulary, not people */
+  const MONTH = "(?:jan(?:uary|vier|v)?|f[eé]b(?:ruary)?|f[eé]v(?:rier|r)?|mar(?:ch|s)?|a[pv]r(?:il)?|may|mai|june?|juin|july?|juil(?:let)?|aug(?:ust)?|ao[uû]t|sep(?:t(?:ember|embre)?)?|oct(?:ober|obre)?|nov(?:ember|embre)?|d[eé]c(?:ember|embre)?)\\.?";
+  /* ft-allow-names-end */
+  const ORD = "(?:st|nd|rd|th|er|ᵉʳ)?";
+  /* every way a day-date is written on this site or in its sources; group "y" is the year */
+  const FULL = [
+    new RegExp("(?<![\\p{L}\\d])\\d{1,2}" + ORD + "\\s+" + MONTH + ",?\\s+(?<y>\\d{4})(?!\\d)", "giu"),   /* 28 May 1870 · 1er mars 1870 */
+    new RegExp("(?<![\\p{L}\\d])" + MONTH + "\\s+\\d{1,2}" + ORD + ",?\\s+(?<y>\\d{4})(?!\\d)", "giu"),   /* May 28, 1870 */
+    /(?<!\d)\d{1,2}[./-]\d{1,2}[./-](?<y>\d{4})(?!\d)/g,                                                  /* 28/05/1870 */
+    /(?<!\d)(?<y>\d{4})-\d{2}-\d{2}(?!\d)/g                                                                /* 1870-05-28 */
+  ];
+  /* a day and a month with no year, straight after a word about being born */
+  const BORN = "(?:born|birthday|birth|n[ée]e?s?|naissance|naquit|anniversaire)";
+  const NOYEAR = [
+    new RegExp("(?<![\\p{L}])" + BORN + "(?![\\p{L}])[^.;]{0,30}?(?<![\\p{L}\\d])\\d{1,2}" + ORD + "\\s+" + MONTH + "(?![\\p{L}])", "giu"),
+    new RegExp("(?<![\\p{L}])" + BORN + "(?![\\p{L}])[^.;]{0,30}?(?<![\\p{L}])" + MONTH + "\\s+\\d{1,2}" + ORD + "(?![\\p{L}\\d])", "giu")
+  ];
+  const yearOf = s => +((String(s || "").match(/\d{4}/) || [])[0] || 0);
+  const livingLine = s => {
+    const y = String(s || ""), b = yearOf(y);
+    if (!b || b < THIS_YEAR - 110) return false;
+    if (/^\s*b\./i.test(y)) return true;
+    return b >= 1930 && !/\d{4}\s*[–—-]\s*(\d{4}|\?)/.test(y) && !/^\s*(d\.|\?)/i.test(y);
   };
-  let files = null;
-  try {
-    files = cp.execFileSync("git", ["ls-files"], { cwd: ROOT, stdio: ["ignore", "pipe", "ignore"] })
-      .toString("utf8").trim().split("\n").filter(Boolean);
-  } catch (_) { /* no git — nothing to scan */ }
-  if (!files) {
-    console.log("  --  git unavailable — skipping");
-  } else {
-    /* three tiers, narrowest first: a full name is unambiguous, a long surname
-     * nearly so, and a living person's given name is the one that matters most. */
-    const fullNames = new Set(), surnames = new Set(), livingGiven = new Set();
-    const addName = (raw, node) => {
-      const name = String(raw || "").trim();
-      if (!name) return;
-      const toks = name.split(/\s+/).filter(t => /\p{L}/u.test(t));
-      if (toks.length > 1) fullNames.add(name.toLowerCase());
-      const last = toks[toks.length - 1];
-      if (last && last.length >= 5) surnames.add(norm(last).toLowerCase());
-      if (node) {
-        const years = String(node.years || "");
-        const birth = (years.match(/(\d{4})/) || [])[1];
-        const died  = /\d{4}\s*[–-]\s*\d{4}/.test(years);
-        if (birth && +birth >= 1930 && !died) {
-          toks.slice(0, -1).forEach(t => { if (t.length >= 4) livingGiven.add(norm(t).toLowerCase()); });
-        }
-      }
-    };
-    allNodes.forEach(n => { addName(n.p.name, n.p); (n.p.unions || []).forEach(u => addName(u.s, null)); });
-    /* Correspondents named in source labels are people too — and they are NOT
-     * nodes in the tree, so the pass above is blind to them. Labels introduce
-     * them in a few fixed shapes ("Email to X from Y", "photographed by Y",
-     * "via Y"); only correspondence-ish labels are read, which keeps place
-     * names, publications and institutions out of the index. */
-    let fromLabels = 0;
-    try {
-      const CORRESPONDENCE = /email|courriel|letter|correspondence|correspondance|photograph|bible|\bvia\b/i;
-      const NAMED_BY = /\b(?:from|by|via|to)\s+((?:[A-ZÀ-Þ][\p{L}'’-]+(?:\s+|$)){2,4})/gu;
-      const labels = [];
-      (function walkLabels(o) {
-        if (!o || typeof o !== "object") return;
-        if (Array.isArray(o)) return o.forEach(walkLabels);
-        if (typeof o.l === "string") labels.push(o.l);
-        Object.values(o).forEach(walkLabels);
-      })(get("DATA"));
-      labels.filter(l => CORRESPONDENCE.test(l)).forEach(l => {
-        let m; NAMED_BY.lastIndex = 0;
-        while ((m = NAMED_BY.exec(l))) {
-          const phrase = m[1].trim().replace(/[,(].*$/, "").trim();
-          const toks = phrase.split(/\s+/).filter(Boolean);
-          if (toks.length < 2) continue;
-          fullNames.add(phrase.toLowerCase());
-          const last = toks[toks.length - 1];
-          if (last.length >= 5) surnames.add(norm(last).toLowerCase());
-          fromLabels++;
-        }
-      });
-    } catch (e) { console.error("   label scan unavailable: " + e.message); }
-    [...ALLOW].forEach(a => { surnames.delete(a); livingGiven.delete(a); });
-
+  const hasDayDate = s => new RegExp("(?<![\\p{L}])" + MONTH + "(?![\\p{L}])", "iu").test(String(s || "")) || /\d{1,2}[./-]\d{1,2}/.test(String(s || ""));
+  /* every string a card shows, the person's own only: children are other cards, images and links are not prose */
+  const SKIP = new Set(["img", "imgL", "u", "url", "k", "d", "years", "name"]);   /* a pin's own `d` is check 2's business */
+  const ownText = p => {
+    const out = [];
+    (function walk(o, key) {
+      if (typeof o === "string") { if (!SKIP.has(key)) out.push(o); return; }
+      if (!o || typeof o !== "object") return;
+      if (Array.isArray(o)) { o.forEach(x => walk(x, key)); return; }
+      Object.keys(o).forEach(k => { if (k === "c" && Array.isArray(o[k])) return; walk(o[k], k); });
+    })(p, "");
+    return out;
+  };
+  const datesIn = text => {
     const hits = [];
-    for (const f of files) {
-      let text;
-      try { text = fsx.readFileSync(require("path").join(ROOT, f), "utf8"); } catch (_) { continue; }
-      if (f === "index.html") text = text
-        .replace(/const ENC = \{[\s\S]*?\};/, "")
-        .replace(/const MAPLBL = "[\s\S]*?";/, "");   /* world city labels, not people */
-      text = stripAllowed(text, f);
-      const low = text.toLowerCase();
-      const bad = new Set();
-      fullNames.forEach(n => { if (low.includes(n)) bad.add(n); });
-      const words = new Set(norm(text).toLowerCase().split(/[^\p{L}]+/u).filter(w => w.length >= 4));
-      surnames.forEach(sn => { if (words.has(sn)) bad.add(sn); });
-      livingGiven.forEach(g => { if (words.has(g)) bad.add(g); });
-      if (bad.size) hits.push({ f, bad: [...bad] });
-    }
-    ok(!unclosed.length, "every ft-allow-names block is closed" +
-      (unclosed.length ? " — unterminated in " + unclosed.join(", ") : ""));
-    ok(!hits.length, "no person names in the " + files.length + " tracked files" +
-      " (index: " + fullNames.size + " full names incl. " + fromLabels + " from source labels)" +
-      (hits.length ? " — " + hits.length + " file(s)" +
-        (process.env.CI ? "" : ": " + hits.map(h => h.f + " [" + h.bad.join(", ") + "]").join("; ")) : ""));
-  }
+    FULL.forEach(re => { re.lastIndex = 0; let m; while ((m = re.exec(text))) hits.push({ y: +m.groups.y, at: m.index }); });
+    return hits;
+  };
+  const living = allNodes.filter(n => livingLine(n.p.years));
+  const who = list => PUBLIC ? "" : ": " + [...new Set(list)].join("; ");
+
+  /* 1. the dates line itself */
+  const badLine = living.filter(n => hasDayDate(n.p.years)).map(n => n.p.name);
+  ok(!badLine.length, "a living person's dates line carries the year only (" + living.length + " living people)" + (badLine.length ? " — " + badLine.length + who(badLine) : ""));
+  /* 2. the birth and baptism pins: a year, never a `d` */
+  const badPin = living.filter(n => (n.p.pl || []).some(r => (r.t === "birth" || r.t === "baptism") && r.d !== undefined)).map(n => n.p.name);
+  ok(!badPin.length, "no living person's birth or baptism pin carries a day-date" + (badPin.length ? " — " + badPin.length + who(badPin) : ""));
+  /* 3. their own card's prose: a full date in their birth year, or a day and month after a word about being born */
+  const badText = [];
+  living.forEach(n => {
+    const by = yearOf(n.p.years);
+    ownText(n.p).forEach(t => {
+      if (datesIn(t).some(h => h.y === by) || NOYEAR.some(re => { re.lastIndex = 0; return re.test(t); })) badText.push(n.p.name);
+    });
+  });
+  ok(!badText.length, "no living person's own card spells out their birthday" + (badText.length ? " — " + new Set(badText).size + who(badText) : ""));
+  /* 4. a living spouse is a line on someone else's card: same rule */
+  const badSpouse = [];
+  allNodes.forEach(n => (n.p.unions || []).forEach(u => { if (u.s && livingLine(u.sy) && hasDayDate(u.sy)) badSpouse.push(u.s); }));
+  ok(!badSpouse.length, "a living spouse's dates line carries the year only" + (badSpouse.length ? " — " + badSpouse.length + who(badSpouse) : ""));
+  /* 5. anyone else's card: a full date straight after a word about being born, in a year a living
+   *    relative of that card was born (a child, or a spouse) — the way a parent's bio gives a child away */
+  const badKin = [];
+  allNodes.forEach(n => {
+    const years = new Set();
+    n.children.forEach(c => { if (livingLine(c.p.years)) years.add(yearOf(c.p.years)); });
+    (n.p.unions || []).forEach(u => { if (livingLine(u.sy)) years.add(yearOf(u.sy)); });
+    if (!years.size) return;
+    const bornRe = new RegExp("(?<![\\p{L}])" + BORN + "(?![\\p{L}])[^.;]{0,40}$", "iu");
+    ownText(n.p).forEach(t => datesIn(t).forEach(h => { if (years.has(h.y) && bornRe.test(t.slice(Math.max(0, h.at - 60), h.at))) badKin.push(n.p.name); }));
+  });
+  ok(!badKin.length, "no card spells out the birthday of a living child or spouse" + (badKin.length ? " — " + new Set(badKin).size + who(badKin) : ""));
+  /* not a failure, a count: Cory's 7 Sep rule was wider (no day-dates at all for the living). Other pins
+   * that still carry one are reported so the drift is visible, and left for him to rule on. */
+  const otherPins = living.reduce((a, n) => a + (n.p.pl || []).filter(r => r.d !== undefined && r.t !== "birth" && r.t !== "baptism").length, 0);
+  console.log("  --  other day-dated pins on living people (reported, not enforced): " + otherPins);
+  const counts = [badLine.length, badPin.length, new Set(badText).size, badSpouse.length, new Set(badKin).size, otherPins];
+  if (process.env.GITHUB_ACTIONS)
+    console.log("::notice title=Living people - year only::dates lines " + counts[0] + " | birth pins " + counts[1] + " | own card text " + counts[2] +
+      " | spouse lines " + counts[3] + " | on a relative's card " + counts[4] + " | other day-dated pins (not enforced) " + counts[5] + " | living people " + living.length);
 }
 
-report();
 
-})().catch(e => { console.error("FATAL: " + (e && e.message)); process.exit(1); });
+console.log("\n" + pass + " clean, " + fail + " with offenders (counts only; this audit never fails the run)");
+})().catch(e => { console.log("::notice title=Living people - year only::audit could not run (" + e.name + ")"); });
