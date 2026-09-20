@@ -108,6 +108,9 @@ header.hmin h1{font-size:15px}
 .jumps button.b-east.on{background:var(--us-east);color:#fff}
 .jumps button.b-west.on{background:var(--us-west);color:#fff}
 .jumps button.b-ohio.on{background:var(--us-ohio);color:#fff}
+.jumps button.b-doubs.on{background:var(--fr-doubs);color:#fff}
+.jumps button.b-colmar.on{background:var(--colmar);color:#fff}
+.jumps button.b-paris.on{background:var(--fr-paris);color:#fff}
 .jumps button.b-schw.on{background:var(--schw);color:#fff}
 #hint{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);background:rgba(31,42,51,.88);color:#fff;font-size:12px;padding:7px 14px;border-radius:16px;cursor:pointer;transition:opacity .4s;z-index:5;max-width:90%;text-align:center}
 #stage{flex:1;position:relative;overflow:hidden;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
@@ -249,6 +252,9 @@ html.dark #lock .err{color:#EF9A9A}
   .jumps button.b-east:hover{background:var(--us-east);color:#fff}
   .jumps button.b-west:hover{background:var(--us-west);color:#fff}
   .jumps button.b-ohio:hover{background:var(--us-ohio);color:#fff}
+  .jumps button.b-doubs:hover{background:var(--fr-doubs);color:#fff}
+  .jumps button.b-colmar:hover{background:var(--colmar);color:#fff}
+  .jumps button.b-paris:hover{background:var(--fr-paris);color:#fff}
   .jumps button.b-schw:hover{background:var(--schw);color:#fff}
   .node .pill:hover{border-color:var(--ink);color:var(--ink);background:var(--panel)}
   #zoomctl button:hover{background:var(--ink);color:var(--paper)}
@@ -373,7 +379,11 @@ html.dark{--sea:#121A1F; --land:#222A2E; --coast:#3D474C; --bord:#39434A; --stat
 #mapbar .mchip.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
 #mapbar .mchip.b-fr.on{background:var(--fr);border-color:var(--fr);color:var(--onbrand)}
 #mapbar .mchip.b-east.on{background:var(--us-east);border-color:var(--us-east);color:var(--onbrand)}
-#mapbar .mchip.b-west.on{background:var(--us-west);border-color:var(--us-west);color:var(--onbrand)}.b-ohio.on{background:var(--us-ohio);border-color:var(--us-ohio);color:var(--onbrand)}
+#mapbar .mchip.b-west.on{background:var(--us-west);border-color:var(--us-west);color:var(--onbrand)}
+#mapbar .mchip.b-ohio.on{background:var(--us-ohio);border-color:var(--us-ohio);color:var(--onbrand)}
+#mapbar .mchip.b-doubs.on{background:var(--fr-doubs);border-color:var(--fr-doubs);color:var(--onbrand)}
+#mapbar .mchip.b-colmar.on{background:var(--colmar);border-color:var(--colmar);color:var(--onbrand)}
+#mapbar .mchip.b-paris.on{background:var(--fr-paris);border-color:var(--fr-paris);color:var(--onbrand)}
 #mapbar .mchip.b-schw.on{background:var(--schw);border-color:var(--schw);color:var(--onbrand)}
 #mapbar .mchip.b-leg.on{background:var(--you);border-color:var(--you);color:var(--onbrand)}
 #mapback{display:none;align-items:center;gap:6px;background:var(--you) !important;border-color:var(--you) !important;color:var(--onbrand) !important}
@@ -505,9 +515,9 @@ html.dark{--sea:#121A1F; --land:#222A2E; --coast:#3D474C; --bord:#39434A; --stat
     <button class="b-east" data-jump="east">US East</button>
     <button class="b-west" data-jump="west">Oregon</button>
     <button class="b-ohio" data-jump="ohio">Ohio</button>
-<button class="b-doubs" data-jump="doubs">Besançon</button>
-<button class="b-colmar" data-jump="colmar">Colmar</button>
-<button class="b-paris" data-jump="paris">Paris</button>
+    <button class="b-doubs" data-jump="doubs">Besançon</button>
+    <button class="b-colmar" data-jump="colmar">Colmar</button>
+    <button class="b-paris" data-jump="paris">Paris</button>
     <button class="b-schw" data-jump="schw">Schweitzer</button>
   </div>
   <span class="vsep treeonly"></span>
@@ -568,6 +578,9 @@ html.dark{--sea:#121A1F; --land:#222A2E; --coast:#3D474C; --bord:#39434A; --stat
       <button class="mchip b-east" data-mb="east">US East</button>
       <button class="mchip b-west" data-mb="west">Oregon</button>
       <button class="mchip b-ohio" data-mb="ohio">Ohio</button>
+      <button class="mchip b-doubs" data-mb="doubs">Besançon</button>
+      <button class="mchip b-colmar" data-mb="colmar">Colmar</button>
+      <button class="mchip b-paris" data-mb="paris">Paris</button>
       <button class="mchip b-schw" data-mb="schw">Schweitzer</button>
     </div>
     <div class="grp"><span class="glbl glbl-w">Who</span>
@@ -596,7 +609,7 @@ html.dark{--sea:#121A1F; --land:#222A2E; --coast:#3D474C; --bord:#39434A; --stat
 const SYNCED = "2026-07-14"; /* maintained by the automated sync task: update only when DATA changes */
 const AV = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' fill='%23E9ECE6'/%3E%3Ccircle cx='12' cy='9' r='4' fill='%23AEB6AC'/%3E%3Cpath d='M4 22c0-4.4 3.6-7 8-7s8 2.6 8 7' fill='%23AEB6AC'/%3E%3C/svg%3E";
 const I18N = {
-  en:{search:"Search a name…", filter:"Filter:", legacy:"Origins", fr:"France", east:"US East", west:"Oregon", ohio:"Ohio", schw:"Schweitzer",
+  en:{search:"Search a name…", filter:"Filter:", legacy:"Origins", fr:"France", east:"US East", west:"Oregon", ohio:"Ohio", doubs:"Besançon", colmar:"Colmar", paris:"Paris", schw:"Schweitzer",
       fit:"Fit view", reset:"Reset", hide:"− hide", more_kids:"more", nomatch:"No match", gen:"Gen", author:"Author", synced:"Data synced",
       synced_note:"Source site note: the family site this tree syncs from sometimes rolls back to an older copy, so a few recent facts here can no longer be seen there.",
       hint:"Click a person to open their family and trace their line · click the background or “Reset” to start over · drag / scroll to move",
@@ -636,7 +649,7 @@ const I18N = {
       profile_bapt:"bapt.", profile_bur:"buried", profile_partinf:"partly inferred",
       profile_hl3:"Three things to know", profile_hl:"Worth knowing",
       profile_viewmap:"🗺 See their journey on the map"},
-  fr:{search:"Rechercher un nom…", filter:"Filtre :", legacy:"Origines", fr:"France", east:"USA Est", west:"Oregon", ohio:"Ohio", schw:"Schweitzer",
+  fr:{search:"Rechercher un nom…", filter:"Filtre :", legacy:"Origines", fr:"France", east:"USA Est", west:"Oregon", ohio:"Ohio", doubs:"Besançon", colmar:"Colmar", paris:"Paris", schw:"Schweitzer",
       fit:"Ajuster", reset:"Réinitialiser", hide:"− masquer", more_kids:"de plus", nomatch:"Aucun résultat", gen:"Gén", author:"Auteur", synced:"Données synchronisées",
       synced_note:"Note sur la source : le site familial dont cet arbre se synchronise revient parfois à une copie plus ancienne ; certains faits récents n'y sont donc plus visibles.",
       hint:"Cliquez sur une personne pour ouvrir sa famille et suivre sa lignée · cliquez sur le fond ou « Réinitialiser » pour recommencer · glissez / molette pour naviguer",
@@ -1643,7 +1656,7 @@ function applyLang(){
   document.documentElement.lang = LANG;
   searchEl.placeholder = T("search");
   document.querySelector(".jumps .lbl").textContent = T("filter");
-  ["legacy","fr","east","west","schw"].forEach(k=>{ if(jumpBtns[k]) jumpBtns[k].textContent = T(k); });
+  ["legacy","fr","east","west","ohio","doubs","colmar","paris","schw"].forEach(k=>{ if(jumpBtns[k]) jumpBtns[k].textContent = T(k); });
   const fitB = document.getElementById("fit"), rstB = document.getElementById("reset");
   fitB.querySelector("span").textContent = T("fit");   fitB.title = T("fit");
   rstB.querySelector("span").textContent = T("reset"); rstB.title = T("reset");
@@ -2777,6 +2790,9 @@ function syncMapLang(){
   set("#mapbar [data-mb='east']",   "east");
   set("#mapbar [data-mb='west']",   "west");
   set("#mapbar [data-mb='ohio']",   "ohio");
+  set("#mapbar [data-mb='doubs']",  "doubs");
+  set("#mapbar [data-mb='colmar']", "colmar");
+  set("#mapbar [data-mb='paris']",  "paris");
   set("#mapbar [data-mb='schw']",   "schw");
   set("#mapbar [data-ml='living']", "map_living");
   set("#mapbar [data-ml='dead']",   "map_deceased");

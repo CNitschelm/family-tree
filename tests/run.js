@@ -160,7 +160,7 @@ ok(/^\d{4}-\d{2}-\d{2}$/.test(SYNCED), "SYNCED is YYYY-MM-DD (" + SYNCED + ")");
 /* anchors: branch navigation ids live INSIDE the encrypted data */
 ok(["trunk", "fr", "east", "west", "schw"].every(a => allNodes.some(n => n.p.anchor === a)),
   "all 5 navigation anchors present in encrypted data");
-ok(["fr", "east", "west", "ohio", "schw"].every(k => BRANCH_HEADS[k]), "branch heads resolve via anchors");
+ok(Object.keys(BRANCH_HEADS).every(k => BRANCH_HEADS[k]), "all " + Object.keys(BRANCH_HEADS).length + " branch heads resolve via anchors");
 /* people are referenced structurally, never by name, to keep this file PII-free */
 const creator = allNodes.find(n => /creator of this website/i.test(n.p.note || ""));
 ok(!!creator, "site-creator credit exists");
@@ -277,6 +277,23 @@ setOpenFromFilters();
 ok(visCount() === 1, "all filters off = root only");
 initView();
 ok(visCount() === legacyN, "reset restores default view");
+
+/* Every branch must be selectable in BOTH bars and visibly so. Regression from 20 Sep 2026:
+ * three branches added in 2026 had tree buttons with no selected-state rule (a click toggled
+ * the filter and lit nothing) and no map chip at all (once any map filter was on they were
+ * hidden with no way back). Derived from the markup, so a future branch cannot skip a bar. */
+{
+  const css = html.match(/<style>[\s\S]*<\/style>/)[0];
+  const jumps = [...html.matchAll(/<button class="(b-[a-z]+)"\s+data-jump="([a-z]+)"/g)].map(m => ({ cls: m[1], key: m[2] }));
+  const chips = [...html.matchAll(/<button class="mchip (b-[a-z]+)"\s+data-mb="([a-z]+)"/g)].map(m => ({ cls: m[1], key: m[2] }));
+  const heads = ["legacy", ...Object.keys(BRANCH_HEADS)];
+  ok(jumps.map(j => j.key).join() === heads.join(), "tree filter bar lists every branch, in head order (" + jumps.length + ")");
+  ok(chips.map(c => c.key).join() === heads.join(), "map filter bar lists the same branches, in the same order");
+  ok(jumps.length && jumps.every(j => css.includes(".jumps button." + j.cls + ".on{")), "every tree filter button has a selected-state rule");
+  ok(jumps.length && jumps.every(j => css.includes(".jumps button." + j.cls + ":hover{")), "every tree filter button has a hover rule");
+  ok(chips.length && chips.every(c => css.includes("#mapbar .mchip." + c.cls + ".on{")), "every map filter chip has a selected-state rule");
+  ok(heads.every(k => typeof I18N.en[k] === "string" && typeof I18N.fr[k] === "string"), "every branch filter is labelled in both languages");
+}
 
 /* ---------- 8. Search (regressions: accents, duplicates) ----------
  * All queries are DERIVED from the decrypted data at runtime so this
