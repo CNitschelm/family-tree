@@ -156,6 +156,14 @@ section("Data invariants");
 ok(allNodes.length >= 108, "tree has >= 108 people (" + allNodes.length + ")");
 ok(allNodes.every(n => BC[n.branch]), "every person has a known branch color");
 ok(allNodes.every(n => n.p.name && typeof n.p.name === "string"), "every person has a name");
+/* 24 Sep 2026: every card carries a permanent id (c001, c002, …). The register of settled
+   questions, the change ledger and the payload history name cards by it, so a card whose
+   name or years change is still the same card to them (tools/ledger.js). */
+{
+  const ids = allNodes.map(n => n.p.id);
+  ok(ids.every(id => /^c\d{3,}$/.test(id || "")), "every person has a permanent card id (cNNN)");
+  ok(new Set(ids).size === ids.length, "card ids are unique (" + ids.length + ")");
+}
 ok(/^\d{4}-\d{2}-\d{2}$/.test(SYNCED), "SYNCED is YYYY-MM-DD (" + SYNCED + ")");
 /* anchors: branch navigation ids live INSIDE the encrypted data */
 ok(["trunk", "fr", "east", "west", "schw"].every(a => allNodes.some(n => n.p.anchor === a)),

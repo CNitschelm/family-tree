@@ -32,7 +32,10 @@ const findings = [];
 const add = (level, title, detail, fix) => findings.push({ level, title, detail, fix });
 
 const git = args => {
-  try { return execFileSync("git", args, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim(); }
+  /* GIT_OPTIONAL_LOCKS=0: `git status` otherwise writes .git/index.lock, which the mount cannot
+   * unlink — the very lock this tool warns about, created by the tool itself. */
+  try { return execFileSync("git", args, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
+    env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" } }).trim(); }
   catch (_) { return null; }
 };
 const exists = f => { try { fs.accessSync(p(f)); return true; } catch (_) { return false; } };
@@ -125,6 +128,30 @@ if (porcelain) {
       "git rm --cached '" + f + "' and confirm .gitignore covers it BEFORE any further commit.");
   }
 });
+
+/* ---- 7. the change loop (OPERATING.md): ledger, lock, gate ---- */
+if (!exists("ledger/register.jsonl") || !exists("ledger/changes.jsonl")) {
+  add("WARN", "no ledger/ — the change loop cannot run",
+    "ledger/register.jsonl (settled questions) and ledger/changes.jsonl (every applied change) are missing.",
+    "Do not edit data.json until they are restored; see OPERATING.md.");
+} else {
+  try {
+    const lock = fs.readFileSync(p("ledger/LOCK"), "utf8").trim();
+    if (lock && lock !== "free") {
+      const l = JSON.parse(lock);
+      const hours = (Date.now() - Date.parse(l.since)) / 3600e3;
+      add(hours > 12 ? "WARN" : "INFO", `ledger/LOCK held by "${l.who}" for ${hours.toFixed(1)} h` + (hours > 12 ? " (abandoned?)" : ""),
+        l.what || "", hours > 12 ? 'node tools/lock.js take "<you>" --steal, if that session is gone' : "another session is editing: wait for it");
+    }
+  } catch (_) { /* no lock file: free */ }
+  if (exists("index.html") && git(["diff", "--name-only", "HEAD", "--", "index.html"])) {
+    let stamp = "";
+    try { stamp = fs.readFileSync(p(".gate-stamp"), "utf8").split("\n")[0].trim(); } catch (_) {}
+    const m = fs.readFileSync(p("index.html"), "utf8").match(/const ENC = \{v:\d+, iter:\d+, salt:"[^"]*", iv:"([^"]*)"/);
+    if (!m || stamp !== m[1]) add("INFO", "index.html has changed and the gate has not passed on it",
+      "The commit hook will refuse it until it does.", "node checks/gate.js");
+  }
+}
 
 /* ---------------------------------- report ---------------------------------- */
 const order = { BLOCKER: 0, WARN: 1, INFO: 2, OK: 3 };

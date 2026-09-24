@@ -1,4 +1,11 @@
 'use strict';
+// RETIRED 24 Sep 2026. Edits to data.json go through tools/change.js, which records each one in the
+// ledger with its evidence and checks it against the register and the payload's history
+// (OPERATING.md, "The loop"). This tool wrote data.json or patch files outside that loop — the route
+// by which grades were set in bulk and later flipped back — so it now refuses to run. Kept as a record.
+console.error('RETIRED: use node tools/change.js — see OPERATING.md, "The loop".');
+process.exit(1);
+
 // Turn the patch files into a readable change log: every edit, by card, with the
 // reason its writer gave and the exact before/after. This is the audit trail —
 // `data.json` shows what the site says now, this shows why each sentence changed.

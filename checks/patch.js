@@ -1,4 +1,11 @@
 'use strict';
+// RETIRED 24 Sep 2026. Edits to data.json go through tools/change.js, which records each one in the
+// ledger with its evidence and checks it against the register and the payload's history
+// (OPERATING.md, "The loop"). This tool wrote data.json or patch files outside that loop — the route
+// by which grades were set in bulk and later flipped back — so it now refuses to run. Kept as a record.
+console.error('RETIRED: use node tools/change.js — see OPERATING.md, "The loop".');
+process.exit(1);
+
 // Apply whole-field replacements to data.json. NEVER a regex: each edit names a
 // field path, the exact text it expects to find there, and the complete new text.
 // Usage: node checks/patch.js <patch.json> [--dry]

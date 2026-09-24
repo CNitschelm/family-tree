@@ -1,229 +1,202 @@
 # How this project runs
 
-Written 8 August 2026, after two remediation passes and a graded audit. It exists so nobody has to
-rediscover any of this. **If you are starting a session on this site, read this first.**
+Rewritten 24 September 2026. **Start here, every session.** It replaces the 8 August version (four
+roles, fact sheets, `patch.js`), which is kept in the private history folder. Everything below is
+enforced by a tool unless it says otherwise; where a rule is only written down, it says so.
 
 ---
 
-## The one-line version
+## The one rule
 
-Cory says what he wants. A coordinator routes it, locks cards, and applies patches serially.
-Writers rewrite whole cards from fact sheets. Cold auditors who have seen none of the writing read
-the result. **Nothing ships on a writer's own say-so.**
-
----
+**Every change to what the site says goes through one door — `tools/change.js` — with its reason and
+its evidence, and nothing is committed until `checks/gate.js` proves the payload is exactly what the
+ledger says it is.**
 
 ## Why it is built this way
 
-Three failures shaped it, and all three were the same failure:
+From 3 Aug to 24 Sep 2026 the payload's own history shows facts written, struck and put back:
 
-| what happened | scope |
+| what happened | how |
 |---|---|
-| writers attributed schooling, careers, addresses and day-dates to a family-site page that carries none of them | 11 cards, 3 branches of the tree |
-| a claim that "the Munster parish registers begin in 1580" — that is where one man's *transcription* begins | the root card, propagating to all 162 people |
-| a coordinator's own evidence note said a source carries "no career, ever, for anybody"; it carries three, and writers then **deleted true citations** on that authority | 6 cards |
+| 20 pin grades went `doc` → `inf` → `doc` (8 Aug → 7 Sep; again on 11–12 Sep) | a pass downgraded pins on what the card showed, saying a source "does not give" something it gives; the next pass opened the source and restored them |
+| a week of findings silently undone (4 Aug) | a commit was built from a stale working copy; nothing compared the payload with what had been decided |
+| Cory's own decisions undone by later passes | decisions lived in prose — a dispute register, a decisions file, answer sheets — and no tool read them |
+| one move date re-weighed on eight deploys | the same fact sits on six cards; each pass re-decided part of it |
+| the meaning of `doc` drifted | the grade was defined in a dozen places, and they disagreed |
 
-**Every one was somebody deciding from memory what a source says.** Not carelessness — the sources
-are genuinely hard to hold in your head, and there are only about a dozen of them against 162 people.
-
-So the axis of specialisation is **the source, not the branch of the family.** A Schweitzer expert
-would have caught none of the three.
-
----
-
-## The four roles
-
-### Source steward
-Owns one source and exactly one artifact: `sources/<name>.md`. Fetches it, reads it, and writes down
-what it prints and — the part that matters — what it does **not**. Extends the sheet when a writer
-asks a question it cannot answer. Never edits `data.json`.
-
-Eight sheets exist: `astrosurf` · `baradel` · `hoffman` · `archives-alsace` · `us-records` ·
-`newspapers` · `published-works` · `family-papers`. One is still missing: the **French national
-death index** (INSEE via matchID), cited on five French-line cards.
-
-### Writer
-Rewrites whole cards. **A writer may not cite a source — a writer cites the fact sheet.** If a claim
-is not on the sheet, the writer either asks the steward to re-read and extend it, or writes the
-documented negative. Nobody argues from memory about what a page says.
-
-Writers get a card lock. Two writers on one card is how `expect` mismatches and lost edits happen.
-
-### Cold auditor
-Gets cards having seen none of the writing, and is confined to a directory holding only the data,
-the dossier tool and the fact sheets — no change log, no decisions register, no prior audit. Reads
-as a sceptical reader would.
-
-**Whoever writes a card does not audit it.** Not negotiable, and not satisfied by a writer
-re-reading their own work.
-
-### Coordinator
-Routes by source, locks cards, applies patches serially, runs the machine pass between batches, and
-makes the structural changes writers may not (`pl[i].y`, `y2`, `d`, `k`, `t`; adding or removing
-pins; `years`). **The coordinator never writes prose.** A coordinator who edits loses the
-independence that makes the audit step work.
-
----
-
-## The rules that earned their place
-
-1. **The card is the unit of work, never the field.** Open a card, read all of it in both languages
-   — tooltip, headline, map note, every bio paragraph, union note, pin note, source label, document
-   caption and transcription — fix everything wrong with it, close it. The first pass softened a bio
-   and left the tooltip asserting the old certainty, which is the exact defect it existed to fix.
-2. **No regex on prose.** A writer returns complete replacement text for a whole field, and
-   `checks/patch.js` rejects it unless the current text matches byte for byte. Two live text
-   corruptions were traced to half-matching `.replace()` calls.
-3. **Whoever writes a card does not audit it.**
-4. **A false citation is worse than the bare tag it replaced**, because it tells the reader a check
-   has been done.
-5. **A true citation wrongly struck is exactly as serious.** An over-broad claim about what a source
-   *cannot* say does the same damage as an over-confident claim about what it does. Before deleting
-   anything as unsupported, check the fact sheet and the research record.
-6. **A documented negative is a correct result** — "no death act has been read, and here is why".
-   What is wrong is a bare absence dressed as a conclusion: "no record has been found, *so* nothing
-   was written down."
-7. **Never seed an audit's answer.** And never accept "we found nothing" without a control proving
-   the auditor would have found something.
-
----
-
-## Settled decisions — apply, do not re-argue
-
-- **Pin certainty is judged per pin, never per card.** `doc` asserts a specific document exists and
-  somebody read it.
-- **A register transcription carrying an act number justifies `doc`; a bare year in a children-list
-  does not.** (Cory, 8 Aug.)
-- An official or published record — census, death index, naturalisation file, newspaper, county
-  book, memorial — justifies `doc`. A compiled family tree never does.
-- **A pin may not publish a day (`d`) its own note disclaims.** The map renders `d` in preference to
-  the span, so the day shows as fact while the note beneath denies it.
-- Tooltips are ONE sentence, cite no source, and never name a spouse. The test suite enforces the
-  spouse rule.
-- EN and FR carry the same facts, numbers, names and degree of certainty. In French the recognised
-  documented-negative form is "aucun X ne donne / ne mentionne / ne dit" — **not** "n'atteste",
-  which reads as one-sided doubt against an English negative.
-- Never narrate the editing process to the reader: no "this card", "cette fiche", "as shown here".
-  Plain provenance is welcome: "the family site gives 1989; the gravestone gives 1988".
-- Never add a person without asking. Never pass `--newsalt`.
-- **Nothing outside the ciphertext names a person** — not the plaintext layer, not a code comment,
-  not a test fixture, not a regex. Every tracked file is public *and* is served by GitHub Pages at
-  the family's own site URL, so a name in `tests/run.js` is as exposed as one on the front page.
-  `tests/run.js` §14 fails the build if any tracked file contains a payload name; `.gitignore` is
-  deny-by-default so research files cannot be committed by accident.
-- **Commit messages are public and carry no personal data.** One neutral line ("Update site data
-  payload") — no names, no dates of life, no places, no quotes, no narrative, no body, on every
-  push route. `mcp__GitHub__push_files` bypasses the local test, so there the rule is the only
-  guard. The story goes in `CHANGE-LOG-COMMITS.md` (gitignored), appended in the same session;
-  `tests/run.js` §13 scans unpushed messages against the payload's name index.
-- **Why both rules are absolute:** messages were rewritten on 12 Aug 2026 and the entire repo had
-  to be deleted and rebuilt on 14 Aug, because a force-push does not remove anything — GitHub
-  serves orphaned commits by SHA indefinitely, and Actions run titles never expire. There is no
-  quiet fix after the fact. Do not reintroduce names.
+None of that was new evidence. Each pass re-decided from what it could see. So the tools now carry
+forward what was decided, on what evidence, and what has already been tried and undone — and refuse
+an edit that ignores it.
 
 ---
 
 ## The loop
 
-```
-decrypt  →  route  →  writers (locked cards, fact sheets)  →  apply serially
-         →  machine pass  →  cold audit  →  repair  →  tests  →  encrypt  →  ship
-```
-
 ```bash
-node tools/crypt.js decrypt          # data.json — never commit it
-node checks/dossier.js "<name>"      # one card whole, both languages, with its evidence
-node checks/run.js --json out.json   # the machine pass (flag is --json, not --out)
-node checks/sources.js               # S1 — prose against the fact sheets
-node checks/patch.js patches/x.json  # apply, byte-exact or reject
-node tests/run.js                    # must be all green (120 with a password; commit-message scan included)
-node tools/crypt.js encrypt          # salt unchanged; family devices stay unlocked
-node checks/manifest.js              # regenerate sources/urls.tsv for the source archive
+node tools/doctor.js                         # 0. local state: stale data.json, git locks
+node tools/lock.js take "<who>" "<what>"     #    one writer at a time (ledger/LOCK)
+node tools/crypt.js decrypt                  #    only if data.json is not current
+
+node tools/card.js <c042 | "Name|years" | part of a name> [--history]
+                                             # 1. OPEN THE CARD: fields, sources and our copies of
+                                             #    them, the register entries that bind it, its history
+                                             # 2. OPEN THE SOURCE — our copy in family-tree-sources —
+                                             #    and take the words you will rely on from it
+                                             # 3. WRITE A CHANGE FILE (below)
+node tools/change.js ledger/pending/<file>.json   # 4. applies it, or refuses and says why
+node tools/crypt.js encrypt                  # 5. salt unchanged — never --newsalt, never --force
+node checks/gate.js                          # 6. proves the payload is the ledger; runs the tests
+                                             # 7. commit in GitHub Desktop (the hook checks the gate)
+                                             # 8. push; verify the live iv; changelog entry
+node tools/lock.js release "<who>"
 ```
 
-**The source archive.** `sources/urls.tsv` lists every URL the site cites and how many cards lean
-on it. Copy it into the private `family-tree-sources` repo and push; that fires a GitHub Action
-which takes a copy of each source and commits it. Run `node checks/manifest.js` at the end of any
-session that added or changed a source — a citation to a dead page is not a citation, and
-`astrosurf.com` alone carries 106 of the 162 cards.
+The source archive is the clone of `CNitschelm/family-tree-sources` **next to this folder**. A
+source that is not in it cannot be evidence: capture it first (a hand copy in `archive/hand/`, see
+that repo's `archive/MANUAL.md`), then cite it. After a session that added a URL, run
+`node checks/manifest.js`, copy `sources/urls.tsv` into the archive repo and push.
 
-**Getting files to GitHub when git cannot reach it.** Three routes, in order of preference, all
-learned the hard way:
+## A change file
 
-- `mcp__GitHub__push_files` writes any number of files in one commit and needs nothing from Cory.
-  It is the default. It cannot create a repository and it **cannot write `.github/workflows/*`** —
-  both return 403, because the token is an App installation without those scopes. Its commit
-  message falls under the public-message rule (Settled decisions): one neutral line, no names —
-  this route bypasses the local test that would otherwise catch a violation.
-- For a workflow file, use the **GitHub web upload page** through Claude-in-Chrome:
-  `github.com/<owner>/<repo>/upload/main/.github/workflows`, then `file_upload` the file from
-  `/mnt/user-data/outputs/`. Click the commit button by element `ref`, not by screen coordinate —
-  the page rescales and a coordinate click lands on nothing.
-- `device_commit_files` also refuses `.github/workflows/*` as a protected path. `device_bash` with
-  a heredoc writes it happily; only the remote-file tool objects.
+```json
+{
+  "why": "one line: what this does and why",
+  "edits": [
+    { "card": "c042", "field": "bio[0]", "find": "moved in 1907", "replace": "moved in 1908",
+      "kind": "fact",
+      "evidence": [{ "src": "https://…the cited page", "quote": "came to the town in 1908", "opened": "2026-09-24" }] },
+    { "card": "c042", "field": "bio_fr[0]", "find": "en 1907", "replace": "en 1908", "kind": "fact",
+      "evidence": [{ "src": "https://…", "quote": "came to the town in 1908", "opened": "2026-09-24" }] },
+    { "card": "c042", "field": "pl[t=arrival,k=town].c", "from": "doc", "to": "inf", "kind": "grade",
+      "evidence": [{ "src": "https://…", "absent": ["arrived", "1907"], "opened": "2026-09-24" }] },
+    { "card": "c042", "op": "add", "list": "src", "item": { "l": "…", "u": "https://…" }, "kind": "source" }
+  ]
+}
+```
 
-**Never run git through the desktop bridge mount.** The mount forbids `unlink`, so every git
-command — even a read like `git status` — leaves a `.git/index.lock` it cannot clean up, and that
-stale lock is what makes GitHub Desktop refuse the next pull with *"A lock file already exists in
-the repository"*. If one has been left, move it into `_to_delete/` (the mount will not let you
-delete it) and then run **no further git command in that folder**, because the next one re-creates
-it. This cost an hour on 9 August.
+Field paths: `note` `occ` `occ_c` `mn` `name` `years` `headline` `bio[i]` `hl[i]` (add `_fr` for
+French) · `src[i].l|u|q` · `sources[i].label|label_fr|url` · `docs[i].cap|tr` · `pl[i].k|t|c|y|y2|d|w|w_fr`
+· `union[i].s|sy|n|n_fr`. A list item can be named by content instead of position:
+`src[url=https://…].l`, `pl[t=arrival,k=town].w`. `find` must occur exactly once; `from` must be
+the current value exactly — an edit never overwrites text it has not seen.
 
-**Deploying.** Three routes reach GitHub, in order of preference. (1) **A container clone.**
-`git clone https://github.com/CNitschelm/family-tree.git` works from the cloud container and is the
-easiest place to prepare a commit — but the egress proxy will not inject a credential for `push`,
-and it cannot clone the private `family-tree-sources` at all. (2) **GitHub's web upload page**,
-`/upload/main` (or `/upload/main/<dir>`), driven through Claude-in-Chrome with `file_upload` from
-`/mnt/user-data/outputs/`. This works for both repos, including `.github/workflows/*` which the API
-token is forbidden to write, and it is how every commit of 9 August was made. Always screenshot
-before clicking **Commit changes** and confirm the **main** radio: a mis-click selects "Create a new
-branch". (3) **GitHub Desktop** (Ctrl+P) on Cory's machine — the only route that can pull, since the
-device VM has no network at all.
+## What `change.js` refuses
 
-**Verifying a deploy takes ten seconds and is not optional.** Read `ENC.iv` and the sha256 of
-`ENC.ct` from the live page, and compare them with the local `index.html`. Matching fingerprints
-prove the payload is served; a green push proves nothing — three commits once sat undeployed for a
-day while every local check stayed green. Record the pair in `OPEN-ITEMS.md` so the next session can
-check rather than remember.
+| kind | what it must carry | checked how |
+|---|---|---|
+| `fact` — any change to what the card asserts, including removing something | evidence: `quote` from our copy of the source, or `absent` words for a "no record gives X" | the quote must be in our copy; each `absent` word must really be missing from it. An image or PDF copy needs `read` + `transcription` |
+| `grade` — `pl[…].c`, `occ_c` | evidence for the new grade | as above; a grade change of any other kind is refused |
+| `source` — labels, quotes, URLs | nothing extra | a new `q` must be in our copy; a label may not name a year its source does not contain |
+| `wording` — rephrasing | nothing | refused if a year or number changes; a changed name or place is flagged |
+| `translation` — the French of a pair | nothing | refused if a year or number changes |
+| `owner` — Cory's decision | a register entry of his | nobody else can reopen his decisions |
+| `structure` — adding a list item, a duplicate removed | — | a new or removed **card** needs Cory's recorded decision |
 
----
+And for every kind:
+- **English and French must carry the same years** afterwards (or the edit says `"fr": "exempt: why"`).
+- **The register answers back** (next section).
+- **Putting back what an earlier change took out** — a grade, a year, a sentence — is refused unless
+  the edit says `"reverts": "<what that change got wrong, and the evidence>"`. The payload's history
+  (every published version since 16 Jul 2026, decrypted once into `ledger/history/`) is the memory.
+- **A stale or hand-edited `data.json` is refused** — it must be the payload in `index.html` plus
+  change sets from the ledger, nothing else.
 
-## What the machine pass can and cannot do
+## The register
 
-`checks/run.js` tests internal consistency: hedge-versus-assert, source support, pin certainty,
-arithmetic, EN/FR parity, tooltip shape, gazetteer distance, cross-card citation, family counts.
+`ledger/register.jsonl` (private) holds every settled question — 427 entries at the start, converted
+from the dispute register, the decisions file, Cory's answer sheets, and the "do not re-raise" lists.
 
-`checks/sources.js` (S1) tests prose against the fact sheets' machine contracts. **It currently
-reports 8 findings, of which 2 are real and 6 are artefacts of clause granularity** — a sentence
-naming two sources side by side defeats it. The two real ones are logged as open items in
-`sources/baradel.md`. Treat S1 as a list to look at, not a verdict.
+```json
+{ "id": "R-0042", "status": "settled", "by": "rule", "decided": "2026-09-07",
+  "cards": ["c042", "c043"], "fields": ["pin:arrival", "bio", "hl", "mn"],
+  "tokens": ["1907", "1908"], "topic": "the arrival year", "ruling": "Both years are given; neither is chosen.",
+  "considered": ["https://…", "https://…"], "source_doc": "AUDIT-2026-09/DISPUTE-REGISTER.md D-000", "superseded_by": "" }
+```
 
-**Neither can tell you the genealogy is true.** Roughly half this tree rests on compiled family
-trees that can be confidently and consistently wrong. Every card now says so where it applies. That
-is the ceiling of any check that reads only what the site already holds — and the only thing that
-raises it is archive work. `GRADE-2026-08-08.md` lists the five documents that would settle the most.
+- `status`: `owner` (Cory decided — only Cory reopens it) · `settled` (by rule or evidence) ·
+  `disclosed` (both values shown on purpose; do not pick one) · `policy` (project-wide) · `open`.
+- **An edit that touches an entry must cite it**: `"register": "R-0042"`, and `"effect": "consistent"`
+  (keeps to the ruling) or `"reopen"` (with evidence from a source not in its `considered` list).
+  An entry with `tokens` is touched when an edit adds or removes one of them (or a number in one);
+  an entry without tokens, by any edit to its `fields`.
+- When Cory decides something, add an `owner` entry **in the same session**, in his words.
+  When a ruling changes, append the new entry and set the old one's `superseded_by`. Never edit a
+  ruling in place.
+- Audits and cold readers **read the register**. (The August rule that kept auditors away from it
+  is retired: it is how true citations were struck.)
 
----
+## Grades — the one definition
 
-## Grading a state
+| grade | means |
+|---|---|
+| `doc` | a specific document that records this event was read — an act or record in the original, an official record, a contemporary newspaper notice, a certificate, a census line, or an act **number** cited from a register transcription — it is cited on the card and we hold a copy |
+| `inf` | inferred: from a compiled tree, family memory, or reasoning across documents |
+| `apx` | the event is documented but the point is coarse (only the region, county or town is known) or the date is approximate; the note says which |
 
-Do not ask "audit it again and see if it's clean" — a clean result is unfalsifiable. Use
-`VALIDATE-PROMPT.md`: seed 12 known defects into a scratch copy, seal the key, run a blind audit
-against a stratified sample, then adversarially refute every finding.
+Grades change **one pin at a time, with evidence**. There are no bulk re-grades: a rule change is a
+`policy` entry in the register and applies to pins as they are next touched, unless Cory says otherwise.
 
-**The catch rate is the headline, not the finding count.** The 8 August run scored **12/12 caught,
-14 confirmed defects per 40 cards, 12.5% false positives.** Track defect density across runs; raw
-counts are not comparable.
+## Audits
 
----
+- An audit **proposes**; it never edits. A finding names the card id and field, quotes the card,
+  quotes **our copy of the source** (open it — a finding about a source nobody opened is not a
+  finding), and lists the register entries it checked. It comes with a draft change file.
+- "The source does not say X" is written as `absent: [words]` — `change.js` checks it.
+- Whoever writes a card does not audit it. *(Written rule; no tool enforces it.)*
+- A false citation is serious; **a true citation wrongly struck is exactly as serious.** A documented
+  negative ("no death act has been read, and here is why") is a correct result.
 
-## Next, in order
+## One writer
 
-1. **The ninth fact sheet** — the French national death index.
-2. **The claim ledger.** One row per atomic fact, listing every card that states it, then a check
-   that any claim on more than one card carries the same certainty everywhere. That single rule
-   would have caught the sixth-cousins seam, the Klamath Falls four-way date split, the "nine births
-   versus seven", and the 1580 register claim — each of which cost a phase to find by reading.
-3. **Patch-time enforcement.** `checks/patch.js` already rejects a byte mismatch; extend it to reject
-   an edit that names a source for a claim its sheet excludes. That converts the worst defect class
-   from *caught later* to *cannot land*.
+`node tools/lock.js take "<who>"` before editing; `change.js` refuses while someone else holds it (a
+lock older than 12 hours counts as abandoned; `--steal` takes it over). Two sessions in this folder
+at once is how a changelog entry was overwritten and how payloads went out built from each other's
+stale copies.
+
+## Privacy and commits
+
+- **Nothing outside the ciphertext names a person** — not code, comments, tests, the plaintext layer
+  or a commit message. Every tracked file is public and served by GitHub Pages. `tests/run.js` §14
+  fails on a payload name in any tracked file; `.gitignore` is deny-by-default.
+- **Commit messages: one neutral line**, ≤ 72 characters, no capitalised word after the first, no
+  body, no trailers. The `commit-msg` hook enforces it, and refuses an `index.html` the gate has not
+  passed. `mcp__GitHub__push_files` bypasses hooks: never use it for `index.html`.
+- The story of every deploy goes in `CHANGE-LOG-COMMITS.md` (private), in the same session.
+- Never add a person without asking. Never pass `--newsalt` (it locks out family devices) or
+  `--force` to `crypt.js`.
+
+## Deploy and verify
+
+Push from GitHub Desktop. A green push proves nothing: compare the live page's `ENC.iv` and the
+SHA-256 of `ENC.ct` with the local `index.html` (`notes/deploying.md` has the working routes and the
+traps). Record the live commit at the top of `OPEN-ITEMS.md`.
+
+## Where things live
+
+| | what | public? |
+|---|---|---|
+| `index.html` | the site: encrypted payload + app | yes |
+| `tools/` `checks/` `tests/` `githooks/` | the tools above; `tests/run.js` (site) and `tests/ledger.js` (this loop) | yes |
+| `data.json`, `.password`, `.data-stamp`, `.gate-stamp` | working copy, password, provenance stamps | no |
+| `ledger/` | `register.jsonl` (settled questions), `changes.jsonl` (every applied change), `pending/` (change files), `history/` (payload history cache), `LOCK` | no |
+| `OPEN-ITEMS.md` | the live commit and what is genuinely open — short | no |
+| `CHANGE-LOG-COMMITS.md`, `bio-research-notes.md` | the story of each deploy; the research log | no |
+| `AUDIT-2026-09/`, `history/` | the records the register was built from; older reports | no |
+| `notes/` | project memory (mirror of the memory store) | no |
+| `../family-tree-sources` | the source archive (private repo) | no |
+
+## Tools
+
+| tool | does |
+|---|---|
+| `tools/card.js` | open a card: fields, sources + archive copies, register, ledger, `--history` |
+| `tools/change.js` | apply a change file, or refuse it |
+| `checks/gate.js` | before every commit: payload = ledger, evidence still holds, tests, no new HIGH lint |
+| `tools/lock.js` | one writer at a time |
+| `tools/crypt.js` | decrypt / encrypt the payload |
+| `tools/doctor.js` | local state |
+| `checks/run.js` | prose linter (report only; the gate fails on new HIGH findings) |
+| `checks/manifest.js` | regenerate `sources/urls.tsv` for the archive |
+| `tests/run.js`, `tests/ledger.js` | site regression suite; tests for this loop |
+
+`checks/patch.js` and `checks/dossier.js` are retired in favour of `change.js` and `card.js`.

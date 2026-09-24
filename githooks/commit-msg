@@ -13,11 +13,26 @@
 # non-ASCII subject, and it has no encrypted-payload fallback, so a working
 # copy without data.json is refused rather than waved through.
 dir=$(dirname "$0")
+die() { printf '\ncommit-msg: %s\n\n' "$1" >&2; exit 1; }
+
+# 0. A payload is committed only after checks/gate.js has passed on exactly that payload.
+# The gate proves every change since the live version is in the ledger with its evidence,
+# and that the tests pass; on a pass it writes the payload's iv to .gate-stamp. The iv is
+# fresh on every encrypt, so an edit made after the gate passed cannot slip through either.
+# (24 Sep 2026: before this, nothing stood between an unchecked payload and the live site.)
+if git diff --cached --name-only 2>/dev/null | grep -qx 'index.html'; then
+  root=$(git rev-parse --show-toplevel 2>/dev/null) || die "cannot find the repository root - REFUSED."
+  iv=$(git show :index.html 2>/dev/null | grep -o 'const ENC = {v:[0-9]*, iter:[0-9]*, salt:"[^"]*", iv:"[^"]*"' | head -n 1 | sed 's/.*iv:"//; s/"$//')
+  [ -n "$iv" ] || die "cannot read the iv of the staged index.html, so this commit is REFUSED."
+  stamp=$(head -n 1 "$root/.gate-stamp" 2>/dev/null | tr -d '\r')
+  [ "$stamp" = "$iv" ] || die "index.html is staged, but checks/gate.js has not passed on this payload
+  (staged iv $iv; .gate-stamp says ${stamp:-nothing}). Run:  node checks/gate.js
+  It proves every change is in the ledger with its evidence and the tests pass."
+fi
+
 if command -v node >/dev/null 2>&1; then
   exec node "$dir/../tools/check-commit-msg.js" "$1"
 fi
-
-die() { printf '\ncommit-msg: %s\n\n' "$1" >&2; exit 1; }
 MAX_LEN=72
 TECH="github actions pages readme json html css aes gcm ci en fr node npm js url urls pbkdf2 svg jpeg png dom api http https utf claude cowork windows linux"
 

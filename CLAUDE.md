@@ -1,14 +1,13 @@
 # Working rules for this project
 
-> **Read `notes/` first.** It mirrors this project's Cowork project-memory files: deploying,
-> the map view, the machine checks, the Aug 2026 remediation, the privacy stance, the key
-> cache, the security work, and the Chicago naturalisation research. A session started from
-> a scheduled task carries **no project association and cannot reach project memory at all**
-> — the read fails with "this session is not associated with a project on this device", and
-> nothing can bind a session to a project after the fact. `notes/` is the copy that works
-> either way. It is gitignored by the deny-by-default rule below (check with
-> `git check-ignore -v notes/`), so it is never published. The desktop store remains the
-> master copy — when something changes, update both.
+> **Read `OPERATING.md` first — every session.** It is the single description of how a change reaches
+> the site (the change loop: `tools/card.js` → a change file → `tools/change.js` → `checks/gate.js` →
+> commit), and it replaces the older loop that used to be described here. The rules below are the
+> standing ones that sit around that loop.
+>
+> **Project memory** is the Claude memory store under `/projects/01a0a333-…/` (the master since
+> 15 Sep 2026) and its mirror in `notes/` (gitignored — never published). A session with no project
+> association cannot reach the store; `notes/` works either way. When something changes, update both.
 
 ## Standing priorities (Cory, 31 Jul 2026 — applies to every task here)
 1. **Thoroughness and accuracy first.** Never trade correctness for a shortcut.
@@ -20,19 +19,8 @@
 Cory's interest is **depth of coverage and history**, not breadth. Do not add new people to the tree — including newly discovered relatives, collateral lines, and non-Nitschelm surnames — without confirming with him first. Enriching existing people (bios, documents, photos, sources, corrections) never needs permission.
 
 ## Where things live
-| File | Purpose | Committed? |
-|---|---|---|
-| `index.html` | The whole site. Encrypted `DATA` payload + app. | ✅ |
-| `data.json` | Decrypted working copy of the payload. | ❌ never |
-| `.password` | Site password. | ❌ never |
-| `tests/run.js` | Zero-dependency regression suite (76 tests). | ✅ |
-| `tools/crypt.js` | `decrypt` / `encrypt` the payload. | ✅ |
-| `tools/photo.js` | Embed a card portrait: `node tools/photo.js "<name>" <file> [birthyear]` | ✅ |
-| `OPEN-ITEMS.md` | **Living action list** — read at the start of a session, update at the end. | ❌ (names) |
-| `CHANGE-LOG-COMMITS.md` | Narrative changelog. The story of each change lives here, **not** in commit messages. | ❌ (names) |
-| `bio-research-notes.md` | Research log, newest entry at top. | ❌ (names) |
-| `AUDITOR-NOTES.md` / `AUDIT-PROMPT.md` | For the independent auditor. | ❌ (names) |
-| `evidence/` | Original document crops. | ❌ |
+See `OPERATING.md`, "Where things live". In short: `index.html` is the site; `data.json`, `.password`,
+`ledger/` and every research `.md` are private and never committed.
 
 ## Privacy invariant (non-negotiable) — read this before every commit
 
@@ -94,30 +82,24 @@ commits — GitHub keeps serving them by SHA indefinitely. There is no clean way
 
 ## Run this first, every session
 ```
-node tools/doctor.js                 # local state: stale data.json, git locks, unpushed commits
+node tools/doctor.js                       # local state: stale data.json, git locks, unpushed commits
+node tools/lock.js take "<who>" "<what>"   # one writer at a time
 ```
-Exits 1 on a blocker. It reports only **local** state — it deliberately does not check the
-live site (the `verify-deploy` workflow does) or whether the data is correct (`tests/` and
-`checks/` do). A green doctor means nothing is silently broken underneath you; it does not
-mean safe to deploy.
+Then follow the loop in `OPERATING.md`. The two guards that matter most:
 
-## Standard edit loop
-```
-node tools/crypt.js decrypt          # → data.json   (NEVER pass --newsalt: it locks out family devices)
-node <script that mutates data.json>
-node tools/crypt.js encrypt          # → index.html
-node tests/run.js                    # must be all-green before deploy
-```
+- **`tools/change.js` is the only way an edit reaches `data.json`.** It refuses a fact or grade change
+  without evidence from our copy of the source, a "wording" edit that changes a date, an edit on a
+  settled question that does not cite the register, and an edit that quietly puts back what an earlier
+  change took out. A script that writes `data.json` directly is how facts flip-flopped in Aug–Sep 2026.
+- **`checks/gate.js` must pass before any commit that touches `index.html`**, and the commit-msg hook
+  refuses one it has not passed. It proves every difference from the live payload is in
+  `ledger/changes.jsonl`, re-checks the evidence against the archive, and runs the suites.
 
-**`encrypt` will refuse if `data.json` did not come from the `index.html` now on disk.**
-`decrypt` records a fingerprint of the payload it read into `.data-stamp` (gitignored);
-`encrypt` checks it. That refusal is not in your way — it means the working copy is stale
-and encrypting would silently revert whatever landed in `index.html` since. **Do not reach
-for `--force` to get past it.** Back up `data.json`, run `decrypt` again, re-apply the edit.
-*This exists because on 15 Aug 2026 the `data.json` in this repo was a week and 1.4 MB
-behind the payload, and nothing detected it — the suites check the shape of the data, not
-whether it is the current data, so every test would have passed on top of a silent revert.*
-Deploy = GitHub Desktop: Fetch → commit → Ctrl+P push. Verify with the GitHub MCP `list_commits`.
+**`encrypt` refuses a `data.json` that did not come from the `index.html` on disk** (`.data-stamp`).
+Do not reach for `--force`, and never pass `--newsalt` (it locks out every family device).
+*This exists because on 15 Aug 2026 the `data.json` in this repo was a week and 1.4 MB behind the
+payload, and nothing detected it.* Deploy = GitHub Desktop: commit → push. Verify with the GitHub MCP
+`list_commits`, then the live bytes (below).
 
 ### Deploying is not done when the push succeeds
 The **`verify-deploy` workflow** now proves this automatically on every push to `main`: it polls
@@ -141,7 +123,9 @@ A green `list_commits` only proves the commit reached `main`. **Always verify th
 Check https://www.githubstatus.com/api/v2/summary.json **before** theorising. On 6 Aug 2026 I blamed file size and recompressed 62 images; the build was never the problem — the deploy runner was, and a re-run fixed it in forty seconds.
 
 ## Data shape (inside the payload)
-- Node: `{name, years, note, note_fr, src[], profile{}, unions[{s, sy, n, n_fr, c[]}], g:"m"|"f", img}`
+- Node: `{id, name, years, note, note_fr, src[], profile{}, unions[{s, sy, n, n_fr, c[]}], g:"m"|"f", img}`
+- `id` is the card's permanent id (`c001`…), never reused and never shown to readers. The register, the
+  change ledger and the payload history name cards by it, so a card whose name or years change stays the same card.
 - Quick facts on the bio card: `occ` / `occ_fr` (a short trade noun phrase, no trailing period) and
   `occ_c: "doc"|"inf"|"apx"` on the **node** — graded on the evidence for the TRADE, not for the place
   it was practised. Every other row of the strip (born, died, lived, age at death, children,
