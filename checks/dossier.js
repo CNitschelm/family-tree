@@ -1,4 +1,6 @@
 'use strict';
+// SUPERSEDED 24 Sep 2026 by tools/card.js, which adds the card's register entries, its archive copies
+// and its history. Kept because it still prints the arithmetic anchors; it only reads.
 // Print everything a writer or auditor needs to work ONE card, whole-card rule.
 // Usage: node checks/dossier.js "<name substring>" [--brief]
 const fs = require('fs');

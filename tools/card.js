@@ -74,7 +74,8 @@ if (process.argv.includes('--history')) {
     const runs = [];
     arr.forEach(([v, val]) => { if (!runs.length || runs[runs.length - 1][1] !== val) runs.push([v, val]); });
     if (runs.length < 2) continue;
-    const back = runs.some(([, val], i) => runs.slice(0, i - 1).some(([, w]) => w === val));
+    // a value that returns after something else replaced it: A → B → A
+    const back = runs.some(([, val], i) => i >= 2 && runs.slice(0, i - 1).some(([, w]) => w === val));
     if (back || full) W(`  ${back ? '↺ ' : '  '}${p}: ` + runs.map(([v, val]) => `${v.date.slice(0, 10)} ${cut(val, 40)}`).join('  →  '));
   }
 } else W('\n(--history adds the published history of every field and flags values that came back)');

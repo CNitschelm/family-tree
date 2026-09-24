@@ -11,6 +11,7 @@ const ROOT = path.join(__dirname, '..');
 const mf = path.join(ROOT, 'sources', 'MANIFEST.json');
 const tsvPath = path.join(ROOT, 'sources', 'urls.tsv');
 const st = path.join(ROOT, 'archive', 'store', 'state.json');
+const handDir = path.join(ROOT, 'archive', 'hand');
 // the working copy has the full manifest with card names; the archive repo has urls.tsv without
 let manifest;
 if (fs.existsSync(mf)) manifest = JSON.parse(fs.readFileSync(mf, 'utf8'));
@@ -24,17 +25,30 @@ else if (fs.existsSync(tsvPath)) {
 } else { console.error('no sources/MANIFEST.json and no sources/urls.tsv'); process.exit(1); }
 const state = fs.existsSync(st) ? JSON.parse(fs.readFileSync(st, 'utf8')) : {};
 
-// A source counts as covered if we hold ANYTHING for it — but the two kinds are not equal and
-// this file must stop pretending they are. `ok` means the fetcher got a 200 and saved the bytes.
-// A hand file in archive/hand/ is a transcription: someone read the page and wrote down what it
-// said. Those were never registered in state.json, which is why this reported 50% while the
-// archive was described as complete. Both numbers were wrong. Count them, separately, and say so.
-const handDir = path.join(ROOT, 'archive', 'hand');
-const hasHand = e => fs.existsSync(path.join(handDir, e.id + '.txt'));
-const auto = e => { const s = state[e.id]; return !!(s && s.ok); };
-const held = e => auto(e) || hasHand(e);
+// Pages saved out of a logged-in browser because no script may have them — Geneanet and FindAGrave
+// refuse automated clients, and the Internet Archive holds no snapshot of these deep links. One
+// file per source id. They count as held: the text of the page is what the citation rests on.
+const hand = new Set(fs.existsSync(handDir)
+  ? fs.readdirSync(handDir).filter(f => f.endsWith('.txt')).map(f => f.replace(/\.txt$/, ''))
+  : []);
+
+// A source we captured once is still held when a later run is refused (a 429, a 403, a timeout):
+// the copy on disk did not go anywhere. fetch.mjs keeps it as `lastGood` on the failed record.
+const copyOnDisk = s => !!(s && (s.ok || (s.lastGood && s.lastGood.file)));
+const held = e => copyOnDisk(state[e.id]) || hand.has(e.id);
 const STALE = 180 * 864e5;
-const stale = e => { const s = state[e.id]; return s && s.ok && (Date.now() - Date.parse(s.fetched)) > STALE; };
+const heldSince = s => (s.ok ? s.fetched : s.lastGood && s.lastGood.fetched);
+const stale = e => { const s = state[e.id]; return copyOnDisk(s) && (Date.now() - Date.parse(heldSince(s))) > STALE; };
+
+// A change somebody has already checked against the cards is closed, and stays closed for that
+// capture. One line per review in archive/reviewed.tsv: id, the sha256 of the capture reviewed,
+// the date, what was found. Without this the same change was re-reported on every run for six
+// months, and every report sent somebody back to re-read the same cards.
+const reviewedPath = path.join(ROOT, 'archive', 'reviewed.tsv');
+const reviewed = new Set(fs.existsSync(reviewedPath)
+  ? fs.readFileSync(reviewedPath, 'utf8').split(/\r?\n/).filter(l => l && !l.startsWith('#'))
+      .map(l => l.split('\t')).map(([id, sha]) => `${id}\t${sha}`)
+  : []);
 
 const total = manifest.entries.length;
 const have = manifest.entries.filter(held);
@@ -45,14 +59,25 @@ const allCards = new Set(manifest.entries.flatMap(e => e.cards));
 const coveredCards = new Set(have.flatMap(e => e.cards));
 const orphaned = [...allCards].filter(c => !coveredCards.has(c));
 
+const byHand = have.filter(e => hand.has(e.id) && !copyOnDisk(state[e.id]));
+const viaIA = have.filter(e => (state[e.id] || {}).result === 'wayback');
+const own = have.length - viaIA.length - byHand.length;
+
+console.log('');
+console.log(`  ${pct(have.length)} of the sources this family tree cites are safe.`);
+console.log(`  If every one of those sites went dark tonight, ${have.length} of ${total} could still be read.`);
+if (allCards.size) {
+  console.log(`  ${((coveredCards.size / allCards.size) * 100).toFixed(0)}% of people on the tree would still have at least one source you can open.`);
+}
+console.log('');
 console.log(`ARCHIVE COVERAGE`);
-console.log(`  sources with a copy   ${have.length} / ${total}  (${pct(have.length)})`);
-console.log(`    fetched bytes       ${manifest.entries.filter(auto).length}`);
-console.log(`    hand transcription  ${manifest.entries.filter(e => hasHand(e) && !auto(e)).length}   (a reading of the page, not the page)`);
-console.log(`  NOTE  a 200 is not proof the bytes are the record. Run checks/archive-verify.js —`);
-console.log(`        on 11 Aug 2026 it found 41 of these are a wall, a viewer frame or an empty file.`);
-console.log(`  copies over 180 days  ${manifest.entries.filter(stale).length}`);
-console.log(`  cards whose evidence survives a blackout   ${coveredCards.size} / ${allCards.size}`);
+console.log(`  our own copy of the live page      ${own}`);
+console.log(`  Internet Archive snapshot instead  ${viaIA.length}`);
+console.log(`  saved by hand from a browser       ${byHand.length}`);
+console.log(`  no copy at all                     ${total - have.length}`);
+console.log(`  copies over 180 days old           ${manifest.entries.filter(stale).length}`);
+if (allCards.size) console.log(`  cards whose evidence survives a blackout   ${coveredCards.size} / ${allCards.size}`);
+else console.log(`  (card-level coverage needs the full MANIFEST.json — run this in the family-tree working copy)`);
 console.log('');
 for (const risk of ['high', 'medium', 'low']) {
   const g = manifest.entries.filter(e => e.risk === risk);
@@ -68,9 +93,14 @@ if (gaps.length) {
   });
   if (gaps.length > 15) console.log(`  … and ${gaps.length - 15} more`);
 }
-const changed = Object.values(state).filter(s => s.result === 'CHANGED');
+const changedAll = Object.values(state).filter(s => s.result === 'CHANGED');
+const changed = changedAll.filter(s => !reviewed.has(`${s.id}\t${s.sha256}`));
 if (changed.length) {
-  console.log(`\nCHANGED SINCE WE LAST LOOKED — check the card still says what the source says:`);
-  changed.forEach(s => console.log(`  ${s.dependents} cards  ${s.url}`));
+  console.log(`\nCHANGED SINCE WE LAST LOOKED — check the card still says what the source says, then add a line to archive/reviewed.tsv:`);
+  changed.forEach(s => console.log(`  ${s.dependents} cards  ${s.url}` +
+    (s.changes ? `  (−${s.changes.removedCount} +${s.changes.addedCount} lines)` : '')));
 }
+if (changedAll.length > changed.length) console.log(`  (${changedAll.length - changed.length} earlier change(s) already reviewed — archive/reviewed.tsv)`);
+const refusedNow = manifest.entries.filter(e => { const s = state[e.id]; return s && !s.ok && s.lastGood; });
+if (refusedNow.length) console.log(`  ${refusedNow.length} held source(s) refused us on the last try — the copy we hold stands`);
 if (orphaned.length) console.log(`\n${orphaned.length} card(s) have no archived source at all.`);
