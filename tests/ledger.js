@@ -23,6 +23,7 @@ const { execFileSync, spawnSync } = require('child_process');
 const SRC = path.join(__dirname, '..');
 const T = fs.mkdtempSync(path.join(os.tmpdir(), 'ledger-test-'));
 const ARCH = path.join(T, 'archive-repo');
+process.env.FT_ARCHIVE = ARCH;     // for the tools loaded in this process, as for those spawned below
 let pass = 0, failN = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('  ok  ' + m); } else { failN++; console.log('  FAIL ' + m); } };
 
@@ -70,8 +71,19 @@ fs.mkdirSync(path.join(ARCH, 'archive', 'store', 'example.invalid', sid(URL_B)),
 fs.writeFileSync(path.join(ARCH, 'archive', 'hand', sid(URL_A) + '.txt'),
   `# url: ${URL_A}\n# captured: 2026-09-01T00:00Z\n# kind: hand copy\n\nProbus Quillfeather died at the Town of Marrowby on Jan 5, 1920. He came to Valeton in 1908.\n`);
 fs.writeFileSync(path.join(ARCH, 'archive', 'store', 'example.invalid', sid(URL_B), '2026-09-01.jpg'), 'not really a jpeg');
+// an old page saved in Latin-1 that also spells accents as entities, and a viewer page with no words
+const URL_C = 'https://example.invalid/old-page.htm', URL_D = 'https://example.invalid/viewer/3';
+for (const u of [URL_C, URL_D]) fs.mkdirSync(path.join(ARCH, 'archive', 'store', 'example.invalid', sid(u)), { recursive: true });
+fs.writeFileSync(path.join(ARCH, 'archive', 'store', 'example.invalid', sid(URL_C), '2026-09-01.html'),
+  Buffer.concat([Buffer.from('<HTML><BODY><P>Tertia Quillfeather oo Probus &Eacute;pervine (1850, 1920)</P><P>n'),
+    Buffer.from([0xe9]), Buffer.from('e &agrave; Marrowby &#8212; caf&#xE9;</P></BODY></HTML>')]));
+fs.writeFileSync(path.join(ARCH, 'archive', 'store', 'example.invalid', sid(URL_D), '2026-09-01.html'),
+  '<!doctype html><html><head><meta charset="utf-8"><script>boot()</script></head><body>\n  <div id="app"></div>\n</body></html>');
+const stored = (u, f, type) => ({ id: sid(u), url: u, ok: true, result: 'new', sha256: 'x', file: `example.invalid/${sid(u)}/${f}`, contentType: type });
 fs.writeFileSync(path.join(ARCH, 'archive', 'store', 'state.json'), JSON.stringify({
-  [sid(URL_B)]: { id: sid(URL_B), url: URL_B, ok: true, result: 'new', sha256: 'x', file: `example.invalid/${sid(URL_B)}/2026-09-01.jpg`, contentType: 'image/jpeg' } }));
+  [sid(URL_B)]: stored(URL_B, '2026-09-01.jpg', 'image/jpeg'),
+  [sid(URL_C)]: stored(URL_C, '2026-09-01.html', 'text/html'),
+  [sid(URL_D)]: stored(URL_D, '2026-09-01.html', 'text/html') }));
 
 const env = { ...process.env, FT_ROOT: T, FT_ARCHIVE: ARCH, FT_LEDGER: path.join(T, 'ledger') };
 delete env.FT_WHO;
@@ -172,6 +184,11 @@ const chain = L.chain(L.loadChanges(), L.hashData(live), L.hashData(now));
 ok(Array.isArray(chain) && chain.length === 2, 'every difference from the live payload is explained by the ledger (2 change sets)');
 const hand = JSON.parse(JSON.stringify(now)); hand.unions[0].c[0].note = 'Clerk!';
 ok(L.chain(L.loadChanges(), L.hashData(live), L.hashData(hand)) === null, 'a single hand edit breaks the chain, so the gate would refuse the commit');
+
+console.log('== reading the archive');
+ok(L.quoteIn(URL_C, 'Probus Épervine (1850, 1920)').ok === true, 'an accent written as an HTML entity matches a quote that spells it out');
+ok(L.quoteIn(URL_C, 'née à Marrowby — café').ok === true, 'a Latin-1 page is read as Latin-1, not as broken UTF-8');
+ok(L.quoteIn(URL_D, 'anything').ok === null, 'a copy with no words in it counts as unread, not as a copy that lacks the quote');
 
 fs.rmSync(T, { recursive: true, force: true });
 console.log(`\n${pass} passed, ${failN} failed`);

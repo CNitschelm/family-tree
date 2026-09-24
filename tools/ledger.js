@@ -220,14 +220,38 @@ function archiveState() {
   try { _state = JSON.parse(fs.readFileSync(f, 'utf8')); } catch (_) { _state = {}; }
   return _state;
 }
+// Named entities an old page may use. Without the accented letters, a page that writes
+// "Chr&eacute;tien" never matched a quote that says "Chrétien", and the gate refused true evidence.
+const ENTITIES = {
+  nbsp: ' ', amp: '&', quot: '"', apos: "'", lt: '<', gt: '>', ndash: '–', mdash: '—', hellip: '…',
+  lsquo: '‘', rsquo: '’', sbquo: '‚', ldquo: '“', rdquo: '”', bdquo: '„', laquo: '«', raquo: '»',
+  deg: '°', ordm: 'º', ordf: 'ª', sect: '§', middot: '·', times: '×', shy: '', copy: '©', reg: '®',
+  szlig: 'ß', aelig: 'æ', AElig: 'Æ', oelig: 'œ', OElig: 'Œ', oslash: 'ø', Oslash: 'Ø',
+};
+for (const [mark, letters] of Object.entries({ grave: 'àèìòùÀÈÌÒÙ', acute: 'áéíóúýÁÉÍÓÚÝ', circ: 'âêîôûÂÊÎÔÛ',
+  tilde: 'ãñõÃÑÕ', uml: 'äëïöüÿÄËÏÖÜŸ', ring: 'åÅ', cedil: 'çÇ' }))
+  for (const ch of letters) ENTITIES[ch.normalize('NFD')[0] + mark] = ch;
+function decodeEntities(s) {
+  return s.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+\d*);/gi, (m, e) => {
+    if (e[0] === '#') { const n = /^#x/i.test(e) ? parseInt(e.slice(2), 16) : +e.slice(1); return n > 0 && n < 0x110000 ? String.fromCodePoint(n) : m; }
+    return ENTITIES[e] ?? ENTITIES[e.toLowerCase()] ?? m;
+  });
+}
 function readableHtml(html) {
-  return html.replace(/<!--[\s\S]*?-->/g, ' ')
+  return decodeEntities(html.replace(/<!--[\s\S]*?-->/g, ' ')
     .replace(/<(script|style|noscript|svg|template|iframe)\b[\s\S]*?<\/\1\s*>/gi, ' ')
     .replace(/<\/?(br|p|div|li|tr|td|th|h[1-6]|section|article|dd|dt|blockquote|pre|table|ul|ol|time|label)\b[^>]*>/gi, '\n')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'")
-    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&ndash;/g, '–').replace(/&mdash;/g, '—')
-    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n));
+    .replace(/<[^>]+>/g, ' '));
+}
+// A page saved in Latin-1 or Windows-1252 (the family site is one) read as UTF-8 turns every
+// accented letter into U+FFFD. Decode by the page's own declaration, or by that symptom.
+function readPage(file) {
+  const buf = fs.readFileSync(file);
+  const declared = (/<meta[^>]+charset=["']?\s*([\w-]+)/i.exec(buf.subarray(0, 4096).toString('latin1')) || [])[1] || '';
+  const utf8 = buf.toString('utf8');
+  if (/^utf-?8$/i.test(declared) || (!declared && !utf8.includes('�'))) return utf8;
+  if (declared && !/^(iso-8859-1|iso-8859-15|latin-?1|windows-1252|cp1252|us-ascii)$/i.test(declared)) return utf8;
+  try { return new TextDecoder('windows-1252').decode(buf); } catch (_) { return buf.toString('latin1'); }
 }
 // What we hold of a source, and its text where it has text.
 function archived(src) {
@@ -256,14 +280,15 @@ function archived(src) {
     const full = path.join(ARCHIVE, 'archive', 'store', f);
     if (!fs.existsSync(full)) continue;
     out.held = true; out.kind = out.kind || 'store'; out.files.push(full);
-    if (/\.html?$/i.test(full)) texts.push(readableHtml(fs.readFileSync(full, 'utf8')));
+    if (/\.html?$/i.test(full)) texts.push(readableHtml(readPage(full)));
     else if (/\.(txt|md|json)$/i.test(full)) texts.push(fs.readFileSync(full, 'utf8'));
   }
   if (s && s.result === 'pages' && Array.isArray(s.pages)) for (const pg of s.pages) {
     const full = path.join(ARCHIVE, 'archive', 'store', pg.file);
     if (fs.existsSync(full)) { out.held = true; out.kind = out.kind || 'pages'; out.files.push(full); }
   }
-  if (texts.length) out.text = texts.join('\n');
+  // a copy with no words in it (a canvas viewer's empty page) has no text layer: it must be read
+  if (texts.join('').trim()) out.text = texts.join('\n');
   if (!out.held) out.why = 'no copy in the archive (archive/hand/' + id + '.txt or archive/store/…/' + id + ')';
   return out;
 }

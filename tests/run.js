@@ -255,6 +255,64 @@ ok(allNodes.every(n => (n.p.unions || []).every(u => !u.n || (u.n_fr && u.n_fr.l
  * note ("Remarried <given name>…", "first wife <given name>…") belongs on the card */
 ok(allNodes.every(n => !/(re)?married\s+[A-Z]|\b(wife|husband|spouse)\s+[A-ZÉ]/.test(n.p.note || "")),
   "no marriages hidden in notes — they belong on cards as unions");
+/* 24 Sep 2026, the owner's rule: a LIVING person's birth is published as a year only — never the
+   day or the month (a full date of birth is what identity theft needs). Living = a card whose dates
+   line is "b. YYYY" or empty, or a spouse whose union line is "b. YYYY". The check is narrow on
+   purpose — a day-and-month date in the same sentence as a birth word, in that person's own year
+   or with no year — so the dated weddings, letters and notices on these cards pass. It reads the
+   person's own card, the union notes that name a living spouse, and a parent's card where it
+   names a living child. It reports card ids and field paths only, never names. */
+{
+  const MON = "January|February|March|April|May|June|July|August|September|October|November|December|" +
+    "Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept|Sep|Oct|Nov|Dec|janvier|février|mars|avril|mai|juin|juillet|août|" +
+    "septembre|octobre|novembre|décembre";
+  const DAY_MONTH = new RegExp("(?:(?<![\\p{L}\\d])\\d{1,2}(?:st|nd|rd|th|er)?(?: of)? (?:" + MON + ")(?![\\p{L}])|" +
+    "(?<![\\p{L}])(?:" + MON + ")\\.? \\d{1,2}(?:st|nd|rd|th)?(?![\\p{L}\\d]))(?:,? (\\d{4}))?", "giu");
+  const BIRTH = /(?<![\p{L}])(?:born|birth|naissance|naquit|na[iî]t|née?)(?![\p{L}])/iu;
+  const yearOf = s => { const m = /^b\. (\d{4})$/.exec(String(s || "").trim()); return m ? m[1] : null; };
+  const living = p => /^b\. \d{4}$/.test(String(p.years || "").trim()) || !String(p.years || "").trim();
+  const texts = p => {
+    const out = [], pr = p.profile || {};
+    const add = (at, v) => { if (typeof v === "string" && v && !v.startsWith("data:")) out.push([at, v]); };
+    ["note", "note_fr", "mn", "mn_fr", "occ", "occ_fr"].forEach(k => add(k, p[k]));
+    (p.src || []).forEach((s, i) => { add("src[" + i + "].l", s.l); add("src[" + i + "].q", s.q); });
+    (p.pl || []).forEach((x, i) => { add("pl[" + i + "].w", x.w); add("pl[" + i + "].w_fr", x.w_fr); });
+    (p.unions || []).forEach((u, i) => { add("union[" + i + "].n", u.n); add("union[" + i + "].n_fr", u.n_fr); });
+    ["headline", "headline_fr"].forEach(k => add(k, pr[k]));
+    ["bio", "bio_fr", "hl", "hl_fr"].forEach(k => (pr[k] || []).forEach((v, i) => add(k + "[" + i + "]", v)));
+    (pr.sources || []).forEach((s, i) => { add("sources[" + i + "].label", s.label); add("sources[" + i + "].label_fr", s.label_fr); });
+    (pr.docs || []).forEach((x, i) => ["cap", "cap_fr", "tr", "tr_fr"].forEach(k => add("docs[" + i + "]." + k, x[k])));
+    (pr.timeline || []).forEach((x, i) => { add("timeline[" + i + "].t", x.t); add("timeline[" + i + "].t_fr", x.t_fr); });
+    return out;
+  };
+  const sentences = s => String(s).split(/(?<=[.;!?])\s+(?=[\p{Lu}“«"(])/u);
+  // years === null: the person's year is unknown, so any dated day and month counts
+  const tells = (text, years, first) => sentences(text).some(se => {
+    if (!BIRTH.test(se) || (first && !se.includes(first))) return false;
+    for (const m of se.matchAll(DAY_MONTH)) if (!m[1] || years === null || years.includes(m[1])) return true;
+    return false;
+  });
+  const bad = new Set();
+  for (const n of allNodes) {
+    const p = n.p;
+    if (living(p)) {
+      const y = yearOf(p.years);
+      for (const [at, t] of texts(p)) if (tells(t, y ? [y] : null)) bad.add(p.id + " " + at);
+      (p.pl || []).forEach((x, i) => { if (x.t === "birth" && x.d && !/^\s*(c\.\s*)?\d{4}\s*$/.test(x.d)) bad.add(p.id + " pl[" + i + "].d"); });
+    }
+    (p.unions || []).forEach((u, i) => {
+      const y = yearOf(u.sy);
+      if (y) ["n", "n_fr"].forEach(k => { if (u[k] && tells(u[k], [y])) bad.add(p.id + " union[" + i + "]." + k); });
+      (u.c || []).forEach(k => {
+        if (!living(k) || !k.name) return;
+        const ky = yearOf(k.years), first = k.name.split(/\s+/)[0];
+        for (const [at, t] of texts(p)) if (tells(t, ky ? [ky] : null, first)) bad.add(p.id + " " + at + " (a child's birth)");
+      });
+    });
+  }
+  ok(!bad.size, "no living person's day or month of birth is published — year only" +
+    (bad.size ? " — " + [...bad].join("; ") : ""));
+}
 
 /* ---------- 6. Descendant counts (pill labels) ---------- */
 section("Descendant counts");
