@@ -3,11 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!--build:head-->
 <title>Nitschelm Family Tree — Visual</title>
-<link rel="icon" type="image/png" href="favicon.png">
-<link rel="apple-touch-icon" href="favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@500;600&family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!--/build:head-->
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="favicon.png">
 <style>
 :root{
   --paper:#F5F6F2; --panel:#FFFFFF; --ink:#1F2A33; --ink-soft:#5B6770; --rule:#C9CEC6;
@@ -18,18 +20,10 @@ html.dark{
   --paper:#15191C; --panel:#1E2428; --ink:#E7EBEA; --ink-soft:#98A3A6; --rule:#3B4448;
   --fr:#6FAE8A; --us-east:#7EA2DB; --us-west:#D97B62;--us-ohio:#D2AE5E; --fr-doubs:#6FB3BB; --colmar:#D98BAE; --fr-paris:#B5C25A; --schw:#B18BC4; --you:#D9A93F; --sel:#4FC8C6;
 }
-html.dark #sync{background:rgba(21,25,28,.85)}
 html.dark .node .box{box-shadow:0 1px 2px rgba(0,0,0,.4)}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;height:100dvh}
 body{background:var(--paper);color:var(--ink);font-family:'Archivo',system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden}
-header{background:var(--panel);border-bottom:2px solid var(--ink);padding:8px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;z-index:10}
-header h1{font-family:'EB Garamond',serif;font-weight:600;font-size:19px;white-space:nowrap;margin-right:4px}
-header input{font:inherit;font-size:13px;color:var(--ink);padding:6px 10px;border:1px solid var(--rule);border-radius:6px;width:180px;background:var(--panel)}
-header input::placeholder{color:var(--ink-soft)}
-header input:focus{outline:2px solid var(--us-east)}
-header button{font:inherit;font-size:12px;font-weight:600;color:var(--ink);padding:6px 11px;border:1px solid var(--ink);border-radius:6px;background:var(--panel);cursor:pointer;white-space:nowrap}
-#searchwrap{position:relative}
 #suggest{position:absolute;top:100%;left:0;margin-top:4px;min-width:250px;max-height:290px;overflow:auto;background:var(--panel);border:1px solid var(--rule);border-radius:8px;box-shadow:0 6px 18px rgba(31,42,51,.18);display:none;z-index:30}
 #suggest .it{padding:7px 12px;cursor:pointer;font-size:13px;display:flex;justify-content:space-between;align-items:baseline;gap:12px;white-space:nowrap}
 #suggest .it .nm2{overflow:hidden;text-overflow:ellipsis}
@@ -37,23 +31,10 @@ header button{font:inherit;font-size:12px;font-weight:600;color:var(--ink);paddi
 #suggest .it .yr{color:var(--ink-soft);font-size:11.5px;flex-shrink:0}
 #suggest .it.act{background:var(--paper)}
 #suggest .none{padding:7px 12px;font-size:12px;color:var(--ink-soft)}
-.jumps{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
-.jumps .lbl{font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.5px;margin-right:2px}
-.vsep{width:1px;height:24px;background:var(--ink-soft);margin:0 6px}
-.jumps button{border-width:1px;font-weight:500}
-.jumps button.b-leg{border-color:var(--you);color:var(--you)}
-.jumps button.b-fr{border-color:var(--fr);color:var(--fr)}
-.jumps button.b-east{border-color:var(--us-east);color:var(--us-east)}
-.jumps button.b-west{border-color:var(--us-west);color:var(--us-west)}.b-ohio{border-color:var(--us-ohio);color:var(--us-ohio)}.b-doubs{border-color:var(--fr-doubs);color:var(--fr-doubs)}.b-colmar{border-color:var(--colmar);color:var(--colmar)}.b-paris{border-color:var(--fr-paris);color:var(--fr-paris)}
-.jumps button.b-schw{border-color:var(--schw);color:var(--schw)}
-.subtle{border:none !important;background:transparent !important;font-size:11px;opacity:.6;text-decoration:underline;padding:4px 6px;cursor:pointer}
-.subtle:hover{opacity:1}
-.hend{margin-left:auto;display:flex;align-items:center;gap:2px;flex:none}
 .tsrcq{margin-top:4px;font-size:10px;font-style:italic;opacity:.85;line-height:1.5}
 /* genogram convention: circular portraits = women, rounded squares = men */
 .node .av.g-f,#profile .phead img.g-f{border-radius:50%}
 .node .av.g-m,#profile .phead img.g-m{border-radius:4px}
-@media (min-width: 701px){ #hdrtoggle{display:none} }
 /* ---- first-visit intro tour ---- */
 #intro{position:fixed;inset:0;background:rgba(21,25,28,.55);display:none;align-items:center;justify-content:center;z-index:70;padding:18px}
 #intro .icard{background:var(--panel);color:var(--ink);border:1px solid var(--rule);border-radius:16px;max-width:580px;width:100%;max-height:88vh;max-height:86dvh;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:30px 34px;box-shadow:0 12px 40px rgba(0,0,0,.35);position:relative}
@@ -97,33 +78,16 @@ header button{font:inherit;font-size:12px;font-weight:600;color:var(--ink);paddi
 #introgo{margin-top:14px;width:100%;font-weight:500;padding:10px;font-size:13px;opacity:.75}
 #introgo:hover{opacity:1}
 @media (prefers-reduced-motion: reduce){ #intro *{animation:none !important} }
-#hdrtoggle{border:1px solid var(--rule);background:var(--panel);color:var(--ink);font-size:20px;line-height:1;opacity:.85;padding:10px 16px;min-width:48px;min-height:44px;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center}
-#hdrtoggle:hover{opacity:1}
-header.hmin > :not(h1):not(.hend){display:none !important}
-header.hmin .hend .subtle{display:none !important}
-header.hmin{padding-top:6px;padding-bottom:6px}
-header.hmin h1{font-size:15px}
-.jumps button.b-leg.on{background:var(--you);color:#fff}
-.jumps button.b-fr.on{background:var(--fr);color:#fff}
-.jumps button.b-east.on{background:var(--us-east);color:#fff}
-.jumps button.b-west.on{background:var(--us-west);color:#fff}
-.jumps button.b-ohio.on{background:var(--us-ohio);color:#fff}
-.jumps button.b-doubs.on{background:var(--fr-doubs);color:#fff}
-.jumps button.b-colmar.on{background:var(--colmar);color:#fff}
-.jumps button.b-paris.on{background:var(--fr-paris);color:#fff}
-.jumps button.b-schw.on{background:var(--schw);color:#fff}
-#hint{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);background:rgba(31,42,51,.88);color:#fff;font-size:12px;padding:7px 14px;border-radius:16px;cursor:pointer;transition:opacity .4s;z-index:5;max-width:90%;text-align:center}
 #stage{flex:1;position:relative;overflow:hidden;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
 /* interface chrome is not text: a double-tap to zoom must never leave a button
    glyph highlighted. Bios, tooltips and the detail panel stay selectable so
    names and dates can still be copied. */
-header, header *, #viewtoggle, #mapbar, #mapbar *, #mapctl, #zoomctl, #ruler,
-#maplegend, #mapwhere, #mappins, #mappins *, #sync, .jumps, button{
+.fl, .fl *, #row2, #mapctl, #zoomctl, #ruler, #restart,
+#maplegend, #mapwhere, #mappins, #mappins *, #sync, button{
   user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;
 }
 #profile .pcard, #mapsheet .sb, #tip, #lb{ user-select:text; -webkit-user-select:text }
 #stage.dragging{cursor:grabbing}
-svg{position:absolute;inset:0;width:100%;height:100%;z-index:0}
 #cards{position:absolute;left:0;top:0;width:0;height:0;transform-origin:0 0;z-index:1;touch-action:none}
 .edge{fill:none;stroke:var(--rule);stroke-width:1.6}
 .edge.lit{stroke:var(--you);stroke-width:2.4}
@@ -151,7 +115,6 @@ svg{position:absolute;inset:0;width:100%;height:100%;z-index:0}
 #tip a{color:#9FD3FF;text-decoration:underline}
 html.dark #tip a{color:#0f5aa8} /* dark theme inverts the tooltip to a light background */
 .tsrc{margin-top:5px;padding-top:5px;border-top:1px solid rgba(255,255,255,.25);font-size:10.5px;line-height:1.6}
-#sync{position:absolute;left:10px;bottom:10px;font-size:10px;color:var(--ink-soft);z-index:4;background:rgba(245,246,242,.85);padding:2px 7px;border-radius:4px}
 #synctxt{border-bottom:1px dotted var(--ink-soft);cursor:help} /* hover shows the source-rollback note */
 #profile{position:fixed;inset:0;background:rgba(21,25,28,.55);display:none;align-items:center;justify-content:center;z-index:60;padding:18px}
 #profile .pcard{background:var(--panel);color:var(--ink);border:1px solid var(--rule);border-radius:14px;max-width:520px;width:100%;max-height:86vh;max-height:84dvh;overflow:auto;overscroll-behavior:contain;padding:26px 28px;box-shadow:0 12px 40px rgba(0,0,0,.35);position:relative}
@@ -216,7 +179,7 @@ html.dark #tip a{color:#0f5aa8} /* dark theme inverts the tooltip to a light bac
 #profile .psrc a{color:var(--ink-soft)}
 .node .av.hasbio{border:2px solid var(--you);cursor:pointer}
 #sync a{color:var(--ink-soft)}
-#sync .ext{font-size:9px;vertical-align:1px}
+#sync .ext,.dhome .ext{width:12px;height:12px;display:inline-block;vertical-align:-1px;margin-left:3px}
 .node .badge{font-size:8px;font-weight:700;letter-spacing:.4px;color:#fff;background:var(--you);border-radius:8px;padding:1px 6px;text-transform:uppercase;margin-left:5px;vertical-align:1px;display:inline-block;line-height:1.4}
 .node .prow{margin-top:auto;display:flex;gap:6px;justify-content:center}
 .node .pill{
@@ -233,8 +196,9 @@ html.dark #tip a{color:#0f5aa8} /* dark theme inverts the tooltip to a light bac
 #genlines .genline{position:absolute;left:0;right:0;border-top:1px dashed var(--rule);opacity:.75}
 #ruler .g{position:absolute;left:8px;font-size:10px;color:var(--ink-soft);background:var(--paper);border:1px solid var(--rule);border-radius:5px;padding:2px 7px;line-height:1.25;white-space:nowrap;box-shadow:0 1px 4px rgba(31,42,51,.2)}
 #ruler .g b{display:block;font-size:1.05em;color:var(--ink);font-weight:600}
-#zoomctl{position:absolute;right:14px;bottom:14px;display:flex;flex-direction:column;gap:6px;z-index:5}
-#zoomctl button{width:34px;height:34px;font-size:17px;color:var(--ink);border:1px solid var(--ink);border-radius:7px;background:var(--panel);cursor:pointer}
+#ruler.tight .g span{display:none}
+#ruler.tight .g{padding-top:1px;padding-bottom:1px}
+#ruler.tighter .g:nth-child(even){display:none}
 #lock{position:fixed;inset:0;background:var(--paper);display:none;align-items:center;justify-content:center;z-index:100}
 #lock .box{background:var(--panel);border:1px solid var(--rule);border-left:4px solid var(--you);border-radius:12px;padding:30px 34px;text-align:center;width:min(340px,86vw);box-shadow:0 8px 30px rgba(31,42,51,.15)}
 #lock h2{font-family:'EB Garamond',serif;font-weight:600;font-size:22px;margin-bottom:6px;color:var(--ink)}
@@ -242,30 +206,24 @@ html.dark #tip a{color:#0f5aa8} /* dark theme inverts the tooltip to a light bac
 #lock input{font:inherit;font-size:16px;color:var(--ink);background:var(--paper);border:1px solid var(--rule);border-radius:6px;padding:9px 12px;width:100%;text-align:center;margin-bottom:10px}
 #lock button{font:inherit;font-size:13px;font-weight:600;color:var(--paper);background:var(--ink);border:none;border-radius:6px;padding:9px 18px;cursor:pointer;width:100%}
 #lock .err{color:#C62828;font-size:12px;min-height:16px;margin-top:8px}
+/* a build that opens with a PUBLIC password (SITE.autoPw) shows it, and hides the form while it opens */
+#lock .demohint{font-size:12.5px;line-height:1.45;color:var(--ink);background:var(--paper);border:1px dashed var(--you);border-radius:7px;padding:7px 10px;margin:0 0 12px}
+#lock .demohint b{font-weight:700;letter-spacing:.3px}
+#lock.auto #lockpw,#lock.auto #lockbtn,#lock.auto #lockdemo,#lock.auto .err{display:none}
+/* a build without name search (SITE.search false; the build puts class "nosearch" on <html>) */
+html.nosearch #searchwrap,html.nosearch #intro .itry,html.nosearch #intro .ihr{display:none!important}
+/* the optional tag after the tree's name (the build's "tag" slot) */
 html.dark #lock .err{color:#EF9A9A}
 /* hover styles only on devices that truly hover — on touch, :hover sticks after a
    tap and made toggled-off filter buttons still look selected */
 @media(hover:hover){
-  header button:hover{background:var(--ink);color:var(--paper)}
-  .jumps button.b-leg:hover{background:var(--you);color:#fff}
-  .jumps button.b-fr:hover{background:var(--fr);color:#fff}
-  .jumps button.b-east:hover{background:var(--us-east);color:#fff}
-  .jumps button.b-west:hover{background:var(--us-west);color:#fff}
-  .jumps button.b-ohio:hover{background:var(--us-ohio);color:#fff}
-  .jumps button.b-doubs:hover{background:var(--fr-doubs);color:#fff}
-  .jumps button.b-colmar:hover{background:var(--colmar);color:#fff}
-  .jumps button.b-paris:hover{background:var(--fr-paris);color:#fff}
-  .jumps button.b-schw:hover{background:var(--schw);color:#fff}
   .node .pill:hover{border-color:var(--ink);color:var(--ink);background:var(--panel)}
-  #zoomctl button:hover{background:var(--ink);color:var(--paper)}
   #sync a:hover{color:var(--ink)}
 }
 @media(pointer:coarse){
   .node .pill{line-height:24px;font-size:11.5px;padding:0 14px}
   #profile .pclose{font-size:28px;padding:10px 14px;top:2px;right:2px} /* 44px-class touch target */
   #profile .pcard{padding:24px 20px}
-  header button{padding:9px 13px;font-size:13px}
-  #zoomctl button{width:42px;height:42px;font-size:20px}
 }
 @media(max-width:720px){
   /* --- mobile rules for the 2026 additions --- */
@@ -278,7 +236,6 @@ html.dark #lock .err{color:#EF9A9A}
   .ianim{width:72px;height:48px;border-radius:8px}
   .itxt{font-size:12.5px;line-height:1.45}
   #introgo{margin-top:10px;padding:12px}
-  #hdrtoggle{font-size:22px;padding:10px 18px;opacity:1}
   #profile{padding:8px}
   #profile .pcard{max-height:92dvh;padding:20px 16px}
   #intro .ihr{margin:12px 0 10px}
@@ -291,34 +248,10 @@ html.dark #lock .err{color:#EF9A9A}
   #profile .pparents{gap:8px;margin-bottom:12px}
   #profile .pdocs .ptr{font-size:12.5px}
 
-  header{padding:6px 8px;gap:6px;row-gap:3px}
-  header .vsep{display:none}
-  .hend{gap:1px}
-  .hend .subtle{padding:2px 4px;font-size:11px}
-  #hdrtoggle{padding:5px 10px;min-height:32px;min-width:36px;font-size:16px;border-radius:8px;margin-left:2px}
-  header button{padding:7px 10px;font-size:12.5px}
-  #fit, #reset{padding:7px 11px;font-size:15px;line-height:1}
-  #fit span, #reset span{display:none}
-  #lang, #theme{padding:7px 9px}
-  header h1{display:none}
-  #searchwrap{flex:1;min-width:104px}
-  header input{width:100%;font-size:16px} /* 16px stops iOS auto-zoom on focus */
-  .jumps{flex:1 0 100%;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
-  .jumps .lbl{display:none}
   #ruler{width:54px}
   #ruler .g{padding:1px 5px}
-  #zoomctl{top:10px;right:10px;bottom:auto;flex-direction:row}
-  #hint{bottom:36px;font-size:11px} /* above the footer; the bottom info sheet it once avoided is gone */
 }
 /* ================= MAP VIEW ================= */
-#viewtoggle{display:inline-flex;border:1px solid var(--ink);border-radius:7px;overflow:hidden;flex:none}
-#viewtoggle button{border:none;border-radius:0;padding:6px 12px;font-size:12px;font-weight:600;background:var(--panel);color:var(--ink);cursor:pointer;white-space:nowrap}
-#viewtoggle button.on{background:var(--ink);color:var(--paper)}
-#viewtoggle button + button{border-left:1px solid var(--ink)}
-#viewtoggle button b, #fit b, #reset b{font-weight:400;font-style:normal}
-#fit span, #reset span{margin-left:5px}
-#viewtoggle button span{margin-left:5px}
-@media(max-width:560px){ #viewtoggle button span{display:none} #viewtoggle button{padding:7px 12px;font-size:15px} }
 body.mapmode #stage{display:none}
 body.mapmode #mapview{display:block}
 body.mapmode .treeonly{display:none !important}
@@ -365,34 +298,6 @@ html.dark{--sea:#121A1F; --land:#222A2E; --coast:#3D474C; --bord:#39434A; --stat
   box-shadow:0 1px 4px rgba(31,42,51,.35);
 }
 #mappins .pin.jn .dot{border-color:var(--you);border-width:2.5px}
-#mapctl{position:absolute;right:14px;bottom:14px;display:flex;flex-direction:column;gap:6px;z-index:4}
-#mapctl button{width:34px;height:34px;font-size:17px;color:var(--ink);border:1px solid var(--ink);border-radius:7px;background:var(--panel);cursor:pointer}
-#mapbar{
-  position:absolute;left:10px;top:10px;right:10px;z-index:4;display:flex;gap:6px;flex-wrap:wrap;align-items:center;
-  pointer-events:none;
-}
-#mapbar > *{pointer-events:auto}
-#mapbar .mchip{
-  font:inherit;font-size:11.5px;font-weight:600;color:var(--ink);background:color-mix(in srgb, var(--panel) 88%, transparent);
-  border:1px solid var(--rule);border-radius:16px;padding:5px 11px;cursor:pointer;white-space:nowrap;backdrop-filter:blur(3px);
-}
-#mapbar .mchip.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
-#mapbar .mchip.b-fr.on{background:var(--fr);border-color:var(--fr);color:var(--onbrand)}
-#mapbar .mchip.b-east.on{background:var(--us-east);border-color:var(--us-east);color:var(--onbrand)}
-#mapbar .mchip.b-west.on{background:var(--us-west);border-color:var(--us-west);color:var(--onbrand)}
-#mapbar .mchip.b-ohio.on{background:var(--us-ohio);border-color:var(--us-ohio);color:var(--onbrand)}
-#mapbar .mchip.b-doubs.on{background:var(--fr-doubs);border-color:var(--fr-doubs);color:var(--onbrand)}
-#mapbar .mchip.b-colmar.on{background:var(--colmar);border-color:var(--colmar);color:var(--onbrand)}
-#mapbar .mchip.b-paris.on{background:var(--fr-paris);border-color:var(--fr-paris);color:var(--onbrand)}
-#mapbar .mchip.b-schw.on{background:var(--schw);border-color:var(--schw);color:var(--onbrand)}
-#mapbar .mchip.b-leg.on{background:var(--you);border-color:var(--you);color:var(--onbrand)}
-#mapback{display:none;align-items:center;gap:6px;background:var(--you) !important;border-color:var(--you) !important;color:var(--onbrand) !important}
-#mapback.on{display:inline-flex}
-#mapback b{font-weight:700}
-#mapback i{font-style:normal;opacity:.85;max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-@media(max-width:720px){ #mapback i{max-width:110px} }
-#mapbar .grp{display:flex;gap:5px;flex-wrap:wrap;align-items:center;background:color-mix(in srgb, var(--paper) 62%, transparent);border-radius:18px;padding:2px}
-#mapbar .glbl{font-size:9.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--ink-soft);padding:0 4px 0 8px}
 #mapsheet{
   position:absolute;left:10px;bottom:10px;width:min(340px,calc(100% - 20px));max-height:min(62%,460px);
   background:var(--panel);border:1px solid var(--rule);border-radius:12px;box-shadow:0 10px 34px rgba(31,42,51,.26);
@@ -433,104 +338,340 @@ html.dark{--sea:#121A1F; --land:#222A2E; --coast:#3D474C; --bord:#39434A; --stat
 #mapsheet .pchip i{font-style:normal;color:var(--ink-soft);font-size:10.5px;margin-left:3px}
 #mapsheet .mact{margin-top:10px;display:flex;gap:6px;flex-wrap:wrap}
 #mapsheet .mact button{font:inherit;font-size:11.5px;font-weight:600;border:1px solid var(--ink);background:var(--panel);color:var(--ink);border-radius:6px;padding:6px 10px;cursor:pointer}
-#mapwhere{
-  position:absolute;left:50%;bottom:12px;transform:translateX(-50%);z-index:3;pointer-events:none;
-  background:color-mix(in srgb, var(--panel) 90%, transparent);border:1px solid var(--rule);
-  border-radius:16px;padding:4px 13px;box-shadow:0 2px 10px rgba(31,42,51,.14);
-  font-size:11.5px;line-height:1.35;color:var(--ink);white-space:nowrap;max-width:min(88%,520px);
-  overflow:hidden;text-overflow:ellipsis;backdrop-filter:blur(3px);
-}
 #mapwhere b{font-weight:700}
 #mapwhere span{color:var(--ink-soft);margin-left:7px}
 #mapwhere.fam{border-color:var(--you)}
-#mapsheet.on ~ #mapwhere{bottom:auto;top:calc(100% - 0px)}
-#maplegend{position:absolute;left:10px;bottom:10px;z-index:3;font-size:10px;color:var(--ink-soft);background:color-mix(in srgb, var(--paper) 82%, transparent);border-radius:6px;padding:4px 8px;line-height:1.6}
 #mapsheet.on ~ #maplegend{display:none}
 #mapempty{position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:2;pointer-events:none}
 #mapempty span{background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding:12px 18px;font-size:13px;color:var(--ink-soft);box-shadow:0 6px 20px rgba(31,42,51,.18)}
-#profile .pmapbtn{margin-top:12px;font:inherit;font-size:12.5px;font-weight:600;border:1px solid var(--ink);background:var(--panel);color:var(--ink);border-radius:7px;padding:8px 13px;cursor:pointer}
+#profile .pmapbtn{margin-top:12px;font:inherit;font-size:12.5px;font-weight:600;border:1px solid var(--ink);background:var(--panel);color:var(--ink);border-radius:7px;padding:8px 13px;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
 #profile .pmapbtn:hover{background:var(--ink);color:var(--paper)}
 @media(pointer:coarse){
-  #mapctl button{width:42px;height:42px;font-size:20px}
-  #mapbar .mchip{padding:8px 13px;font-size:12.5px}
   #mapsheet .stp{padding:9px 0}
 }
-@media(max-width:720px){
-  #mapbar{left:0;right:0;top:6px;gap:5px;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding:0 8px 3px;scroll-padding-left:8px}
-  #mapbar .glbl{display:none}
-  #mapbar .grp{padding:2px 3px}
-  #mapsheet .sh h3{font-size:15px;line-height:1.25}
-  #mapbar .grp{flex-wrap:nowrap}
-  #mapsheet{left:6px;right:6px;width:auto;bottom:6px;max-height:76%;transition:max-height .18s ease}
-  #mapsheet.peek{max-height:min(38%,270px)}
-  #mapsheet .grab{
-    display:block;position:absolute;top:0;left:0;right:0;height:22px;border:none;background:none;
-    cursor:grab;padding:0;touch-action:none;z-index:2;
-  }
-  #mapsheet .grab::before{
-    content:"";position:absolute;top:7px;left:50%;transform:translateX(-50%);
-    width:38px;height:4px;border-radius:2px;background:var(--rule);
-  }
-  #mapsheet .sh{padding-top:20px}
-  #mapsheet .sh h3{padding-right:34px}
-  #mapctl{top:56px;right:8px;bottom:auto;flex-direction:column}
-  #maplegend{display:none}
-  #mapwhere{bottom:8px;font-size:11px;padding:3px 10px;max-width:94%}
-  #mapsheet.on ~ #mapwhere{display:none}
-}
-/* a phone held sideways: 844 wide, 390 tall — width rules never fire, but the
-   height is what is scarce. Must sit after the map styles to win. */
-@media(max-height:520px) and (pointer:coarse){
-  header h1{display:none}
-  header{padding:4px 10px;row-gap:2px;gap:6px}
-  .hend .subtle{padding:2px 5px;font-size:11.5px}
-  #hdrtoggle{padding:4px 11px;min-height:30px;min-width:38px;font-size:16px}
-  header button{padding:6px 10px}
-  #mapbar{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;left:0;right:0;padding:0 8px 3px}
-  #mapbar .glbl{display:none}
-  #mapbar .grp{flex-wrap:nowrap;padding:2px 3px}
-  #mapsheet{max-height:min(72%,300px);width:min(320px,48%);bottom:8px;left:8px}
-  #maplegend{display:none}
-  #mapctl{top:52px;right:8px;bottom:auto}
-  #mapctl button{width:34px;height:34px;font-size:17px}
-}
 
+/* ================= FLOATING CONTROLS (30 Sep 2026) =================
+   Everything floats over a full-height canvas. Wide screens (> 840 px): a top row of three groups on a
+   1fr auto 1fr grid, so they can never overlap; the map adds a second row (Go to, and the way back out
+   of a journey). Phones (<= 840 px wide, or a coarse pointer at <= 520 px tall): a search pill on top
+   and a dock at the bottom; held sideways, pill and dock share one top row. */
+:root{
+  --fl-shadow:0 1px 2px rgba(31,42,51,.10),0 6px 20px rgba(31,42,51,.12);
+  --pop-shadow:0 2px 4px rgba(31,42,51,.08),0 16px 40px rgba(31,42,51,.18);
+  --tint:color-mix(in srgb,var(--ink) 6%,var(--panel));   /* the Filters button, hovers */
+  --field:color-mix(in srgb,var(--ink) 5%,var(--panel));  /* the search field */
+  --div:color-mix(in srgb,var(--ink) 13%,var(--panel));   /* dividers inside a group */
+  --segbg:color-mix(in srgb,var(--ink) 7%,var(--panel));  /* segmented-control track */
+  --onyou:#15191C;                                        /* text ON the gold (white on gold fails contrast) */
+  --st:env(safe-area-inset-top,0px); --sb:env(safe-area-inset-bottom,0px);
+  --sl:env(safe-area-inset-left,0px); --sr:env(safe-area-inset-right,0px);
+}
+html.dark{--fl-shadow:0 1px 2px rgba(0,0,0,.55),0 8px 24px rgba(0,0,0,.5);--pop-shadow:0 2px 6px rgba(0,0,0,.5),0 18px 44px rgba(0,0,0,.6)}
+[hidden]{display:none!important}
+.ic{width:18px;height:18px;flex:none;display:block}
+.fl{background:var(--panel);box-shadow:var(--fl-shadow);border-radius:12px;color:var(--ink)}
+.fl button,#restart{font:inherit;font-family:'Archivo',system-ui,sans-serif;color:var(--ink);background:transparent;border:0;cursor:pointer;margin:0}
+button:focus-visible,#filters .tile:focus-visible{outline:2px solid var(--sel);outline-offset:2px}
+.ib{width:40px;height:40px;display:flex;align-items:center;justify-content:center;border-radius:8px;padding:0;flex:none}
+.dv{width:1px;height:24px;flex:none;background:var(--div)}
+.grow{flex:1 1 auto;min-width:0}
+.demotag{font-family:'Archivo',system-ui,sans-serif;font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:color-mix(in srgb,var(--you) 68%,var(--ink));border:1px solid var(--you);border-radius:9px;padding:1px 7px;margin-left:8px;vertical-align:3px;white-space:nowrap}
+/* --- top row --- */
+#topbar{position:fixed;z-index:20;top:16px;left:16px;right:16px;display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:start;pointer-events:none}
+#topbar > *{pointer-events:auto}
+#tl{justify-self:start;height:48px;display:flex;align-items:center;gap:12px;padding:0 6px 0 16px;position:relative}
+#ttl{font-family:'EB Garamond',serif;font-weight:600;font-size:20px;line-height:1.1;white-space:nowrap;color:var(--ink);min-width:0;overflow:hidden;text-overflow:ellipsis}
+#menubtn{display:none}
+#searchwrap{position:relative;width:236px;height:36px;display:flex;align-items:center;gap:8px;padding:0 12px;border-radius:8px;background:var(--field);color:var(--ink-soft);flex:none}
+#searchwrap .sic{display:flex}
+#search{flex:1;min-width:0;height:100%;border:0;outline:0;padding:0;background:transparent;font:inherit;font-size:14px;color:var(--ink)}
+#search::placeholder{color:var(--ink-soft);opacity:1}
+#search::-webkit-search-decoration,#search::-webkit-search-cancel-button{-webkit-appearance:none}
+#searchwrap:focus-within{box-shadow:0 0 0 2px var(--sel)}
+#suggest{top:calc(100% + 8px);min-width:260px;z-index:30;box-shadow:var(--pop-shadow)}
+#tc{justify-self:center;height:48px;display:flex;align-items:center;gap:4px;padding:4px}
+#tc > button,#dock > [data-view]{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;border-radius:8px;height:40px;padding:0 16px 0 14px;white-space:nowrap}
+#tc > button[aria-pressed="true"],#dock > [data-view][aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+#tr{justify-self:end;height:48px;display:flex;align-items:center;gap:4px;padding:4px}
+#tr .dv{margin:0 4px}
+.fl .filtbtn{display:flex;align-items:center;gap:8px;height:40px;padding:0 10px 0 12px;border-radius:8px;background:var(--tint);font-size:14px;font-weight:600;white-space:nowrap}
+.filtbtn .chev{width:16px;height:16px;transition:transform .15s ease}
+.filtbtn[aria-expanded="true"] .chev{transform:rotate(180deg)}
+.dots{display:flex;align-items:center;flex:none}
+.dots:empty{display:none}
+.dots span{width:8px;height:8px;border-radius:50%;flex:none;box-shadow:0 0 0 1.5px var(--tint)}
+.dots span + span{margin-left:var(--dotgap,3px)}
+.fl #lang{display:flex;align-items:center;gap:6px;height:40px;padding:0 10px;border-radius:8px;font-size:14px;font-weight:600}
+@media(hover:hover){
+  #tc > button:not([aria-pressed="true"]):hover,#tr .ib:hover,.fl #lang:hover,#goto button:hover,#gomenu button:hover,
+  .zc button:hover,#restart:hover,#menubtn:hover,#drawer .ib:hover,#drawer .dbtn:hover,.tbtn:hover{background:var(--tint)}
+  .fl .filtbtn:hover{background:color-mix(in srgb,var(--ink) 11%,var(--panel))}
+  #filters .tile:hover{border-color:var(--bcol)}
+}
+/* --- second row (map only): Go to, and the way back out of one person's journey --- */
+#row2{position:fixed;z-index:19;top:72px;left:16px;right:16px;display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:start;pointer-events:none}
+#row2 > *{pointer-events:auto}
+#goto{grid-column:1;justify-self:start;height:44px;display:flex;align-items:center;gap:2px;padding:4px}
+#goto .glbl{display:flex;align-items:center;gap:6px;color:var(--ink-soft);font-size:12px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;white-space:nowrap}
+#goto .glbl:first-child{padding-left:6px}
+#goto #goto-h{padding:0 8px 0 4px}
+#goto button{height:36px;padding:0 12px;border-radius:8px;font-size:14px;font-weight:500;white-space:nowrap}
+#gochip{display:none}
+#mapback{grid-column:2;justify-self:center;display:none;align-items:center;gap:8px;height:40px;padding:0 16px 0 12px;border:0;border-radius:20px;
+  background:var(--you);color:var(--onyou);font:inherit;font-family:'Archivo',system-ui,sans-serif;font-size:14px;font-weight:700;box-shadow:var(--fl-shadow);cursor:pointer;max-width:100%;min-width:0}
+#mapback.on{display:inline-flex}
+#mapback i{font-style:normal;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px}
+#gomenu{position:fixed;z-index:41;min-width:210px;padding:6px;display:flex;flex-direction:column;border-radius:12px;box-shadow:var(--pop-shadow)}
+#gomenu button{height:44px;padding:0 14px;border-radius:8px;font-size:15px;font-weight:500;text-align:left;white-space:nowrap}
+/* --- the Filters panel: a popover on wide screens --- */
+#filters{position:fixed;z-index:41;top:72px;right:16px;width:420px;max-width:calc(100vw - 32px);max-height:calc(100% - 88px);overflow:auto;overscroll-behavior:contain;
+  border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:16px;box-shadow:var(--pop-shadow);border:1px solid var(--div)}
+#filters .grab,#filters .fhead{display:none}
+#filters h2{font-size:20px;font-weight:700;line-height:1.2;flex:1}
+.fsec{display:flex;flex-direction:column;gap:10px}
+.frow{display:flex;align-items:center;gap:2px}
+.flbl{font-size:12px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--ink-soft)}
+.fl .tbtn{height:32px;padding:0 10px;border-radius:8px;color:var(--sel);font-size:13.5px;font-weight:600}
+.tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+#filters .tile{width:100%;height:42px;display:flex;align-items:center;gap:12px;padding:0 12px;border:1px solid var(--rule);border-radius:10px;background:var(--panel);font-size:14px;font-weight:600;text-align:left;min-width:0}
+#filters .tile[aria-pressed="true"]{background:color-mix(in srgb,var(--bcol) 9%,var(--panel));border-color:color-mix(in srgb,var(--bcol) 55%,transparent)}
+#filters .tile .cb{width:20px;height:20px;flex:none;box-sizing:border-box;border-radius:6px;border:2px solid var(--bcol);display:flex;align-items:center;justify-content:center;color:transparent}
+#filters .tile .cb .ic{width:14px;height:14px;stroke-width:2.6}
+#filters .tile[aria-pressed="true"] .cb{background:var(--bcol);color:var(--onbrand)}
+html.dark #filters .tile[aria-pressed="true"] .cb{color:var(--panel)}   /* the check glyph takes the dark panel colour, not white */
+#filters .tile .tl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.flegend{display:flex;align-items:center;gap:10px;font-size:13px;line-height:1.35;color:var(--ink-soft)}
+.edgesample{width:30px;height:20px;flex:none;box-sizing:border-box;background:var(--panel);border:1px solid var(--rule);border-left:3px solid var(--us-east);border-radius:4px}
+.fsep{height:1px;flex:none;background:var(--div)}
+.segs{height:40px;box-sizing:border-box;display:flex;gap:3px;padding:3px;border-radius:12px;background:var(--segbg)}
+.fl .segs button{flex:1 1 0;height:34px;border-radius:9px;font-size:14px;font-weight:600;min-width:max-content;padding:0 8px;white-space:nowrap}   /* equal widths, but a label never wraps (French is longer) */
+.fl .segs button[aria-pressed="true"]{background:var(--panel);box-shadow:0 1px 2px rgba(31,42,51,.16)}
+html.dark .fl .segs button[aria-pressed="true"]{background:color-mix(in srgb,var(--ink) 16%,var(--panel));box-shadow:none}
+.fsw{display:flex;align-items:center;gap:12px}
+.swl{font-size:14px;font-weight:600}
+.swn{font-size:12.5px;line-height:1.35;color:var(--ink-soft);margin-top:3px}
+.fl #estsw{width:52px;height:44px;flex:none;display:flex;align-items:center;justify-content:center;padding:0;border-radius:14px}
+#estsw .trk{width:46px;height:28px;box-sizing:border-box;display:flex;align-items:center;justify-content:flex-start;padding:3px;border-radius:14px;background:var(--ink-soft)}
+#estsw[aria-checked="true"] .trk{background:var(--sel);justify-content:flex-end}
+#estsw .knob{width:22px;height:22px;border-radius:50%;background:var(--panel);box-shadow:0 1px 2px rgba(0,0,0,.25)}
+#scrim{position:fixed;inset:0;z-index:40;background:rgba(21,25,28,.44)}
+/* --- the phone menu --- */
+#drawer{position:fixed;z-index:41;top:0;bottom:0;left:0;width:min(312px,calc(100% - 48px));border-radius:0 20px 20px 0;
+  padding:calc(14px + var(--st)) 14px calc(24px + var(--sb)) calc(20px + var(--sl));display:flex;flex-direction:column;gap:22px;overflow:auto;overscroll-behavior:contain;box-shadow:8px 0 30px rgba(21,25,28,.18)}
+#drawer > *,#filters > *{flex:none}
+#drawer > .grow{flex:1 1 auto}
+#drawer .dhead{display:flex;align-items:center;gap:8px}
+#drawer h2{flex:1;font-family:'EB Garamond',serif;font-size:23px;font-weight:600;line-height:1.15}
+#drawer .ib{width:44px;height:44px;border-radius:22px}
+.dsec{display:flex;flex-direction:column;gap:10px}
+#drawer .segs{height:44px}
+#drawer .segs button{height:38px;font-size:15px}
+#drawer .dbtn{height:48px;display:flex;align-items:center;gap:12px;padding:0 8px;border-radius:10px;font-size:15px;font-weight:600;text-align:left}
+.dstat{font-size:12.5px;line-height:1.6;color:var(--ink-soft)}
+.dhome{font-size:13px;color:var(--ink-soft);margin-top:-14px}
+.dhome a{color:var(--ink-soft)}
+/* --- zoom clusters (tree and map) and Start over --- */
+.zc{position:absolute;z-index:6;right:16px;bottom:16px;display:flex;flex-direction:column;overflow:hidden;border-radius:12px}
+.zc button{width:44px;height:44px;display:flex;align-items:center;justify-content:center;padding:0}
+.zc .ic{width:20px;height:20px}
+.zdv{height:1px;margin:0 8px;background:var(--div)}
+#restart{position:fixed;z-index:20;right:72px;bottom:16px;height:44px;display:flex;align-items:center;gap:8px;padding:0 16px 0 13px;border-radius:22px;font-size:14px;font-weight:600;white-space:nowrap}
+#dock{display:none}
+/* --- re-homed overlays --- */
+#svg{position:absolute;inset:0;width:100%;height:100%;z-index:0}
+#hint{position:absolute;top:76px;left:50%;transform:translateX(-50%);background:rgba(31,42,51,.88);color:#fff;font-size:12px;padding:7px 14px;border-radius:16px;cursor:pointer;transition:opacity .4s;z-index:5;width:max-content;max-width:min(90%,720px);text-align:center}
+#sync{position:absolute;left:16px;bottom:16px;font-size:11px;color:var(--ink-soft);z-index:4;background:color-mix(in srgb,var(--paper) 86%,transparent);padding:3px 8px;border-radius:6px}
+#mapwhere{position:absolute;left:50%;top:124px;transform:translateX(-50%);z-index:3;pointer-events:none;
+  background:color-mix(in srgb,var(--panel) 90%,transparent);border:1px solid var(--rule);border-radius:16px;padding:4px 13px;box-shadow:0 2px 10px rgba(31,42,51,.14);
+  font-size:11.5px;line-height:1.35;color:var(--ink);white-space:nowrap;max-width:min(88%,520px);overflow:hidden;text-overflow:ellipsis;backdrop-filter:blur(3px)}
+#maplegend{position:absolute;left:16px;bottom:16px;z-index:3;font-size:10.5px;color:var(--ink-soft);background:color-mix(in srgb,var(--paper) 82%,transparent);border-radius:6px;padding:4px 8px;line-height:1.6;max-width:calc(100% - 260px)}
+#mapsheet{left:16px;bottom:16px;max-height:min(62%,460px,calc(100% - 148px))}
+@media(max-width:1240px){
+  #ttl,#tl > .dv{display:none}
+  #tl{padding:0 6px}
+  html.nosearch #ttl{display:block}
+  html.nosearch #tl{padding:0 16px}
+}
+html.nosearch #tl > .dv{display:none}
+html.nosearch #tl{padding:0 16px}
+/* ================= PHONES ================= */
+@media (max-width:840px),(pointer:coarse) and (max-height:520px){
+  #topbar{display:block;top:calc(12px + var(--st));left:50%;right:auto;transform:translateX(-50%);width:min(560px,calc(100% - 24px - var(--sl) - var(--sr)))}
+  #tc,#tr{display:none}
+  #tl{width:100%;height:48px;border-radius:24px;padding:0 4px;gap:2px}
+  #ttl,#tl > .dv{display:none}
+  #menubtn{display:flex;width:44px;height:44px;border-radius:22px}
+  #searchwrap{position:static;flex:1;min-width:0;width:auto;height:44px;padding:0;gap:0;background:transparent;border-radius:22px}
+  #searchwrap:focus-within{box-shadow:none}
+  #searchwrap .sic{order:2;width:44px;height:44px;align-items:center;justify-content:center}
+  #search{order:1;font-size:16px;padding:0 6px}
+  #suggest{left:0;right:0;top:calc(100% + 6px);min-width:0;max-height:min(50vh,320px)}
+  #suggest .it{padding:11px 14px;font-size:14px}
+  html.nosearch #ttl{display:block;flex:1;font-size:19px;padding:0 6px}
+  html.nosearch #tl{padding:0 4px}
+  #dock{position:fixed;z-index:20;display:flex;left:50%;transform:translateX(-50%);bottom:calc(16px + var(--sb));width:min(440px,calc(100% - 24px - var(--sl) - var(--sr)));height:56px;box-sizing:border-box;align-items:center;gap:4px;padding:4px;border-radius:28px}
+  #dock > [data-view]{height:48px;border-radius:24px;font-size:15px;flex:none;padding:0 16px 0 14px}
+  #dock .filtbtn{flex:1;min-width:0;justify-content:center;height:48px;border-radius:24px;font-size:15px;padding:0 12px}
+  #dock .ic{width:20px;height:20px}
+  #row2{display:flex;gap:8px;top:calc(68px + var(--st));left:calc(12px + var(--sl));right:calc(12px + var(--sr))}
+  #goto{display:none!important}
+  #gochip{display:flex;align-items:center;gap:6px;height:44px;padding:0 14px 0 12px;border-radius:22px;font-size:14px;font-weight:600;flex:none}
+  #gochip .chev{width:16px;height:16px}
+  #mapback{height:44px;border-radius:22px;min-width:0}
+  #mapback i{max-width:none}
+  #filters{top:auto;left:50%;right:auto;bottom:0;transform:translateX(-50%);width:min(560px,100%);max-width:none;max-height:85%;
+    border-radius:20px 20px 0 0;padding:8px 16px calc(28px + var(--sb));gap:14px;border:0;box-shadow:0 -10px 30px rgba(21,25,28,.18)}
+  #filters .grab{display:block;width:36px;height:5px;flex:none;align-self:center;border-radius:3px;background:var(--rule)}
+  #filters .fhead{display:flex;align-items:center;gap:8px}
+  .fl #filters .done,#filters .done{height:44px;padding:0 20px;border-radius:22px;background:var(--ink);color:var(--paper);font-size:15px;font-weight:600}
+  .fl .tbtn{height:44px;font-size:15px}
+  #filters .tile{height:52px;padding:0 14px;border-radius:12px;font-size:15px}
+  #filters .tile .cb{width:22px;height:22px}
+  #filters .segs{height:44px}
+  .fl #filters .segs button,#filters .segs button{height:38px;font-size:15px}
+  .flegend{font-size:13.5px}
+  .zc{right:calc(12px + var(--sr));bottom:calc(84px + var(--sb))}
+  #restart{left:calc(12px + var(--sl));right:auto;bottom:calc(84px + var(--sb))}
+  #hint{top:calc(68px + var(--st));font-size:11.5px;max-width:calc(100% - 24px)}
+  #sync{display:none}
+  #ruler{width:54px}
+  #ruler .g{padding:1px 5px}
+  #mapwhere{top:calc(120px + var(--st));font-size:11px;padding:3px 10px;max-width:calc(100% - 24px)}
+  #maplegend{display:none}
+  #mapsheet{left:calc(12px + var(--sl));right:calc(12px + var(--sr));width:auto;bottom:calc(84px + var(--sb));max-height:calc(100% - 212px - var(--st) - var(--sb));transition:max-height .18s ease}
+  #mapsheet.peek{max-height:min(38%,270px)}
+  #mapsheet .grab{display:block;position:absolute;top:0;left:0;right:0;height:22px;border:none;background:none;cursor:grab;padding:0;touch-action:none;z-index:2}
+  #mapsheet .grab::before{content:"";position:absolute;top:7px;left:50%;transform:translateX(-50%);width:38px;height:4px;border-radius:2px;background:var(--rule)}
+  #mapsheet .sh{padding-top:20px}
+  #mapsheet .sh h3{padding-right:34px;font-size:15px;line-height:1.25}
+  body.sheeton #mapctl,body.mapmode.sheeton #restart,body.sheeton #mapwhere{display:none!important}
+}
+/* the narrowest phones (under 360px): Tree and Map keep their icons and lose their visible words
+   (still their names to a screen reader), so Filters and its dots keep room in every language */
+@media (max-width:359px){
+  #dock > [data-view]{width:48px;padding:0;justify-content:center}
+  #dock > [data-view] span{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+}
+/* a phone held sideways: pill and dock share one top row */
+@media (pointer:coarse) and (max-height:520px){
+  #topbar{left:calc(12px + var(--sl));transform:none;width:auto;right:calc(20px + var(--dockw,330px) + var(--sr))}
+  #tl{height:44px;border-radius:22px}
+  #menubtn,#searchwrap .sic{width:40px;height:40px}
+  #searchwrap{height:40px}
+  #dock{top:calc(12px + var(--st));bottom:auto;left:auto;right:calc(12px + var(--sr));transform:none;width:auto;height:44px;border-radius:22px}
+  #dock > [data-view],#dock .filtbtn{height:36px;border-radius:18px;font-size:14px}
+  #dock .filtbtn{flex:none}
+  #row2{top:calc(64px + var(--st))}
+  #hint{top:calc(64px + var(--st))}
+  #mapwhere{top:calc(116px + var(--st))}
+  .zc{bottom:calc(12px + var(--sb))}
+  #restart{bottom:calc(12px + var(--sb))}
+  #mapsheet{left:calc(12px + var(--sl));right:auto;width:min(340px,46%);bottom:calc(12px + var(--sb));max-height:calc(100% - 128px - var(--st) - var(--sb))}
+  #mapsheet.peek{max-height:calc(100% - 128px - var(--st) - var(--sb))}
+  #filters{max-height:88%}
+}
+/* touch: every control at least 44 px, whichever layout is showing */
+@media (pointer:coarse){
+  #tc,#tr{padding:2px}
+  #tc > button,#tr .ib,.fl .filtbtn,.fl #lang{height:44px}
+  #tr .ib{width:44px}
+  #searchwrap{height:44px}
+  #goto{height:48px;padding:2px}
+  #goto button{height:44px}
+  #mapback{height:44px;border-radius:22px}
+  .fl .tbtn{height:44px}
+  #filters .tile{min-height:46px}
+  #filters .segs,#drawer .segs{height:50px}
+  #filters .segs button,#drawer .segs button{height:44px}
+}
+@media (pointer:coarse) and (max-height:520px){
+  #tl{padding:0}
+  #menubtn,#searchwrap .sic{width:44px;height:44px}
+  #searchwrap{height:44px}
+  #dock{padding:0;gap:2px;height:44px}
+  #dock > [data-view],#dock .filtbtn{height:44px;border-radius:22px}
+  #row2{top:calc(64px + var(--st))}
+}
+@media (prefers-reduced-motion:reduce){.filtbtn .chev{transition:none}}
 </style>
 </head>
 <body>
 
-<div id="lock"><div class="box"><h2>Nitschelm Family Tree</h2><p id="lockmsg">This family tree is password protected.</p><input id="lockpw" type="password" autocomplete="current-password"><button id="lockbtn">Unlock</button><div class="err" id="lockerr"></div></div></div>
+<div id="lock"><div class="box"><h2><!--build:title-->Nitschelm Family Tree<!--/build:title--></h2><p id="lockmsg">This family tree is password protected.</p><div class="demohint" id="lockdemo" hidden></div><input id="lockpw" type="password" autocomplete="current-password"><button id="lockbtn">Unlock</button><div class="err" id="lockerr"></div></div></div>
 
-<header>
-  <h1>Nitschelm Family Tree</h1>
-  <div id="searchwrap">
-    <input id="search" type="search" placeholder="Search a name…" autocomplete="off">
-    <div id="suggest"></div>
+<!-- ================= FLOATING CONTROLS =================
+     One set of controls floating over a full-height canvas, shared by the tree and the map.
+     Wide screens: three groups on one row (name + search | Tree / Map | Filters, language,
+     theme, tour), and under them the map's Go to places and its way back out of a journey.
+     Phones: a search pill on top and a dock at the bottom (Tree, Map, Filters); the menu
+     drawer holds language, appearance, the tour and the status line. -->
+<div id="topbar">
+  <div id="tl" class="fl">
+    <button type="button" id="menubtn" class="ib" aria-haspopup="dialog" aria-controls="drawer" aria-expanded="false" data-i18n-label="menu"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <h1 id="ttl"><!--build:title-->Nitschelm Family Tree<!--/build:title--><!--build:tag--><!--/build:tag--></h1>
+    <span class="dv" aria-hidden="true"></span>
+    <div id="searchwrap">
+      <span class="sic" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg></span>
+      <input id="search" type="search" placeholder="Search a name…" autocomplete="off" data-i18n-aria="search_label" aria-label="Search a name">
+      <div id="suggest"></div>
+    </div>
   </div>
-  <div id="viewtoggle"><button id="vt-tree" class="on"><b>🌳</b><span>Tree</span></button><button id="vt-map"><b>🗺</b><span>Map</span></button></div>
-  <div class="jumps treeonly">
-    <span class="lbl">Filter:</span>
-    <button class="b-leg" data-jump="legacy">Legacy</button>
-    <button class="b-fr" data-jump="fr">France</button>
-    <button class="b-east" data-jump="east">US East</button>
-    <button class="b-west" data-jump="west">Oregon</button>
-    <button class="b-ohio" data-jump="ohio">Ohio</button>
-    <button class="b-doubs" data-jump="doubs">Besançon</button>
-    <button class="b-colmar" data-jump="colmar">Colmar</button>
-    <button class="b-paris" data-jump="paris">Paris</button>
-    <button class="b-schw" data-jump="schw">Schweitzer</button>
+  <div id="tc" class="fl seg" role="group" data-i18n-label="view_label">
+    <button type="button" id="vt-tree" data-view="tree" aria-pressed="true"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="3" width="6" height="5" rx="1.2"/><rect x="3" y="16" width="6" height="5" rx="1.2"/><rect x="15" y="16" width="6" height="5" rx="1.2"/><path d="M12 8v4M6 16v-1.5A2.5 2.5 0 0 1 8.5 12h7a2.5 2.5 0 0 1 2.5 2.5V16"/></svg><span data-i18n="view_tree">Tree</span></button>
+    <button type="button" id="vt-map" data-view="map" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 4.5L3.5 6.8v12.7L9 17.2l6 2.3 5.5-2.3V4.5L15 6.8 9 4.5z"/><path d="M9 4.5v12.7M15 6.8v12.7"/></svg><span data-i18n="view_map">Map</span></button>
   </div>
-  <span class="vsep treeonly"></span>
-  <button id="fit" class="treeonly"><b>⛶</b><span>Fit view</span></button>
-  <button id="reset" class="treeonly"><b>↺</b><span>Reset</span></button>
-  <span class="vsep"></span>
-  <button id="lang" title="Français / English">🌐 FR</button>
-  <button id="theme" title="Light / dark">🌙</button>
-  <div class="hend">
-    <button id="tourbtn" class="subtle" title="Tour">?</button>
-    <button id="hdrtoggle" aria-label="Collapse header">▴</button>
+  <div id="tr" class="fl">
+    <button type="button" id="filtbtn" class="filtbtn" aria-haspopup="dialog" aria-expanded="false" aria-controls="filters"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span data-i18n="filters">Filters</span><span class="dots" aria-hidden="true"></span><svg class="ic chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg></button>
+    <span class="dv" aria-hidden="true"></span>
+    <button type="button" id="lang"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.4 2.6 3.6 5.6 3.6 9s-1.2 6.4-3.6 9c-2.4-2.6-3.6-5.6-3.6-9S9.6 5.6 12 3z"/></svg><span>FR</span></button>
+    <button type="button" id="theme" class="ib" aria-label="Dark mode" title="Dark mode"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 14.2A8 8 0 0 1 9.8 4a8 8 0 1 0 10.2 10.2z"/></svg></button>
+    <button type="button" id="tourbtn" class="ib" data-i18n-label="tour_take"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.4c-.6.3-1 .8-1 1.5v.4"/><path d="M12 17h.01"/></svg></button>
   </div>
-</header>
+</div>
+<!-- map only: where to go (left) and the way back out of one person's journey (centre) -->
+<div id="row2">
+  <div id="goto" class="fl maponly" role="group" aria-labelledby="goto-h">
+    <span class="glbl" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 21s-6.5-6.1-6.5-11A6.5 6.5 0 0 1 18.5 10c0 4.9-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg></span><span class="glbl" id="goto-h" data-i18n="map_region">Go to</span>
+  </div>
+  <button type="button" id="gochip" class="fl maponly" aria-haspopup="menu" aria-expanded="false" aria-controls="gomenu"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 21s-6.5-6.1-6.5-11A6.5 6.5 0 0 1 18.5 10c0 4.9-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg><span data-i18n="map_region">Go to</span><svg class="ic chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg></button>
+  <button type="button" id="mapback" class="maponly" data-i18n-title="map_showall"></button>
+</div>
+<div id="gomenu" class="fl" role="menu" aria-labelledby="gochip" hidden></div>
+<div id="dock" class="fl">
+  <button type="button" data-view="tree" aria-pressed="true"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="3" width="6" height="5" rx="1.2"/><rect x="3" y="16" width="6" height="5" rx="1.2"/><rect x="15" y="16" width="6" height="5" rx="1.2"/><path d="M12 8v4M6 16v-1.5A2.5 2.5 0 0 1 8.5 12h7a2.5 2.5 0 0 1 2.5 2.5V16"/></svg><span data-i18n="view_tree">Tree</span></button>
+  <button type="button" data-view="map" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 4.5L3.5 6.8v12.7L9 17.2l6 2.3 5.5-2.3V4.5L15 6.8 9 4.5z"/><path d="M9 4.5v12.7M15 6.8v12.7"/></svg><span data-i18n="view_map">Map</span></button>
+  <button type="button" id="dockfilt" class="filtbtn" aria-haspopup="dialog" aria-expanded="false" aria-controls="filters"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span data-i18n="filters">Filters</span><span class="dots" aria-hidden="true"></span></button>
+</div>
+<button type="button" id="restart" class="fl" hidden><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3.5 4.5v4.5H8"/></svg><span data-i18n="start_over">Start over</span></button>
+<div id="scrim" hidden></div>
+<!-- the branch filters: a popover under the Filters button on wide screens, a bottom sheet on phones -->
+<div id="filters" class="fl" role="dialog" aria-labelledby="filt-h" hidden>
+  <div class="grab" aria-hidden="true"></div>
+  <div class="fhead"><h2 id="filt-h" data-i18n="filters">Filters</h2><button type="button" class="done" data-close data-i18n="done">Done</button></div>
+  <div class="fsec">
+    <div class="frow"><span class="flbl" id="br-h" data-i18n="branches">Branches</span><span class="grow"></span><button type="button" class="tbtn" id="fall" data-i18n="show_all">Show all</button><button type="button" class="tbtn" id="fnone" data-i18n="clear">Clear</button></div>
+    <div class="tiles" role="group" aria-labelledby="br-h"></div>
+  </div>
+  <div class="flegend treeonly"><span class="edgesample" aria-hidden="true"></span><span data-i18n="legend_edge">The colored edge on each card shows its branch.</span></div>
+  <div class="fsep maponly"></div>
+  <div class="fsec maponly">
+    <span class="flbl" id="pp-h" data-i18n="map_people">People</span>
+    <div class="segs" role="group" aria-labelledby="pp-h"><button type="button" data-life="" aria-pressed="true" data-i18n="map_everyone">Everyone</button><button type="button" data-life="living" aria-pressed="false" data-i18n="map_living">Living</button><button type="button" data-life="dead" aria-pressed="false" data-i18n="map_deceased">Deceased</button></div>
+  </div>
+  <div class="fsep maponly"></div>
+  <div class="fsw maponly"><div class="grow"><div class="swl" id="est-l" data-i18n="map_est">Show uncertain places</div><div class="swn" id="est-n" data-i18n="map_est_note">Places we inferred or could only place roughly</div></div><button type="button" id="estsw" role="switch" aria-checked="true" aria-labelledby="est-l" aria-describedby="est-n"><span class="trk"><span class="knob"></span></span></button></div>
+</div>
+<!-- the phone menu: a drawer from the left -->
+<div id="drawer" class="fl" role="dialog" aria-modal="true" aria-labelledby="drw-h" hidden>
+  <div class="dhead"><h2 id="drw-h"><!--build:title-->Nitschelm Family Tree<!--/build:title--><!--build:tag--><!--/build:tag--></h2><button type="button" class="ib" data-close data-i18n-label="close"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="dsec"><span class="flbl" id="lg-h" data-i18n="language">Language</span><div class="segs" role="group" aria-labelledby="lg-h"><button type="button" data-setlang="en" lang="en" aria-pressed="true">English</button><button type="button" data-setlang="fr" lang="fr" aria-pressed="false">Français</button></div></div>
+  <div class="dsec"><span class="flbl" id="ap-h" data-i18n="appearance">Appearance</span><div class="segs" role="group" aria-labelledby="ap-h"><button type="button" data-settheme="system" aria-pressed="true" data-i18n="th_auto">Auto</button><button type="button" data-settheme="light" aria-pressed="false" data-i18n="th_light">Light</button><button type="button" data-settheme="dark" aria-pressed="false" data-i18n="th_dark">Dark</button></div></div>
+  <div class="fsep"></div>
+  <button type="button" class="dbtn" id="drawtour"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.4c-.6.3-1 .8-1 1.5v.4"/><path d="M12 17h.01"/></svg><span data-i18n="tour_take">Take the tour</span></button>
+  <div class="grow"></div>
+  <div class="dstat"><span id="dstats"></span><br><span id="dsync"></span></div>
+  <div class="dhome"><!--build:home--><a href="https://corynitschelm.com" target="_blank" rel="noopener">corynitschelm.com<svg class="ic ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M8 16L16 8M10 8h6v6"/></svg></a><!--/build:home--></div>
+</div>
 
 <div id="intro"><div class="icard">
   <h2 id="int-title"></h2>
@@ -551,52 +692,29 @@ html.dark{--sea:#121A1F; --land:#222A2E; --coast:#3D474C; --bord:#39434A; --stat
   <svg id="svg"><g id="world"></g></svg>
   <div id="cards"></div>
   <div id="ruler"></div>
-  <div id="hint">Click a person to open their family and trace their line · click the background or “Reset” to start over · drag / scroll to move</div>
-  <div id="zoomctl">
-    <button id="zin" aria-label="Zoom in">+</button>
-    <button id="zout" aria-label="Zoom out">−</button>
+  <div id="hint">Click a person to open their family and trace their line · click the background or “Start over” to go back to the start · drag / scroll to move</div>
+  <div id="zoomctl" class="zc fl">
+    <button type="button" id="zin" data-i18n-label="zoom_in"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg></button>
+    <button type="button" id="zout" data-i18n-label="zoom_out"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14"/></svg></button>
+    <span class="zdv" aria-hidden="true"></span>
+    <button type="button" id="fit" data-i18n-label="fit"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
   </div>
   <div id="tip"></div>
-  <div id="sync"><span id="statstxt"></span> · <span id="synctxt"></span> · <a href="https://corynitschelm.com" target="_blank" rel="noopener">corynitschelm.com <span class="ext">↗</span></a></div>
+  <div id="sync"><span id="statstxt"></span> · <span id="synctxt"></span> · <!--build:home--><a href="https://corynitschelm.com" target="_blank" rel="noopener">corynitschelm.com<svg class="ic ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M8 16L16 8M10 8h6v6"/></svg></a><!--/build:home--></div>
 </div>
 
 <div id="mapview">
   <canvas id="mapcanvas"></canvas>
   <div id="mappins"></div>
-  <div id="mapbar">
-    <button id="mapback" class="mchip"></button>
-    <div class="grp"><span class="glbl glbl-r">Region</span>
-      <button class="mchip" data-mr="alsace">Alsace</button>
-      <button class="mchip" data-mr="france">France</button>
-      <button class="mchip" data-mr="us">USA</button>
-      <button class="mchip" data-mr="west">Oregon</button>
-      <button class="mchip" data-mr="world">World</button>
-    </div>
-    <div class="grp"><span class="glbl glbl-b">Filter</span>
-      <button class="mchip b-leg"  data-mb="legacy">Origins</button>
-      <button class="mchip b-fr"   data-mb="fr">France</button>
-      <button class="mchip b-east" data-mb="east">US East</button>
-      <button class="mchip b-west" data-mb="west">Oregon</button>
-      <button class="mchip b-ohio" data-mb="ohio">Ohio</button>
-      <button class="mchip b-doubs" data-mb="doubs">Besançon</button>
-      <button class="mchip b-colmar" data-mb="colmar">Colmar</button>
-      <button class="mchip b-paris" data-mb="paris">Paris</button>
-      <button class="mchip b-schw" data-mb="schw">Schweitzer</button>
-    </div>
-    <div class="grp"><span class="glbl glbl-w">Who</span>
-      <button class="mchip" data-ml="living">Living</button>
-      <button class="mchip" data-ml="dead">Deceased</button>
-      <button class="mchip on" data-mest="1">Uncertain places</button>
-    </div>
-  </div>
   <div id="mapsheet"></div>
   <div id="mapwhere"></div>
   <div id="maplegend"></div>
   <div id="mapempty"><span></span></div>
-  <div id="mapctl">
-    <button id="mzin" aria-label="Zoom in">+</button>
-    <button id="mzout" aria-label="Zoom out">−</button>
-    <button id="mfit" aria-label="Fit">⛶</button>
+  <div id="mapctl" class="zc fl">
+    <button type="button" id="mzin" data-i18n-label="zoom_in"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg></button>
+    <button type="button" id="mzout" data-i18n-label="zoom_out"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14"/></svg></button>
+    <span class="zdv" aria-hidden="true"></span>
+    <button type="button" id="mfit" data-i18n-label="fit"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
   </div>
 </div>
 
@@ -607,28 +725,75 @@ html.dark{--sea:#121A1F; --land:#222A2E; --coast:#3D474C; --bord:#39434A; --stat
 <script>
 /* ---------------- DATA (verbatim from astrosurf.com/nitschelm, updated 2026-07-14) ---------------- */
 const SYNCED = "2026-07-14"; /* maintained by the automated sync task: update only when DATA changes */
+/* ---------------- SITE: what differs between the builds made from this one file ----------------
+   This file IS the family build. tools/build-demo.js makes the public demo from it,
+   swapping only: this block, BRANCHES, REGIONS, the I18N strings its config names, the build
+   slots marked in the markup, the reference place names (MAPLBL) and the payload.
+   A behaviour that differs between the builds is switched here — never forked. */
+const SITE = {
+  store: "ft-",       /* prefix of every browser storage key and of the key-cache database: builds that
+                         share a web origin must never share storage (see the key cache note below) */
+  autoPw: "",         /* a PUBLIC password to open with straight away; "" = ask for the password */
+  search: true,       /* name search; false hides it (the build also puts class "nosearch" on <html>) */
+  bornAt: false,      /* true = each card shows its birthplace beside the years */
+  gen0: "1500s"       /* the generation ruler's label for the first generation; "" = its computed year */
+};
+/* ---------------- BRANCHES: the one list every branch control is built from ----------------
+   One entry per branch, in the order the controls show them:
+     key   — the filter key, and the anchor value the payload carries on that branch's head card
+             (anchors live INSIDE the encrypted data, so no name ever appears in this layer);
+     id    — the payload's branch id (a card's `branch`), which picks the colour of its edge;
+     color — the CSS custom property holding the branch colour (light values in :root, dark in html.dark).
+   Origins is the exception: it is the trunk, found by the payload's anchor "trunk", so it has no
+   anchor of its own and uses --you.
+   ADDING A BRANCH = one entry here + its two colour values (:root and html.dark) + its label under
+   the same key in both I18N tables. The filter buttons, the map chips, the branch heads, the card-edge
+   colours, the map filter and the relabelling are all derived from this list; tests/run.js checks
+   every entry for colours, labels and a matching anchor. */
+const BRANCHES = [
+  {key:"legacy", id:"legacy",   color:"--you", trunk:true},
+  {key:"fr",     id:"fr",       color:"--fr"},
+  {key:"east",   id:"us-east",  color:"--us-east"},
+  {key:"west",   id:"us-west",  color:"--us-west"},
+  {key:"ohio",   id:"us-ohio",  color:"--us-ohio"},
+  {key:"doubs",  id:"fr-doubs", color:"--fr-doubs"},
+  {key:"colmar", id:"colmar",   color:"--colmar"},
+  {key:"paris",  id:"fr-paris", color:"--fr-paris"},
+  {key:"schw",   id:"schw",     color:"--schw"}
+];
+/* the map's "Go to" camera boxes, [[west,south],[east,north]] in degrees; each label is I18N map_<key> */
+const REGIONS = {
+  alsace:  [[6.85,47.85],[7.95,48.95]],
+  france:  [[-4.5,42.2],[8.5,51.2]],
+  us:      [[-125,25.5],[-67,49.5]],
+  west:    [[-124.5,41.5],[-116.5,49]],
+  world:   [[-158,-2],[116,55]]
+};
 const AV = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' fill='%23E9ECE6'/%3E%3Ccircle cx='12' cy='9' r='4' fill='%23AEB6AC'/%3E%3Cpath d='M4 22c0-4.4 3.6-7 8-7s8 2.6 8 7' fill='%23AEB6AC'/%3E%3C/svg%3E";
 const I18N = {
-  en:{search:"Search a name…", filter:"Filter:", legacy:"Origins", fr:"France", east:"US East", west:"Oregon", ohio:"Ohio", doubs:"Besançon", colmar:"Colmar", paris:"Paris", schw:"Schweitzer",
-      fit:"Fit view", reset:"Reset", hide:"− hide", more_kids:"more", nomatch:"No match", gen:"Gen", author:"Author", synced:"Data synced",
+  en:{search:"Search a name…", search_long:"Search the Nitschelm tree…", search_label:"Search a name", legacy:"Origins", fr:"France", east:"US East", west:"Oregon", ohio:"Ohio", doubs:"Besançon", colmar:"Colmar", paris:"Paris", schw:"Schweitzer",
+      fit:"Fit to screen", zoom_in:"Zoom in", zoom_out:"Zoom out", start_over:"Start over", hide:"− hide", more_kids:"more", nomatch:"No match", gen:"Gen", author:"Author", synced:"Data synced",
       synced_note:"Source site note: the family site this tree syncs from sometimes rolls back to an older copy, so a few recent facts here can no longer be seen there.",
-      hint:"Click a person to open their family and trace their line · click the background or “Reset” to start over · drag / scroll to move",
+      hint:"Click a person to open their family and trace their line · click the background or “Start over” to go back to the start · drag / scroll to move",
       pwmsg:"This family tree is password protected.", pwbtn:"Unlock", pwerr:"Wrong password — try again.",
       stats_people:"people", stats_gens:"generations", stats_since:"records since",
       profile_timeline:"Career", profile_links:"Links", profile_btn:"Bio", profile_sources:"Sources", profile_docs:"The original record", profile_transcript:"What it says", profile_doc_src:"see the register", profile_father:"Father", profile_mother:"Mother", profile_nobio:"No life story has been written for this person yet — what is known is on their card and in the records below.", profile_quotes:"In the family’s own words",
-      collapse:"Collapse header", expand:"Show controls",
-      intro_title:"Welcome to the Nitschelm Family Tree", intro_go:"skip for now", tour:"Tour",
+      menu:"Menu", close:"Close", done:"Done", view_label:"View", filters:"Filters", branches:"Branches", show_all:"Show all", clear:"Clear",
+      legend_edge:"The colored edge on each card shows its branch.",
+      language:"Language", appearance:"Appearance", th_auto:"Auto", th_light:"Light", th_dark:"Dark",
+      dark_mode:"Dark mode", light_mode:"Light mode", lang_switch:"Passer en français", tour_take:"Take the tour",
+      intro_title:"Welcome to the Nitschelm Family Tree", intro_go:"skip for now",
       itry:"★ Try it right now — type a name and see their line light up:", itry_btn:"Find", itry_ph:"e.g. a surname or first name", itry_none:"No one by that name — try another spelling.",
       ipan_d:"Drag anywhere to move around; scroll or use +/− to zoom.",
       ipan_m:"Drag with one finger to move around; pinch to zoom.",
       itap_d:"Click a person to unfold their family line. Click again to pin their details, sources and Bio.",
       itap_m:"Tap a person to unfold their family line. Tap again for details, sources and Bio.",
       itip:"Every card cites its sources — original parish registers, memorials and family letters. Round portraits are women, square ones are men. Look for the Bio button for full life stories.",
-      ifilt:"The colored filters jump to each branch: France, US East, Oregon, and the Schweitzer–Sartre cousins.",
-      ileg:"“Legacy view” (top right) shows the tree exactly as the family long believed it, before the 2026 register corrections.",
-      view_tree:"Tree", view_map:"Map", map_region:"Go to", map_who:"Who",
+      ifilt:"Open Filters to choose which branches of the family are shown; the colored edge on each card tells you its branch.",
+      ileg:"Switch to the Map to follow each person’s life from place to place; dashed rings and routes mark places that are inferred rather than documented.",
+      view_tree:"Tree", view_map:"Map", map_region:"Go to", map_people:"People", map_everyone:"Everyone",
       map_alsace:"Alsace", map_france:"France", map_us:"USA", map_west:"Oregon", map_world:"Everywhere",
-      map_living:"Living", map_deceased:"Deceased", map_est:"Uncertain places",
+      map_living:"Living", map_deceased:"Deceased", map_est:"Show uncertain places", map_est_note:"Places we inferred or could only place roughly",
       map_births:"%n of these people were born here.", map_nobirth:"No birthplace recorded — this is the earliest place known for them.",
       map_nodate:"date unknown", map_alt:"other reading",
       map_c_doc:"documented", map_c_inf:"inferred", map_c_apx:"approximate",
@@ -648,27 +813,31 @@ const I18N = {
       profile_intree:"%n in this tree", profile_age_exact:"%n", profile_age_about:"about %n",
       profile_bapt:"bapt.", profile_bur:"buried", profile_partinf:"partly inferred",
       profile_hl3:"Three things to know", profile_hl:"Worth knowing",
-      profile_viewmap:"🗺 See their journey on the map"},
-  fr:{search:"Rechercher un nom…", filter:"Filtre :", legacy:"Origines", fr:"France", east:"USA Est", west:"Oregon", ohio:"Ohio", doubs:"Besançon", colmar:"Colmar", paris:"Paris", schw:"Schweitzer",
-      fit:"Ajuster", reset:"Réinitialiser", hide:"− masquer", more_kids:"de plus", nomatch:"Aucun résultat", gen:"Gén", author:"Auteur", synced:"Données synchronisées",
+      profile_viewmap:"See their journey on the map"},
+  fr:{search:"Rechercher un nom…", search_long:"Rechercher dans l'arbre Nitschelm…", search_label:"Rechercher un nom", legacy:"Origines", fr:"France", east:"USA Est", west:"Oregon", ohio:"Ohio", doubs:"Besançon", colmar:"Colmar", paris:"Paris", schw:"Schweitzer",
+      fit:"Ajuster à l'écran", zoom_in:"Zoom avant", zoom_out:"Zoom arrière", start_over:"Recommencer", hide:"− masquer", more_kids:"de plus", nomatch:"Aucun résultat", gen:"Gén", author:"Auteur", synced:"Données synchronisées",
       synced_note:"Note sur la source : le site familial dont cet arbre se synchronise revient parfois à une copie plus ancienne ; certains faits récents n'y sont donc plus visibles.",
-      hint:"Cliquez sur une personne pour ouvrir sa famille et suivre sa lignée · cliquez sur le fond ou « Réinitialiser » pour recommencer · glissez / molette pour naviguer",
+      hint:"Cliquez sur une personne pour ouvrir sa famille et suivre sa lignée · cliquez sur le fond ou « Recommencer » pour revenir au départ · glissez / molette pour naviguer",
       pwmsg:"Cet arbre généalogique est protégé par mot de passe.", pwbtn:"Déverrouiller", pwerr:"Mot de passe incorrect — réessayez.",
       stats_people:"personnes", stats_gens:"générations", stats_since:"actes depuis",
       profile_timeline:"Parcours", profile_links:"Liens", profile_btn:"Bio", profile_sources:"Sources", profile_docs:"Le document original", profile_transcript:"Ce qu’il dit", profile_doc_src:"voir le registre", profile_father:"Père", profile_mother:"Mère", profile_nobio:"Aucune notice n’a encore été rédigée pour cette personne — ce que l’on sait figure sur sa carte et dans les documents ci-dessous.", profile_quotes:"Dans les mots de la famille",
-      collapse:"Replier l'en-tête", expand:"Afficher les contrôles",
-      intro_title:"Bienvenue dans l'arbre familial Nitschelm", intro_go:"passer pour l'instant", tour:"Visite",
+      menu:"Menu", close:"Fermer", done:"Terminé", view_label:"Affichage", filters:"Filtres", branches:"Branches", show_all:"Tout afficher", clear:"Effacer",
+      legend_edge:"Le liseré de couleur de chaque fiche indique sa branche.",
+      language:"Langue", appearance:"Apparence", th_auto:"Auto", th_dark:"Sombre",
+      th_light:"Clair", light_mode:"Mode clair", /* ft-allow-names: "clair" is the French word for light (the appearance switch), not a person */
+      dark_mode:"Mode sombre", lang_switch:"Switch to English", tour_take:"Faire la visite",
+      intro_title:"Bienvenue dans l'arbre familial Nitschelm", intro_go:"passer pour l'instant",
       itry:"★ Essayez tout de suite — tapez un nom et voyez sa lignée s'illuminer :", itry_btn:"Chercher", itry_ph:"ex. un nom ou un prénom", itry_none:"Personne de ce nom — essayez une autre orthographe.",
       ipan_d:"Faites glisser pour vous déplacer ; molette ou +/− pour zoomer.",
       ipan_m:"Glissez avec un doigt pour vous déplacer ; pincez pour zoomer.",
       itap_d:"Cliquez sur une personne pour déplier sa lignée. Cliquez à nouveau pour épingler ses détails, sources et Bio.",
       itap_m:"Touchez une personne pour déplier sa lignée. Touchez à nouveau pour les détails, sources et Bio.",
       itip:"Chaque fiche cite ses sources — registres paroissiaux, mémoriaux, lettres familiales. Les portraits ronds sont des femmes, les carrés des hommes. Le bouton Bio ouvre les récits de vie.",
-      ifilt:"Les filtres colorés mènent à chaque branche : France, USA Est, Oregon, et les cousins Schweitzer–Sartre.",
-      ileg:"« Vue d'origine » (en haut à droite) montre l'arbre tel que la famille l'a longtemps cru, avant les corrections de 2026.",
-      view_tree:"Arbre", view_map:"Carte", map_region:"Aller à", map_who:"Qui",
+      ifilt:"Ouvrez Filtres pour choisir les branches de la famille à afficher ; le liseré de couleur de chaque fiche indique sa branche.",
+      ileg:"Passez à la Carte pour suivre la vie de chacun de lieu en lieu ; les cercles et trajets en pointillé marquent les lieux déduits plutôt qu'attestés.",
+      view_tree:"Arbre", view_map:"Carte", map_region:"Aller à", map_people:"Personnes", map_everyone:"Tout le monde",
       map_alsace:"Alsace", map_france:"France", map_us:"USA", map_west:"Oregon", map_world:"Partout",
-      map_living:"Vivants", map_deceased:"Décédés", map_est:"Lieux incertains",
+      map_living:"Vivants", map_deceased:"Décédés", map_est:"Afficher les lieux incertains", map_est_note:"Lieux déduits ou situés approximativement",
       map_births:"%n de ces personnes sont nées ici.", map_nobirth:"Lieu de naissance inconnu — voici le premier lieu connu pour elle.",
       map_nodate:"date inconnue", map_alt:"autre lecture",
       map_c_doc:"attesté", map_c_inf:"déduit", map_c_apx:"approximatif",
@@ -688,11 +857,11 @@ const I18N = {
       profile_intree:"%n dans cet arbre", profile_age_exact:"%n ans", profile_age_about:"environ %n ans",
       profile_bapt:"bapt.", profile_bur:"inh.", profile_partinf:"en partie déduit",
       profile_hl3:"Trois choses à savoir", profile_hl:"À retenir",
-      profile_viewmap:"🗺 Voir son parcours sur la carte"}
+      profile_viewmap:"Voir son parcours sur la carte"}
 };
 var mapLangReady = false;
 let LANG = "en";
-try{ LANG = localStorage.getItem("ft-lang") || "en"; }catch(_){}
+try{ LANG = localStorage.getItem(SITE.store + "lang") || (/^fr(-|$)/i.test(navigator.language || "") ? "fr" : "en"); }catch(_){}  /* no saved choice: follow a French browser */
 if(!I18N[LANG]) LANG = "en"; /* guard against a bad persisted value breaking every render */
 const T = k => I18N[LANG][k] !== undefined ? I18N[LANG][k] : (I18N.en[k] !== undefined ? I18N.en[k] : k);
 /* Self-contained vector basemap. Natural Earth 50m country polygons and
@@ -721,11 +890,11 @@ async function decryptData(key){
 }
 /* The unlock key is cached so family devices stay unlocked. It is held as a
    NON-EXTRACTABLE CryptoKey in IndexedDB, never as bytes in localStorage:
-   github.io project sites all share the origin https://cnitschelm.github.io, so
-   any other page published under this account can read this origin's storage.
+   a static host can serve many sites from one shared origin, and any other page
+   published on that origin could read this origin's storage.
    A raw key there could be copied off the device and reused anywhere; a
    non-extractable handle cannot leave the browser that created it. */
-const KEYDB = "ft-keydb", KEYSTORE = "k";
+const KEYDB = SITE.store + "keydb", KEYSTORE = "k";   /* the family build: "ft-keydb", unchanged since 14 Aug 2026 */
 function idb(){
   return new Promise((res, rej) => {
     const rq = indexedDB.open(KEYDB, 1);
@@ -744,10 +913,18 @@ function idbTx(mode, fn){
 const keyPut = k => idbTx("readwrite", st => st.put(k, "key"));
 const keyGet = () => idbTx("readonly", st => st.get("key"));
 const lockEl = document.getElementById("lock");
+let autoOpen = !!SITE.autoPw;   /* a build with a PUBLIC password opens with it straight away, once */
 function showLock(){
-  document.getElementById("lockmsg").textContent = T("pwmsg");
+  document.getElementById("lockmsg").textContent = autoOpen ? T("pwopening") : T("pwmsg");
+  if(SITE.autoPw){ const h = document.getElementById("lockdemo"); h.innerHTML = T("pwdemo"); h.hidden = false; }  /* public: say it */
   document.getElementById("lockbtn").textContent = T("pwbtn");
+  lockEl.classList.toggle("auto", autoOpen);
   lockEl.style.display = "flex";
+  if(autoOpen){
+    autoOpen = false;
+    const pw = document.getElementById("lockpw"); pw.autocomplete = "off"; pw.value = SITE.autoPw;
+    tryUnlock(); return;
+  }
   document.getElementById("lockpw").focus();
 }
 async function tryUnlock(){
@@ -760,6 +937,8 @@ async function tryUnlock(){
     lockEl.style.display = "none";
     boot(data);
   }catch(_){
+    lockEl.classList.remove("auto");   /* an automatic open that failed falls back to the password box */
+    document.getElementById("lockmsg").textContent = T("pwmsg");
     document.getElementById("lockerr").textContent = T("pwerr");
     pwEl.select();
   }
@@ -768,7 +947,7 @@ document.getElementById("lockbtn").onclick = tryUnlock;
 document.getElementById("lockpw").addEventListener("keydown", e=>{ if(e.key==="Enter") tryUnlock(); });
 /* theme for the lock screen (boot re-applies incl. the toggle icon) */
 try{
-  const th = localStorage.getItem("ft-theme") || "system";
+  const th = localStorage.getItem(SITE.store + "theme") || "system";
   const dark = th==="dark" || (th!=="light" && window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches);
   document.documentElement.classList.toggle("dark", dark);
 }catch(_){}
@@ -779,24 +958,40 @@ try{
     if(!key){
       /* one-time migration off the old localStorage copy: re-import the bytes as
          non-extractable, keep the handle, and erase the bytes from this device */
-      const raw = localStorage.getItem("ft-key");
+      const raw = localStorage.getItem(SITE.store + "key");
       if(!raw) return showLock();
       key = await crypto.subtle.importKey("raw", b64b(raw), {name:"AES-GCM"}, false, ["decrypt"]);
       const data = await decryptData(key);          /* prove it works before erasing */
-      try{ await keyPut(key); localStorage.removeItem("ft-key"); }catch(_){}
+      try{ await keyPut(key); localStorage.removeItem(SITE.store + "key"); }catch(_){}
       return boot(data);
     }
     boot(await decryptData(key));
   }catch(_){
-    try{ localStorage.removeItem("ft-key"); }catch(__){}
+    try{ localStorage.removeItem(SITE.store + "key"); }catch(__){}
     try{ await idbTx("readwrite", st => st.delete("key")); }catch(__){}
     showLock();
   }
 })();
 
 function boot(DATA){
+/* ---------------- Icons: inline stroke SVGs (24 grid, 1.8 stroke, currentColor) — no emoji in the chrome ---------------- */
+const ICON = Object.fromEntries(Object.entries({
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  close: '<path d="M6 6l12 12M18 6L6 18"/>',
+  map: '<path d="M9 4.5L3.5 6.8v12.7L9 17.2l6 2.3 5.5-2.3V4.5L15 6.8 9 4.5z"/><path d="M9 4.5v12.7M15 6.8v12.7"/>',
+  moon: '<path d="M20 14.2A8 8 0 0 1 9.8 4a8 8 0 1 0 10.2 10.2z"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4"/>',
+  pin: '<path d="M12 21s-6.5-6.1-6.5-11A6.5 6.5 0 0 1 18.5 10c0 4.9-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>'
+}).map(([k, d]) => [k, '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' + d + '</svg>']));
 /* ---------------- Build ---------------- */
 const NODE_W = 240, LEVEL_H = 132, GAP_X = 22;
+/* SITE.bornAt: the birthplace beside the years on every card, so the family's spread shows in the tree too */
+function bornAt(p){
+  if(!SITE.bornAt) return "";
+  const r = (p.pl||[]).find(x => x.t === "birth" && !x.x) || (p.pl||[]).find(x => x.t === "baptism" && !x.x);
+  const g = r && DATA.gaz && DATA.gaz[r.k];
+  return g ? `<span class="bp"> · ${esc(pickL(g.n, g.n_fr))}</span>` : "";
+}
 let idc = 0;
 const allNodes = [];
 function build(p, branch, parent, gen){
@@ -829,23 +1024,17 @@ function findPerson(pred){ return allNodes.find(pred); }
    Open state is recomputed as the union of all active filters.
    Anchors are stable ids carried INSIDE the encrypted data — no names in this layer. */
 const trunkFork = findPerson(n=>n.p.anchor==="trunk");
-const BRANCH_HEADS = {
-  fr:   findPerson(n=>n.p.anchor==="fr"),
-  east: findPerson(n=>n.p.anchor==="east"),
-  west: findPerson(n=>n.p.anchor==="west"),
-  ohio: findPerson(n=>n.p.anchor==="ohio"),
-  doubs: findPerson(n=>n.p.anchor==="doubs"),
-  colmar: findPerson(n=>n.p.anchor==="colmar"),
-  paris: findPerson(n=>n.p.anchor==="paris"),
-  schw: findPerson(n=>n.p.anchor==="schw")
-};
+const BRANCH_HEADS = Object.fromEntries(BRANCHES.filter(b=>!b.trunk)
+  .map(b=>[b.key, findPerson(n=>n.p.anchor===b.key)]));   /* key = the anchor on the branch head */
 function walkDown(n,f){ f(n); n.children.forEach(c=>walkDown(c,f)); }
 function openAll(n){ walkDown(n, x=>{ if(x.children.length) x.open=true; }); }
 const activeFilters = new Set(["legacy"]);
 let visSet = null; /* explicit whitelist of visible nodes; keeps branch paths narrow */
+let treeMoved = false; /* a line opened or closed by hand since the filters last laid the tree out (shows Start over) */
 function allowSubtree(n){ if(visSet) walkDown(n, x=>visSet.add(x.id)); }
 function allowPathUp(n){ if(!visSet) return; let a=n; while(a){ visSet.add(a.id); a=a.parent; } }
 function setOpenFromFilters(){
+  treeMoved = false;
   allNodes.forEach(n=>n.open=false);
   visSet = new Set([root.id]);
   if(activeFilters.has("legacy")){
@@ -913,7 +1102,7 @@ function fmtYears(y){
   if(LANG==="fr") return y.replace(/^b\. /,"n. ").replace(/^c\. /,"v. ").replace("16th c.","XVIe s.");
   return y;
 }
-const BC = {legacy:"var(--you)",fr:"var(--fr)","us-east":"var(--us-east)","us-west":"var(--us-west)","us-ohio":"var(--us-ohio)","fr-doubs":"var(--fr-doubs)",colmar:"var(--colmar)","fr-paris":"var(--fr-paris)",schw:"var(--schw)"};
+const BC = Object.fromEntries(BRANCHES.map(b=>[b.id, "var(" + b.color + ")"]));   /* payload branch id → edge colour */
 
 function render(){
   layout();
@@ -958,7 +1147,7 @@ function render(){
     const bioChip = p.profile ? `<div class="pill biochip" data-bio="1">👤 ${T("profile_btn")}</div>` : "";
     const prow = (bioChip || pill) ? `<div class="prow">${bioChip}${pill}</div>` : "";
     const ni = `<span class="ni">i</span>`; /* visibility decided after layout (notes OR truncation) */
-    d.innerHTML = `<div class="box" style="--bc:${BC[n.branch]}"><div class="hd"><img class="av${p.g==="f"?" g-f":p.g==="m"?" g-m":""}${p.profile?" hasbio":""}${p.img?" hasimg":""}" src="${p.img||AV}" alt="" loading="lazy"><div class="hdt"><div class="nm">${esc(p.name)}</div><div class="yrs">${esc(fmtYears(p.years))}${ni}${badge}</div></div></div>${sp}${prow}</div>`;
+    d.innerHTML = `<div class="box" style="--bc:${BC[n.branch]}"><div class="hd"><img class="av${p.g==="f"?" g-f":p.g==="m"?" g-m":""}${p.profile?" hasbio":""}${p.img?" hasimg":""}" src="${p.img||AV}" alt="" loading="lazy"><div class="hdt"><div class="nm">${esc(p.name)}</div><div class="yrs">${esc(fmtYears(p.years))}${bornAt(p)}${ni}${badge}</div></div></div>${sp}${prow}</div>`;
     cards.appendChild(d);
     n.el = d;
   });
@@ -972,7 +1161,7 @@ function render(){
   });
   renderRuler();
   reapplyHL();
-  syncJumpBtns();
+  syncChrome();
 }
 
 /* ---------------- Generation ruler ---------------- */
@@ -987,8 +1176,8 @@ function renderRuler(){
   gens.forEach(g=>{
     const d = document.createElement("div");
     d.className = "g";
-    const era = g===0 ? "1500s" : (genYear[g] ? "~"+genYear[g] : "");
-    d.innerHTML = `<b>${T("gen")} ${g+1}</b>${era}`;
+    const era = g===0 && SITE.gen0 ? SITE.gen0 : (genYear[g] ? "~"+genYear[g] : "");
+    d.innerHTML = `<b>${T("gen")} ${g+1}</b>${era ? `<span>${era}</span>` : ""}`;
     ruler.appendChild(d);
     const ln = document.createElement("div");
     ln.className = "genline";
@@ -1000,6 +1189,9 @@ function renderRuler(){
 function positionRuler(){
   const fs = Math.max(9, Math.min(22, 10*scale)); /* gen labels grow/shrink with zoom */
   const showLines = LEVEL_H*scale > 44;           /* hide rules when rows get too dense */
+  /* rows denser than a label: drop the era line, then every other label, so labels never overlap */
+  ruler.classList.toggle("tight", LEVEL_H*scale < 32);
+  ruler.classList.toggle("tighter", LEVEL_H*scale < 19);
   rulerLabels.forEach(({el,line,gen})=>{
     el.style.top = (ty + (gen*LEVEL_H+6)*scale) + "px";
     el.style.fontSize = fs + "px";
@@ -1025,13 +1217,25 @@ function bbox(){
   return {minX,maxX,minY,maxY};
 }
 const rulerW = ()=> ruler.getBoundingClientRect().width;
+/* the room the floating controls take at the top and bottom of the screen, measured, so the tree
+   and the map are fitted into what is left in every layout */
+function chromeInsets(){
+  const H = window.innerHeight; let top = 0, bottom = 0;
+  ["tl","tc","tr","dock","goto","gochip","mapback"].forEach(id=>{
+    const el = document.getElementById(id); if(!el) return;
+    const r = el.getBoundingClientRect(); if(!r.width || !r.height) return;
+    if(r.top < H/2) top = Math.max(top, r.bottom); else bottom = Math.max(bottom, H - r.top);
+  });
+  return {top, bottom};
+}
 function fit(){
   /* always fit the whole visible tree — pinch/zoom in from there */
   const b=bbox(), RW=rulerW(), W=stage.clientWidth, H=stage.clientHeight;
-  const s = Math.min((W-RW)/(b.maxX-b.minX+60), H/(b.maxY-b.minY+80), 1.1);
+  const ins = chromeInsets(), T0 = ins.top ? ins.top + 8 : 0, B0 = ins.bottom ? ins.bottom + 8 : 0;
+  const s = Math.min((W-RW)/(b.maxX-b.minX+60), (H-T0-B0)/(b.maxY-b.minY+80), 1.1);
   scale = s;
   tx = RW + (W-RW - (b.maxX-b.minX)*s)/2 - b.minX*s;
-  ty = 24 - b.minY*s;
+  ty = T0 + 24 - b.minY*s;
   apply();
 }
 function centerOn(n, targetScale){
@@ -1139,10 +1343,8 @@ function clearHL(){
   document.querySelectorAll(".node").forEach(el=>el.classList.remove("lit","dim","sel"));
   document.querySelectorAll(".edge").forEach(el=>el.classList.remove("lit","dim"));
   hideTip();
+  syncChrome();
 }
-document.getElementById("reset").onclick=()=>{
-  initView(); clearHL(); render(); fit();
-};
 
 function lineageSet(n){
   const set = new Set();
@@ -1164,6 +1366,7 @@ function highlight(n, withTip){
     el.classList.toggle("lit", on); el.classList.toggle("dim", !on);
   });
   if(withTip !== false) showTip(n); /* notes for the selected person (works for touch too) */
+  syncChrome();
 }
 
 /* ---------------- Note tooltip (hover on desktop, selection on touch) ---------------- */
@@ -1224,7 +1427,7 @@ function parseDay(d){                     /* "28 May 1870" → [y, m, d]; anythi
   if(!m || MON[m[2].toLowerCase()] === undefined) return null;
   return [+m[3], MON[m[2].toLowerCase()], +m[1]];
 }
-/* the place and its region — "Chenoa, Illinois" — not the county and not the country */
+/* the place and its region — "Town, State" — not the county and not the country */
 function gParts(k){
   const g = gp(k); if(!g) return {name:k, reg:""};
   const name = pickL(g.n, g.n_fr);
@@ -1345,7 +1548,7 @@ function openProfile(n){
      render time: THE PAYLOAD IS UNCHANGED, so this is reversible and nothing is lost from the data.
 
      Same URL means the same source, always, and two rows that both carry a URL are never merged when
-     those URLs differ — six pages of one museum site share the head "Maison …, Gunsbach" and must stay
+     those URLs differ — six pages of one museum site can share the same head and must stay
      six rows. With no URL to compare, two rows match only when the head of the label (the citation,
      before the em-dash commentary this site writes after it) is identical AND carries a digit, so a
      bare institution name can never collapse distinct documents. The longest wording wins, because it
@@ -1386,7 +1589,7 @@ function openProfile(n){
         }).join("") + `</div>`;
     }
   }
-  if((p.pl || []).length) h += `<button class="pmapbtn" data-mapgo="1">${T("profile_viewmap")}</button>`;
+  if((p.pl || []).length) h += `<button class="pmapbtn" data-mapgo="1">${ICON.map}<span>${T("profile_viewmap")}</span></button>`;
   document.getElementById("pbody").innerHTML = h;
   profileEl.style.display = "flex";
 }
@@ -1433,8 +1636,10 @@ cards.addEventListener("click", e=>{
 lbEl.addEventListener("click", closeLightbox);
 window.addEventListener("keydown", e=>{
   if(e.key !== "Escape") return;
+  if(document.getElementById("intro").style.display === "flex") return;   /* the tour closes itself, and only itself */
   if(lbOpen()){ closeLightbox(); return; }
   if(profileEl.style.display === "flex"){ closeProfile(); return; }
+  if(openPanel){ closePanel(); return; }              /* Filters, the menu, Go to — focus goes back to its button */
   if(document.body.classList.contains("mapmode") && typeof mapEscape === "function") mapEscape();
 });
 
@@ -1453,6 +1658,7 @@ function reapplyHL(){ if(hlNode && nodes.includes(hlNode)) highlight(hlNode); el
 
 /* ---------------- Expand / collapse ---------------- */
 function toggleNode(n){
+  treeMoved = true;
   const bx=n.x, by=n.y;
   const hidden = visSet ? n.children.filter(c=>!visSet.has(c.id)) : [];
   if(!n.open){
@@ -1530,6 +1736,7 @@ function growLine(n){
 /* walking up from a bio: keep everything already on screen, just make sure this
    person's line is open and centred — never collapse what the reader was looking at */
 function goToKeep(n){
+  treeMoved = true;
   if(visSet){ let a = n; while(a){ visSet.add(a.id); a = a.parent; } }
   let a = n.parent; while(a){ a.open = true; a = a.parent; }
   n.open = true;
@@ -1539,11 +1746,12 @@ function goToKeep(n){
   flyTo(n, Math.max(scale, .9));
 }
 function goTo(n, andHighlight){
+  treeMoved = true;
   if(andHighlight){
     /* search focus: drop every open line and show ONLY the person and their
        direct ancestry, straight up to the progenitor */
     activeFilters.clear();
-    syncJumpBtns();
+    syncChrome();
     allNodes.forEach(m=>m.open=false);
     visSet = new Set();
     let a = n; while(a){ visSet.add(a.id); a = a.parent; }
@@ -1564,21 +1772,166 @@ function goTo(n, andHighlight){
   }
 }
 
-/* filter buttons: multi-select toggles; view refits after every change */
-const jumpBtns = {};
-document.querySelectorAll("[data-jump]").forEach(b=>{
-  jumpBtns[b.dataset.jump] = b;
-  b.onclick=()=>{
-    const k = b.dataset.jump;
-    if(activeFilters.has(k)) activeFilters.delete(k); else activeFilters.add(k);
-    setOpenFromFilters();
-    render();
-    fit();
-  };
+/* ---------------- Floating controls ---------------- */
+const PHONEQ = matchMedia("(max-width: 840px), (pointer: coarse) and (max-height: 520px)");  /* the phone layout */
+const SIDEQ  = matchMedia("(pointer: coarse) and (max-height: 520px)");                      /* a phone held sideways */
+const isMap = () => document.body.classList.contains("mapmode");
+const filtersEl = document.getElementById("filters"), drawerEl = document.getElementById("drawer");
+const gomenuEl = document.getElementById("gomenu"), scrimEl = document.getElementById("scrim");
+const tilesEl = filtersEl.querySelector(".tiles");
+/* one toggle tile per BRANCHES entry, its colour passed in as --bcol for the one generic rule */
+BRANCHES.forEach(b=>{
+  const t = document.createElement("button");
+  t.type = "button"; t.className = "tile"; t.dataset.br = b.key; t.setAttribute("aria-pressed", "false");
+  t.style.setProperty("--bcol", "var(" + b.color + ")");
+  t.innerHTML = `<span class="cb" aria-hidden="true">${ICON.check}</span><span class="tl" data-i18n="${esc(b.key)}">${esc(T(b.key))}</span>`;
+  tilesEl.appendChild(t);
 });
-function syncJumpBtns(){
-  Object.entries(jumpBtns).forEach(([k,b])=>b.classList.toggle("on", activeFilters.has(k)));
+/* the map's Go to places, one per REGIONS entry: a group on wide screens, a menu on phones */
+Object.keys(REGIONS).forEach(k=>{
+  [document.getElementById("goto"), gomenuEl].forEach((host, i)=>{
+    const a = document.createElement("button");
+    a.type = "button"; a.dataset.mr = k; a.dataset.i18n = "map_" + k; a.textContent = T("map_" + k);
+    if(i) a.setAttribute("role", "menuitem");
+    host.appendChild(a);
+  });
+});
+/* the tree is "as it opens" with only Origins on, nothing picked and no line opened or closed by
+   hand; Start over appears otherwise (a background tap clears a pick, not the lines it opened) */
+function treeDirty(){ return treeMoved || !(activeFilters.size === 1 && activeFilters.has("legacy")) || !!hlNode; }
+/* dots on the Filters buttons: one per branch shown; many dots overlap rather than overflow */
+function fitDots(d, n){
+  if(n < 2){ d.style.removeProperty("--dotgap"); return; }
+  const maxW = PHONEQ.matches ? 46 : (window.innerWidth > 1100 ? 100 : 48);
+  d.style.setProperty("--dotgap", Math.max(-5, Math.min(3, (maxW - 8*n)/(n - 1))).toFixed(2) + "px");
 }
+/* everything the controls show, redrawn from the state after every change */
+function syncChrome(){
+  const map = isMap();
+  const on = map ? (k=>MF.branch.has(k)) : (k=>activeFilters.has(k));
+  tilesEl.querySelectorAll(".tile").forEach(t=>t.setAttribute("aria-pressed", on(t.dataset.br) ? "true" : "false"));
+  const act = BRANCHES.filter(b=>on(b.key));
+  document.querySelectorAll(".filtbtn").forEach(btn=>{
+    const d = btn.querySelector(".dots");
+    d.innerHTML = act.map(b=>`<span style="background:var(${b.color})"></span>`).join("");
+    fitDots(d, act.length);
+    btn.setAttribute("aria-label", T("filters") + (act.length ? ": " + act.map(b=>T(b.key)).join(", ") : ""));
+  });
+  document.getElementById("restart").hidden = !(map ? mapDirty() : treeDirty());
+  if(map) syncMapFilterControls();
+  if(SIDEQ.matches){ const dk = document.getElementById("dock"); if(dk.offsetWidth) document.documentElement.style.setProperty("--dockw", dk.offsetWidth + "px"); }
+}
+/* branch tiles, Show all, Clear — the tree's filters in the tree, the map's on the map */
+function applyBranches(fn){
+  if(isMap()){ fn(MF.branch); refreshMap(true); }
+  else { fn(activeFilters); setOpenFromFilters(); render(); fit(); }
+  syncChrome();
+}
+tilesEl.addEventListener("click", e=>{
+  const t = e.target.closest(".tile"); if(!t) return;
+  applyBranches(set=>{ set.has(t.dataset.br) ? set.delete(t.dataset.br) : set.add(t.dataset.br); });
+});
+document.getElementById("fall").onclick  = ()=>applyBranches(set=>BRANCHES.forEach(b=>set.add(b.key)));
+document.getElementById("fnone").onclick = ()=>applyBranches(set=>set.clear());
+/* a control that hides itself when used (Start over, the gold chip) hands keyboard focus to the
+   Filters button rather than dropping it on the page */
+function keepFocus(btn, act){
+  const had = document.activeElement === btn;
+  act();
+  if(had && !btn.getClientRects().length){
+    const f = [...document.querySelectorAll(".filtbtn")].find(b=>b.getClientRects().length);
+    if(f) f.focus({preventScroll:true});
+  }
+}
+document.getElementById("restart").onclick = e=>keepFocus(e.currentTarget, ()=>{
+  if(isMap()) mapStartOver();
+  else { initView(); clearHL(); render(); fit(); }
+  syncChrome();
+});
+
+/* ---- the Filters panel, the phone menu and the Go to menu: open one at a time ----
+   The Filters panel is a popover on wide screens (outside click and Escape close it) and a modal
+   bottom sheet on phones; the menu drawer is always modal. Modal panels trap focus; every panel
+   hands focus back to the control that opened it. */
+let openPanel = null, panelOpener = null, lastInput = "pointer";
+document.addEventListener("pointerdown", ()=>{ lastInput = "pointer"; }, true);
+document.addEventListener("keydown", e=>{ if(e.key === "Tab" || e.key === "Enter" || e.key === " ") lastInput = "key"; }, true);
+const panelEl = n => n === "filters" ? filtersEl : n === "drawer" ? drawerEl : gomenuEl;
+const focusables = root => [...root.querySelectorAll("button, [href], input")].filter(el=>!el.disabled && el.getClientRects().length);
+function isModal(n){ return n === "drawer" || (n === "filters" && PHONEQ.matches); }
+function openPanelEl(name, opener){
+  closePanel(false);
+  const el = panelEl(name);
+  openPanel = name; panelOpener = opener || document.activeElement;
+  el.hidden = false;
+  if(name !== "gomenu") el.setAttribute("aria-modal", isModal(name) ? "true" : "false");
+  scrimEl.hidden = !isModal(name);
+  document.querySelectorAll(`[aria-controls="${el.id}"]`).forEach(b=>b.setAttribute("aria-expanded", "true"));
+  if(name === "gomenu"){
+    const r = document.getElementById("gochip").getBoundingClientRect();
+    el.style.left = r.left + "px"; el.style.top = (r.bottom + 6) + "px";
+  }
+  syncChrome();
+  const first = name === "filters" ? el.querySelector(".tile") : focusables(el)[0];
+  if(first && (isModal(name) || lastInput === "key")) first.focus({preventScroll:true});
+}
+function closePanel(restore){
+  if(!openPanel) return;
+  const el = panelEl(openPanel);
+  el.hidden = true; scrimEl.hidden = true;
+  document.querySelectorAll(`[aria-controls="${el.id}"]`).forEach(b=>b.setAttribute("aria-expanded", "false"));
+  const back = panelOpener; openPanel = null; panelOpener = null;
+  if(restore !== false && back && back.focus) back.focus({preventScroll:true});
+}
+function togglePanel(name, btn){ if(openPanel === name) closePanel(); else openPanelEl(name, btn); }
+document.querySelectorAll(".filtbtn").forEach(b=>b.addEventListener("click", ()=>togglePanel("filters", b)));
+document.getElementById("menubtn").addEventListener("click", e=>togglePanel("drawer", e.currentTarget));
+document.getElementById("gochip").addEventListener("click", e=>togglePanel("gomenu", e.currentTarget));
+scrimEl.addEventListener("click", ()=>closePanel());
+[filtersEl, drawerEl].forEach(el=>el.addEventListener("click", e=>{ if(e.target.closest("[data-close]")) closePanel(); }));
+/* a click anywhere else closes a popover; focus stays wherever that click put it */
+document.addEventListener("pointerdown", e=>{
+  if(!openPanel || isModal(openPanel)) return;
+  const el = panelEl(openPanel);
+  if(el.contains(e.target) || e.target.closest(`[aria-controls="${el.id}"]`)) return;
+  closePanel(!e.target.closest("button, input, a"));
+}, true);
+document.addEventListener("keydown", e=>{
+  if(!openPanel) return;
+  const el = panelEl(openPanel);
+  if(e.key === "Tab" && isModal(openPanel)){            /* keep focus inside a modal panel */
+    const f = focusables(el); if(!f.length) return;
+    const i = f.indexOf(document.activeElement);
+    if(e.shiftKey && i <= 0){ e.preventDefault(); f[f.length-1].focus(); }
+    else if(!e.shiftKey && i === f.length-1){ e.preventDefault(); f[0].focus(); }
+  } else if(openPanel === "gomenu" && (e.key === "ArrowDown" || e.key === "ArrowUp")){
+    /* only while focus is in the menu or on its chip — the search box keeps its own arrow keys */
+    const chip = document.getElementById("gochip");
+    if(!el.contains(document.activeElement) && document.activeElement !== chip) return;
+    const f = focusables(el), i = f.indexOf(document.activeElement), down = e.key === "ArrowDown";
+    if(!f.length) return;
+    e.preventDefault(); f[i < 0 ? (down ? 0 : f.length - 1) : (i + (down ? 1 : f.length - 1)) % f.length].focus();
+  }
+});
+/* the Go to menu closes when focus moves on to anything else */
+[gomenuEl, document.getElementById("gochip")].forEach(n=>n.addEventListener("focusout", e=>{
+  const to = e.relatedTarget;
+  if(openPanel === "gomenu" && to && !gomenuEl.contains(to) && to.id !== "gochip") closePanel(false);
+}));
+/* the menu drawer: language, appearance, the tour */
+drawerEl.addEventListener("click", e=>{
+  const l = e.target.closest("[data-setlang]"), t = e.target.closest("[data-settheme]");
+  if(l){ setLang(l.dataset.setlang); }
+  else if(t){ THEME = t.dataset.settheme; try{ localStorage.setItem(SITE.store + "theme", THEME); }catch(_){} applyTheme(); }
+  else if(e.target.closest("#drawtour")){ closePanel(false); showIntro(); }
+});
+function syncDrawer(){
+  drawerEl.querySelectorAll("[data-setlang]").forEach(b=>b.setAttribute("aria-pressed", b.dataset.setlang === LANG ? "true" : "false"));
+  drawerEl.querySelectorAll("[data-settheme]").forEach(b=>b.setAttribute("aria-pressed", b.dataset.settheme === THEME ? "true" : "false"));
+}
+/* switching between the phone and the wide layout: a popover is not a sheet — close whatever is open */
+PHONEQ.addEventListener && PHONEQ.addEventListener("change", ()=>{ closePanel(false); applyPlaceholder(); syncChrome(); });
+SIDEQ.addEventListener && SIDEQ.addEventListener("change", ()=>{ syncChrome(); });
 
 /* search: suggestions dropdown; the tree only moves once a person is chosen */
 const searchEl = document.getElementById("search");
@@ -1652,18 +2005,42 @@ document.addEventListener("pointerdown",e=>{
 });
 
 /* ---------------- Language ---------------- */
+/* the search box names the tree wherever the tree's name is not shown beside it */
+const WIDEQ = matchMedia("(min-width: 1241px)");
+/* …but only where the long form fits whole: a placeholder is never cut short (French is longer) */
+const phCtx = document.createElement("canvas").getContext("2d");
+function phFits(t){
+  const cs = getComputedStyle(searchEl);
+  const room = searchEl.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  if(!(room > 0) || !phCtx) return true;   /* not laid out (hidden): the next resize decides */
+  phCtx.font = cs.fontStyle + " " + cs.fontWeight + " " + cs.fontSize + " " + cs.fontFamily;
+  return phCtx.measureText(t).width <= room - 2;
+}
+function applyPlaceholder(){
+  const long = !(WIDEQ.matches && !PHONEQ.matches);
+  searchEl.placeholder = T(long && phFits(T("search_long")) ? "search_long" : "search");
+}
+WIDEQ.addEventListener && WIDEQ.addEventListener("change", applyPlaceholder);
+if(window.ResizeObserver) new ResizeObserver(()=>applyPlaceholder()).observe(searchEl);
+if(document.fonts && document.fonts.ready) document.fonts.ready.then(applyPlaceholder);
 function applyLang(){
   document.documentElement.lang = LANG;
-  searchEl.placeholder = T("search");
-  document.querySelector(".jumps .lbl").textContent = T("filter");
-  ["legacy","fr","east","west","ohio","doubs","colmar","paris","schw"].forEach(k=>{ if(jumpBtns[k]) jumpBtns[k].textContent = T(k); });
-  const fitB = document.getElementById("fit"), rstB = document.getElementById("reset");
-  fitB.querySelector("span").textContent = T("fit");   fitB.title = T("fit");
-  rstB.querySelector("span").textContent = T("reset"); rstB.title = T("reset");
+  applyPlaceholder();
   document.getElementById("hint").textContent = T("hint");
-  const st = document.getElementById("synctxt");
-  st.textContent = T("synced")+" "+SYNCED;
-  st.title = T("synced_note"); /* the upstream family site occasionally serves an older copy of itself */
+  /* every static label carries its key: data-i18n = text, data-i18n-label = aria-label and tooltip,
+     data-i18n-aria = aria-label only, data-i18n-title = tooltip only */
+  document.querySelectorAll("[data-i18n]").forEach(el=>{ el.textContent = T(el.dataset.i18n); });
+  document.querySelectorAll("[data-i18n-label]").forEach(el=>{ el.setAttribute("aria-label", T(el.dataset.i18nLabel)); el.title = T(el.dataset.i18nLabel); });
+  document.querySelectorAll("[data-i18n-aria]").forEach(el=>{ el.setAttribute("aria-label", T(el.dataset.i18nAria)); });
+  document.querySelectorAll("[data-i18n-title]").forEach(el=>{ el.title = T(el.dataset.i18nTitle); });
+  const langB = document.getElementById("lang"), other = LANG==="en" ? "FR" : "EN";
+  langB.querySelector("span").textContent = other;
+  langB.querySelector("span").lang = other.toLowerCase();
+  langB.title = T("lang_switch"); langB.setAttribute("aria-label", other + " — " + T("lang_switch"));
+  applyTheme();
+  const st = document.getElementById("synctxt"), ds = document.getElementById("dsync");
+  st.textContent = ds.textContent = T("synced")+" "+SYNCED;
+  st.title = ds.title = T("synced_note"); /* the upstream family site occasionally serves an older copy of itself */
   const gens = new Set(allNodes.map(n=>n.gen)).size;
   let minY = 9999;
   allNodes.forEach(n=>{
@@ -1671,22 +2048,22 @@ function applyLang(){
     if(/^c\./.test(y)) return; /* estimated ("circa") years are not records */
     const m = y.match(/\d{4}/); if(m) minY=Math.min(minY,+m[0]);
   });
-  document.getElementById("statstxt").textContent =
+  document.getElementById("statstxt").textContent = document.getElementById("dstats").textContent =
     allNodes.length+" "+T("stats_people")+" · "+gens+" "+T("stats_gens")+" · "+T("stats_since")+" "+minY;
-  document.getElementById("lang").textContent = "🌐 " + (LANG==="en" ? "FR" : "EN");
-  document.getElementById("tourbtn").title = T("tour");
+  syncDrawer();
   render();
   syncMapLang();
 }
-document.getElementById("lang").onclick=()=>{
-  LANG = LANG==="en" ? "fr" : "en";
-  try{ localStorage.setItem("ft-lang", LANG); }catch(_){}
+function setLang(l){
+  LANG = l === "fr" ? "fr" : "en";
+  try{ localStorage.setItem(SITE.store + "lang", LANG); }catch(_){}
   applyLang();
-};
+}
+document.getElementById("lang").onclick=()=>setLang(LANG==="en" ? "fr" : "en");
 
 /* ---------------- Theme (dark mode) ---------------- */
 let THEME = "system"; /* "system" until the user chooses; then "light"/"dark" */
-try{ THEME = localStorage.getItem("ft-theme") || "system"; }catch(_){}
+try{ THEME = localStorage.getItem(SITE.store + "theme") || "system"; }catch(_){}
 if(!["system","light","dark"].includes(THEME)) THEME = "system";
 const sysDark = window.matchMedia ? matchMedia("(prefers-color-scheme: dark)") : null;
 function themeIsDark(){
@@ -1695,23 +2072,18 @@ function themeIsDark(){
   return !!(sysDark && sysDark.matches);
 }
 function applyTheme(){
-  document.documentElement.classList.toggle("dark", themeIsDark());
-  document.getElementById("theme").textContent = themeIsDark() ? "☀️" : "🌙";
+  const dark = themeIsDark(), tb = document.getElementById("theme");
+  document.documentElement.classList.toggle("dark", dark);
+  tb.innerHTML = dark ? ICON.sun : ICON.moon;       /* the button shows what a press switches to */
+  tb.setAttribute("aria-label", T(dark ? "light_mode" : "dark_mode")); tb.title = T(dark ? "light_mode" : "dark_mode");
+  if(typeof syncDrawer === "function") syncDrawer();
 }
 document.getElementById("theme").onclick=()=>{
   THEME = themeIsDark() ? "light" : "dark";
-  try{ localStorage.setItem("ft-theme", THEME); }catch(_){}
+  try{ localStorage.setItem(SITE.store + "theme", THEME); }catch(_){}
   applyTheme();
 };
 
-/* header collapse (presentation only, not persisted) */
-document.getElementById("hdrtoggle").onclick = function(){
-  const h = document.querySelector("header");
-  const min = h.classList.toggle("hmin");
-  this.textContent = min ? "▾" : "▴";
-  this.title = min ? T("expand") : T("collapse");
-  fit();
-};
 if(sysDark && sysDark.addEventListener) sysDark.addEventListener("change", ()=>{ if(THEME==="system") applyTheme(); });
 
 /* ---------------- Init ---------------- */
@@ -1760,17 +2132,19 @@ function showIntro(){
     sug.style.display = "block";
   };
   const pick = i=>{ const it = items[i]; if(!it) return; done(); goTo(it.n, true); };
-  box.addEventListener("input", ()=>{
+  /* handlers are assigned, not added: the tour can be opened many times (the ? button, the menu),
+     and added listeners piled up — one pick then ran once per earlier opening */
+  box.oninput = ()=>{
     clearTimeout(deb2);
     deb2 = setTimeout(()=>{
       const q = box.value.trim();
       hint.textContent = "";
       items = q ? searchMatches(q) : []; idx = 0; paint();
     }, 120);
-  });
-  sug.addEventListener("click", e=>{ const it = e.target.closest(".isit"); if(it) pick(+it.dataset.i); });
+  };
+  sug.onclick = e=>{ const it = e.target.closest(".isit"); if(it) pick(+it.dataset.i); };
   iv.style.display = "flex";
-  const done = ()=>{ iv.style.display="none"; try{ localStorage.setItem("ft-intro","1"); }catch(_){} };
+  const done = ()=>{ iv.style.display="none"; try{ localStorage.setItem(SITE.store + "intro","1"); }catch(_){} };
   /* try-it-yourself: find a person from inside the tour, then land on them */
   const tryFind = ()=>{
     const q = box.value.trim();
@@ -1787,11 +2161,17 @@ function showIntro(){
     else if(e.key==="Enter"){ e.preventDefault(); tryFind(); }
   };
   document.getElementById("introgo").onclick = done;
-  window.addEventListener("keydown", e=>{ if(e.key === "Escape" && iv.style.display === "flex") done(); });
-  iv.addEventListener("pointerdown", e=>{ if(e.target===iv) done(); });
+  showIntro.done = done;
+  if(!showIntro.esc){   /* one Escape listener for the page's lifetime; it closes whichever opening is current */
+    showIntro.esc = e=>{ if(e.key === "Escape" && iv.style.display === "flex") showIntro.done(); };
+    window.addEventListener("keydown", showIntro.esc);
+  }
+  iv.onpointerdown = e=>{ if(e.target===iv) done(); };
+  /* opened from the keyboard: focus goes into the tour, not behind it */
+  if(lastInput === "key"){ const f = focusables(iv)[0]; if(f) f.focus({preventScroll:true}); }
 }
 document.getElementById("tourbtn").onclick = showIntro;
-try{ if(!localStorage.getItem("ft-intro")) showIntro(); }catch(_){}
+try{ if(!localStorage.getItem(SITE.store + "intro")) showIntro(); }catch(_){}
 /* onboarding hint: tap to dismiss, auto-dismiss on first interaction or after 6s */
 const hintEl = document.getElementById("hint");
 function dismissHint(){
@@ -1853,7 +2233,8 @@ const CC = {
   MX:["Mexico","Mexique"], BE:["Belgium","Belgique"], IT:["Italy","Italie"], ES:["Spain","Espagne"],
   NL:["Netherlands","Pays-Bas"], LU:["Luxembourg","Luxembourg"], AT:["Austria","Autriche"],
   CL:["Chile","Chili"], GA:["Gabon","Gabon"], TH:["Thailand","Thaïlande"], HK:["Hong Kong","Hong Kong"],
-  CN:["China","Chine"], JP:["Japan","Japon"], BR:["Brazil","Brésil"], AR:["Argentina","Argentine"]
+  CN:["China","Chine"], JP:["Japan","Japon"], BR:["Brazil","Brésil"], AR:["Argentina","Argentine"],
+  NO:["Norway","Norvège"], DK:["Denmark","Danemark"], SE:["Sweden","Suède"], IE:["Ireland","Irlande"]
 };
 const ccName = c => (CC[c] ? pickL(CC[c][0], CC[c][1]) : c);
 
@@ -1873,14 +2254,16 @@ const mapEl   = document.getElementById("mapview");
 const mapCv   = document.getElementById("mapcanvas");
 const pinsEl  = document.getElementById("mappins");
 const sheetEl = document.getElementById("mapsheet");
-const MAP_OVERLAYS = "#mapsheet,#mapbar,#mapctl,#maplegend,#mapwhere";
+const MAP_OVERLAYS = "#mapsheet,#mapctl,#maplegend,#mapwhere";
 const ctx     = mapCv.getContext("2d");
 let MS = 1000, MTX = 0, MTY = 0;                 /* world width in px, and offset */
 const sx = lon => prjX(lon)*MS + MTX;
 const sy = lat => prjY(lat)*MS + MTY;
 
 /* ---- what the map is currently showing ---- */
-const MF = { branch:new Set(), life:new Set(), est:true };
+/* branch = the branches SHOWN (a tile is a checkbox: all on by default); life = empty for everyone, or
+   {"living"} / {"dead"}; est = show uncertain places */
+const MF = { branch:new Set(BRANCHES.map(b=>b.key)), life:new Set(), est:true };
 let selPerson = null;      /* node in journey mode, null in overview */
 let pinObjs = [], journey = [], stops = [], animT = 1, animRAF = null, spiderLinks = [], anchorEls = [];
 
@@ -1890,9 +2273,9 @@ function lifeState(p){
   if(/\d/.test(y)) return "dead";
   return "unknown";
 }
-const BKEY = { legacy:"legacy", fr:"fr", "us-east":"east", "us-west":"west", "us-ohio":"ohio", "fr-doubs":"doubs", colmar:"colmar", "fr-paris":"paris", schw:"schw" };
+const BKEY = Object.fromEntries(BRANCHES.map(b=>[b.id, b.key]));   /* payload branch id → filter key */
 function passes(n){
-  if(MF.branch.size && !MF.branch.has(BKEY[n.branch])) return false;
+  if(!MF.branch.has(BKEY[n.branch])) return false;
   if(MF.life.size && !MF.life.has(lifeState(n.p))) return false;
   return true;
 }
@@ -2002,7 +2385,7 @@ function updateWhere(w, h){
     whereEl.style.display = "";
   }, 60);
 }
-/* Inland Alsace at village zoom has no coast and no border in frame; a very
+/* An inland valley at village zoom has no coast and no border in frame; a very
    light graticule gives the eye something to hold on to. */
 function drawGrid(w,h){
   if(MS < 9000) return;
@@ -2036,7 +2419,12 @@ function drawScale(w,h){
   const nice = [1,2,5,10].map(m=>m*pow).find(v=>v >= raw/1.6) || pow*10;
   const wpx = nice/mpp;
   const lab = nice >= 1000 ? Math.round(nice/1000) + " km" : Math.round(nice) + " m";
-  const x = w - wpx - 58, y = h - 22;
+  /* beside the zoom cluster, never under a control: above it, or on a phone held sideways (no height
+     to spare) to its left at the bottom */
+  const cr = document.getElementById("mapctl").getBoundingClientRect(), mr = mapEl.getBoundingClientRect();
+  if(!cr.width) return;   /* no cluster (a phone with the sheet up): the sheet and the dock own the bottom edge */
+  let x = cr.right - mr.left - wpx, y = cr.top - mr.top - 12;
+  if(SIDEQ.matches){ x = cr.left - mr.left - 16 - wpx; y = cr.bottom - mr.top - 10; }
   ctx.save();
   ctx.strokeStyle = cssVar("--ink-soft"); ctx.fillStyle = cssVar("--ink-soft");
   ctx.globalAlpha = .85; ctx.lineWidth = 1.4;
@@ -2399,17 +2787,17 @@ function fitTo(pts, pad){
      to be fitted into what is left, or it is drawn underneath the thing
      describing it. */
   const on = sheetEl.classList.contains("on");
-  const wide = w >= 760;
+  const wide = !PHONEQ.matches || SIDEQ.matches;    /* the sheet is a side panel there, a bottom sheet on phones */
   const sheetW = (on && wide) ? sheetEl.offsetWidth + 18 : 0;
   const sheetH = (on && !wide) ? Math.min(sheetEl.offsetHeight + 12, h * 0.55) : 0;
-  const barH = 46;
-  MS = clampMS(Math.min((w-P*2-sheetW)/dx, (h-P*2-barH-sheetH)/dy));
+  const ins = chromeInsets(), topH = ins.top, botH = ins.bottom + sheetH;   /* the floating controls, measured */
+  MS = clampMS(Math.min((w-P*2-sheetW)/dx, (h-P*2-topH-botH)/dy));
   MTX = (w+sheetW)/2 - (x0+x1)/2*MS;
-  MTY = (h+barH-sheetH)/2 - (y0+y1)/2*MS;
+  MTY = (h+topH-botH)/2 - (y0+y1)/2*MS;
   mapApply();
 }
-/* The family's places run from Honolulu to Bangkok, but all but a handful sit
-   between Alsace and the American west coast. Fitting the raw extent shrinks
+/* A family's places can span the globe while nearly all of them sit in a few
+   regions. Fitting the raw extent shrinks
    that story to a smudge, so the default view trims the far outliers; the
    "Everywhere" chip puts them back. */
 function trimOutliers(pts){
@@ -2443,13 +2831,6 @@ function fitVisible(trim){
   if(!pts.length){ mapEmpty(true); mapApply(); return; }
   fitTo(trim === false ? pts : trimOutliers(pts));
 }
-const REGIONS = {
-  alsace:  [[6.85,47.85],[7.95,48.95]],
-  france:  [[-4.5,42.2],[8.5,51.2]],
-  us:      [[-125,25.5],[-67,49.5]],
-  west:    [[-124.5,41.5],[-116.5,49]],
-  world:   [[-158,-2],[116,55]]
-};
 function goRegion(k){
   selPerson = null; journey = []; stops = []; closeSheet();
   const r = REGIONS[k];
@@ -2462,7 +2843,7 @@ function goRegion(k){
 const mptrs = new Map();
 let mMoved = false, mPan = null, mPinch = null, mDownEl = null;
 mapEl.addEventListener("pointerdown", e=>{
-  if(e.target.closest("#mapctl, #mapbar, #mapsheet")) return;
+  if(e.target.closest("#mapctl, #mapsheet")) return;
   try{ mapEl.setPointerCapture(e.pointerId); }catch(_){}
   mptrs.set(e.pointerId, {x:e.clientX, y:e.clientY});
   if(mptrs.size === 1){ mPan = {x:e.clientX, y:e.clientY, tx:MTX, ty:MTY}; mMoved = false; mDownEl = e.target; mapEl.classList.add("dragging"); }
@@ -2541,23 +2922,25 @@ function mapZoom(f){
 }
 
 /* ---- the bottom sheet ---- */
-function closeSheet(){ sheetEl.classList.remove("on"); pinsEl.querySelectorAll(".pin.hi").forEach(el=>el.classList.remove("hi")); }
+function closeSheet(){ sheetEl.classList.remove("on"); document.body.classList.remove("sheeton"); pinsEl.querySelectorAll(".pin.hi").forEach(el=>el.classList.remove("hi")); mapSchedule(); /* the scale bar returns with the zoom cluster */ }
 /* Closing the panel used to leave you stranded inside one person's journey with
    the way out — the "Show everyone" button — inside the panel you had just
    closed. Every exit route now runs through here. */
 function exitPerson(){
   selPerson = null; journey = []; stops = []; spiderLinks = [];
-  closeSheet(); buildPins(); fitVisible(); syncMapChips();
+  /* camera first, pins second: clusters are a function of zoom, and building them at the journey's
+     zoom left dozens of loose markers on the zoomed-out map (30 Sep 2026) */
+  closeSheet(); fitVisible(); buildPins(); syncMapChips();
 }
 function openSheet(title, sub, body){
   sheetEl.innerHTML =
     `<div class="sh"><button class="grab" aria-label="Expand"></button>` +
     `<button class="shx" aria-label="Close">×</button><h3>${title}</h3>${sub?`<div class="sub">${sub}</div>`:""}</div>` +
     `<div class="sb">${body}</div>`;
-  sheetEl.classList.add("on");
+  sheetEl.classList.add("on"); document.body.classList.add("sheeton"); mapSchedule();
   /* on a phone it opens at a peek height so the map stays usable; the grabber
      pulls it up and pushes it back down */
-  sheetEl.classList.toggle("peek", window.innerWidth < 760);
+  sheetEl.classList.toggle("peek", PHONEQ.matches && !SIDEQ.matches);
   sheetEl.querySelector(".shx").onclick = ()=>{ if(selPerson) exitPerson(); else closeSheet(); };
   const grab = sheetEl.querySelector(".grab");
   if(grab){
@@ -2723,13 +3106,23 @@ function flyPin(i){
 }
 
 /* ---- filter chips ---- */
+/* the gold chip under Tree | Map (beside Go to on phones) is always a visible way out of one person's journey */
 function syncMapChips(){
   const back = document.getElementById("mapback");
   back.classList.toggle("on", !!selPerson);
-  if(selPerson) back.innerHTML = `<b>✕</b><i>${esc(selPerson.p.name)}</i>`;
-  document.querySelectorAll("#mapbar [data-mb]").forEach(b=>b.classList.toggle("on", MF.branch.has(b.dataset.mb)));
-  document.querySelectorAll("#mapbar [data-ml]").forEach(b=>b.classList.toggle("on", MF.life.has(b.dataset.ml)));
-  const es = document.querySelector("#mapbar [data-mest]"); if(es) es.classList.toggle("on", MF.est);
+  if(selPerson){ back.innerHTML = `${ICON.close}<i>${esc(selPerson.p.name)}</i>`; back.setAttribute("aria-label", T("map_showall") + " — " + selPerson.p.name); }
+  syncChrome();
+}
+function syncMapFilterControls(){
+  const life = MF.life.size === 1 ? [...MF.life][0] : "";
+  filtersEl.querySelectorAll("[data-life]").forEach(b=>b.setAttribute("aria-pressed", b.dataset.life === life ? "true" : "false"));
+  document.getElementById("estsw").setAttribute("aria-checked", MF.est ? "true" : "false");
+}
+/* the map is "as it opens" with every branch and everyone shown, uncertain places on, nobody picked */
+function mapDirty(){ return MF.branch.size !== BRANCHES.length || MF.life.size > 0 || !MF.est || !!selPerson; }
+function mapStartOver(){
+  MF.branch = new Set(BRANCHES.map(b=>b.key)); MF.life = new Set(); MF.est = true;
+  exitPerson();
 }
 function refreshMap(refit){
   if(selPerson){ selPerson = null; journey = []; stops = []; closeSheet(); }
@@ -2738,14 +3131,16 @@ function refreshMap(refit){
   if(!refit) mapApply();
   syncMapChips();
 }
-document.getElementById("mapbar").addEventListener("click", e=>{
-  const b = e.target.closest("button"); if(!b) return;
-  if(b.dataset.mb){ MF.branch.has(b.dataset.mb) ? MF.branch.delete(b.dataset.mb) : MF.branch.add(b.dataset.mb); refreshMap(true); }
-  else if(b.dataset.ml){ MF.life.has(b.dataset.ml) ? MF.life.delete(b.dataset.ml) : MF.life.add(b.dataset.ml); refreshMap(true); }
-  else if(b.dataset.mest !== undefined){ MF.est = !MF.est; refreshMap(false); }
-  else if(b.dataset.mr){ goRegion(b.dataset.mr); }
-  else if(b.id === "mapback"){ exitPerson(); }
+/* the map's side of the Filters panel: who is shown, and whether uncertain places are */
+filtersEl.addEventListener("click", e=>{
+  const lb = e.target.closest("[data-life]");
+  if(lb){ MF.life = lb.dataset.life ? new Set([lb.dataset.life]) : new Set(); refreshMap(true); return; }
+  if(e.target.closest("#estsw")){ MF.est = !MF.est; refreshMap(false); }
 });
+/* Go to: jump the camera (a group on wide screens, a menu on phones) */
+document.getElementById("goto").addEventListener("click", e=>{ const b = e.target.closest("[data-mr]"); if(b) goRegion(b.dataset.mr); });
+gomenuEl.addEventListener("click", e=>{ const b = e.target.closest("[data-mr]"); if(b){ closePanel(); goRegion(b.dataset.mr); } });
+document.getElementById("mapback").addEventListener("click", e=>keepFocus(e.currentTarget, exitPerson));
 document.getElementById("mzin").onclick  = ()=>mapZoom(1.45);
 document.getElementById("mzout").onclick = ()=>mapZoom(1/1.45);
 document.getElementById("mfit").onclick  = ()=>{
@@ -2762,49 +3157,27 @@ function mapEscape(){
 let mapReady = false;
 function setView(v){
   const map = v === "map";
+  if(openPanel === "gomenu") closePanel(false);
   document.body.classList.toggle("mapmode", map);
-  document.getElementById("vt-tree").classList.toggle("on", !map);
-  document.getElementById("vt-map").classList.toggle("on", map);
+  document.querySelectorAll("[data-view]").forEach(b=>b.setAttribute("aria-pressed", (b.dataset.view === "map") === map ? "true" : "false"));
   if(map){
     if(!mapReady){ mapReady = true; fitVisible(); buildPins(); }
     else mapApply();
   }
+  syncChrome();
 }
-document.getElementById("vt-tree").onclick = ()=>setView("tree");
-document.getElementById("vt-map").onclick  = ()=>setView("map");
+document.querySelectorAll("[data-view]").forEach(b=>{ b.onclick = ()=>setView(b.dataset.view); });
 window.addEventListener("resize", ()=>{ if(document.body.classList.contains("mapmode")) mapSchedule(); });
 
 /* ---- labels, kept in step with the language toggle ---- */
 function syncMapLang(){
   if(!mapLangReady) return;
-  document.querySelector("#vt-tree span").textContent = T("view_tree");
-  document.querySelector("#vt-map span").textContent  = T("view_map");
-  const set = (sel, key) => { const el = document.querySelector(sel); if(el) el.textContent = T(key); };
-  set("#mapbar [data-mr='alsace']", "map_alsace");
-  set("#mapbar [data-mr='france']", "map_france");
-  set("#mapbar [data-mr='us']",     "map_us");
-  set("#mapbar [data-mr='west']",   "map_west");
-  set("#mapbar [data-mr='world']",  "map_world");
-  set("#mapbar [data-mb='legacy']", "legacy");
-  set("#mapbar [data-mb='fr']",     "fr");
-  set("#mapbar [data-mb='east']",   "east");
-  set("#mapbar [data-mb='west']",   "west");
-  set("#mapbar [data-mb='ohio']",   "ohio");
-  set("#mapbar [data-mb='doubs']",  "doubs");
-  set("#mapbar [data-mb='colmar']", "colmar");
-  set("#mapbar [data-mb='paris']",  "paris");
-  set("#mapbar [data-mb='schw']",   "schw");
-  set("#mapbar [data-ml='living']", "map_living");
-  set("#mapbar [data-ml='dead']",   "map_deceased");
-  set("#mapbar [data-mest]",        "map_est");
-  const l1 = document.querySelector("#mapbar .glbl-r"); if(l1) l1.textContent = T("map_region");
-  const l2 = document.querySelector("#mapbar .glbl-b"); if(l2) l2.textContent = T("filter");
-  const l3 = document.querySelector("#mapbar .glbl-w"); if(l3) l3.textContent = T("map_who");
+  /* the map's controls are relabelled with every other [data-i18n] label in applyLang */
   document.getElementById("maplegend").innerHTML = T("map_legend");
   document.getElementById("mapempty").querySelector("span").textContent = T("map_none");
   if(document.body.classList.contains("mapmode")){
     if(selPerson) showJourney(selPerson, false); else { buildPins(); mapApply(); }
-  }
+  } else if(selPerson) syncMapChips();   /* a journey kept while in the tree: its chip's label follows too */
 }
 mapLangReady = true;
 syncMapLang();

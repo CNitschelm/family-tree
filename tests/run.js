@@ -80,6 +80,77 @@ let syntaxOk = true;
 try { new Function(js); } catch (e) { syntaxOk = false; console.error("   " + e.message); }
 ok(syntaxOk, "whole script parses (new Function)");
 
+/* ---------- 2b. One template, two builds ----------
+ * index.html is the family build AND the template of the public demo (tools/build-demo.js).
+ * The family's own switches must stay as they are — above all the storage prefix, which names
+ * the key cache every family device already holds — and the builder must still run on this file:
+ * a new slot or SITE switch has to be decided for the demo, not silently defaulted. The fixture
+ * below is synthetic (two made-up cards, no names); the real demo config lives with the site. */
+section("Build template");
+{
+  const vmx = require("vm");
+  const siteSrc = (js.match(/const SITE = \{[\s\S]*?\n\};/) || [""])[0];
+  let SITE = null;
+  try { SITE = vmx.runInNewContext(siteSrc.replace(/^const /, "var ") + "\nSITE"); } catch (_) {}
+  ok(!!SITE, "SITE switch block present");
+  ok(SITE && SITE.store === "ft-" && /SITE\.store \+ "keydb"/.test(js),
+    "family storage prefix is ft- (key cache stays ft-keydb)");
+  ok(SITE && SITE.autoPw === "" && SITE.search === true && SITE.bornAt === false, "family build asks for its password, has search, no birthplace line");
+  const opens = [...html.matchAll(/<!--build:([a-z0-9_-]+)-->/g)].map(m => m[1]);
+  const closes = [...html.matchAll(/<!--\/build:([a-z0-9_-]+)-->/g)].map(m => m[1]);
+  ok(opens.length > 0 && opens.join() === closes.join(), "build slots are balanced (" + [...new Set(opens)].join(", ") + ")");
+  const tmp = fs.mkdtempSync(path.join(require("os").tmpdir(), "ftdemo-"));
+  try {
+    const BD = require(path.join(ROOT, "tools", "build-demo.js"));
+    const tBr = vmx.runInNewContext(js.match(/const BRANCHES = \[[\s\S]*?\n\];/)[0].replace(/^const /, "var ") + "\nBRANCHES");
+    const tRg = vmx.runInNewContext(js.match(/const REGIONS = \{[\s\S]*?\n\};/)[0].replace(/^const /, "var ") + "\nREGIONS");
+    fs.writeFileSync(path.join(tmp, "l.txt"), "0AA~Alpha~FR\n1CC~Beta~US\n");
+    const slots = {}; opens.forEach(k => { slots[k] = k === "head" ? "<title>Test Tree</title>" : k === "title" ? "Test Tree" : ""; });
+    const cfg = { maplbl: "l.txt", synced: "2026-01-01", dataNote: "test build", slots,
+      site: Object.assign({}, SITE, { store: "fttest-", autoPw: "x", search: false }),
+      branches: [tBr[0], tBr[1]], regions: tRg,
+      i18n: { en: { intro_title: "Test", search_long: "Test", pwopening: "Opening", pwdemo: "Password: x" },
+              fr: { intro_title: "Test", search_long: "Test", pwopening: "Ouverture", pwdemo: "Mot de passe : x" } } };
+    const r = BD.build(html, cfg, tmp);
+    ok(/const SITE = \{"store":"fttest-"/.test(r.html) && /class="nosearch"/.test(r.html) &&
+       !/<!--\/?build:/.test(r.html) && r.html.includes("<title>Test Tree</title>"),
+      "tools/build-demo.js still builds from this file (slots, switches, branches)");
+    let threw = false; try { const c2 = JSON.parse(JSON.stringify(cfg)); delete c2.slots[opens[0]]; BD.build(html, c2, tmp); } catch (_) { threw = true; }
+    ok(threw, "a slot the demo config leaves unfilled stops the demo build");
+    let threw2 = false; try { const c3 = JSON.parse(JSON.stringify(cfg)); delete c3.i18n.fr.pwopening; BD.build(html, c3, tmp); } catch (_) { threw2 = true; }
+    ok(threw2, "a public-password build without its lock-screen words stops the demo build");
+  } catch (e) { ok(false, "tools/build-demo.js still builds from this file — " + e.message); }
+  finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+}
+
+/* ---------- 2c. The floating controls (30 Sep 2026) ----------
+ * The old header's glyph buttons (tree, map, globe, moon, sun, fit, reset, question mark, collapse
+ * arrows) are inline stroke icons now, and the demo once shipped an emoji inside a tour string, so
+ * both the controls' markup and every string are checked. The header-collapse toggle is gone for good
+ * (a later rule used to override its desktop hide rule, so it showed on every desktop). */
+section("Floating controls");
+{
+  const PICT = /\p{Extended_Pictographic}/u;
+  const OLD_GLYPHS = /[⛶↺▴▾]/;
+  const body = html.slice(html.indexOf("<body>"), html.indexOf("<script>"));
+  const chrome = body.slice(body.indexOf('<div id="topbar">'), body.indexOf('<div id="intro">')) +
+    (body.match(/<div id="zoomctl"[\s\S]*?<\/div>/) || [""])[0] + (body.match(/<div id="mapctl"[\s\S]*?<\/div>/) || [""])[0];
+  ok(chrome.length > 2000 && !PICT.test(chrome) && !OLD_GLYPHS.test(chrome), "no emoji or glyph icons in the controls' markup");
+  let i18nOk = null;
+  try {
+    const I = vm.runInNewContext(js.slice(js.indexOf("const I18N = {"), js.indexOf("\n};", js.indexOf("const I18N = {")) + 3).replace(/^const /, "var ") + "\nI18N");
+    i18nOk = Object.keys(I).every(l => Object.values(I[l]).every(v => !PICT.test(String(v))));
+  } catch (_) {}
+  ok(i18nOk === true, "no emoji in any I18N string");
+  ok(!/hdrtoggle|header\.hmin|<header/.test(html), "the header-collapse toggle and the old header are gone");
+  const ibs = [...chrome.matchAll(/<button\b[^>]*class="[^"]*\bib\b[^"]*"[^>]*>/g)].map(m => m[0]);
+  ok(ibs.length >= 4 && ibs.every(t => /aria-label=|data-i18n-label=/.test(t)), "every icon-only button is labelled (" + ibs.length + ")");
+  ok(["filters", "drawer"].every(id => new RegExp('<div id="' + id + '"[^>]*role="dialog"[^>]*aria-labelledby=').test(chrome)) &&
+     /id="drawer"[^>]*aria-modal="true"/.test(chrome), "the Filters panel and the menu are labelled dialogs");
+  ok(/role="switch"[^>]*aria-checked=/.test(chrome) && /data-view="tree" aria-pressed=/.test(chrome), "switch and toggles expose their state");
+  ok(/<div id="filters"[\s\S]*class="tiles"/.test(chrome) && /\.tile\[aria-pressed="true"\]/.test(html), "branch tiles are generated into the Filters panel, one generic rule");
+}
+
 /* ---------- 3. Decrypt DATA ---------- */
 section("Decrypt DATA");
 let PW = (process.env.FT_PASSWORD || "").trim();
@@ -141,6 +212,7 @@ const activeFilters = get("activeFilters"), searchMatches = get("searchMatches")
 const T = get("T"), I18N = get("I18N"), SYNCED = get("SYNCED");
 const esc = get("esc"), BC = get("BC"), noteText = get("noteText");
 const openAll = get("openAll"), AV = get("AV"), BRANCH_HEADS = get("BRANCH_HEADS");
+const BRANCHES = get("BRANCHES");
 const visChildren = get("(n)=> n.open ? n.children.filter(c=>!visSet || visSet.has(c.id)) : []");
 
 function visCount() {
@@ -333,32 +405,42 @@ const expectEast = subtreeSize(eastHead) + depth(eastHead);
 ok(visCount() === expectEast,
   "east-only = branch + direct line only, no sibling heads (" + visCount() + " = " + expectEast + ")");
 
-activeFilters.add("legacy");
-["fr", "west", "ohio", "doubs", "colmar", "paris", "schw"].forEach(k => activeFilters.add(k));
+/* every branch in BRANCHES, the trunk included — derived, so a new branch is covered the day it is added */
+BRANCHES.forEach(b => activeFilters.add(b.key));
 setOpenFromFilters();
-ok(visCount() === allNodes.length, "legacy + all branches = whole tree");
+ok(visCount() === allNodes.length, "legacy + all branches = whole tree (" + BRANCHES.length + " filters)");
 
-["legacy", "fr", "east", "west", "ohio", "doubs", "colmar", "paris", "schw"].forEach(k => activeFilters.delete(k));
+BRANCHES.forEach(b => activeFilters.delete(b.key));
 setOpenFromFilters();
 ok(visCount() === 1, "all filters off = root only");
 initView();
 ok(visCount() === legacyN, "reset restores default view");
 
-/* Every branch must be selectable in BOTH bars and visibly so. Regression from 20 Sep 2026:
- * three branches added in 2026 had tree buttons with no selected-state rule (a click toggled
- * the filter and lit nothing) and no map chip at all (once any map filter was on they were
- * hidden with no way back). Derived from the markup, so a future branch cannot skip a bar. */
+/* Every branch must be selectable and visibly so. Regression from 20 Sep 2026: three branches
+ * added in 2026 had tree buttons with no selected-state rule (a click toggled the filter and lit
+ * nothing) and no map chip at all. Since 30 Sep 2026 every branch control is BUILT from the one
+ * BRANCHES list, so what is checked here is the list itself: each entry needs its colour in both
+ * themes, its label in both languages, and (the trunk aside) its anchor inside the payload. */
 {
   const css = html.match(/<style>[\s\S]*<\/style>/)[0];
-  const jumps = [...html.matchAll(/<button class="(b-[a-z]+)"\s+data-jump="([a-z]+)"/g)].map(m => ({ cls: m[1], key: m[2] }));
-  const chips = [...html.matchAll(/<button class="mchip (b-[a-z]+)"\s+data-mb="([a-z]+)"/g)].map(m => ({ cls: m[1], key: m[2] }));
-  const heads = ["legacy", ...Object.keys(BRANCH_HEADS)];
-  ok(jumps.map(j => j.key).join() === heads.join(), "tree filter bar lists every branch, in head order (" + jumps.length + ")");
-  ok(chips.map(c => c.key).join() === heads.join(), "map filter bar lists the same branches, in the same order");
-  ok(jumps.length && jumps.every(j => css.includes(".jumps button." + j.cls + ".on{")), "every tree filter button has a selected-state rule");
-  ok(jumps.length && jumps.every(j => css.includes(".jumps button." + j.cls + ":hover{")), "every tree filter button has a hover rule");
-  ok(chips.length && chips.every(c => css.includes("#mapbar .mchip." + c.cls + ".on{")), "every map filter chip has a selected-state rule");
-  ok(heads.every(k => typeof I18N.en[k] === "string" && typeof I18N.fr[k] === "string"), "every branch filter is labelled in both languages");
+  const rootVars = (css.match(/:root\{[\s\S]*?\}/) || [""])[0];
+  const darkVars = (css.match(/html\.dark\{[\s\S]*?\}/) || [""])[0];
+  const keys = BRANCHES.map(b => b.key), ids = BRANCHES.map(b => b.id);
+  ok(Array.isArray(BRANCHES) && BRANCHES.length >= 2 && new Set(keys).size === keys.length && new Set(ids).size === ids.length,
+    "BRANCHES lists " + BRANCHES.length + " branches, keys and branch ids unique");
+  ok(BRANCHES.filter(b => b.trunk).length === 1 && BRANCHES[0].trunk && BRANCHES[0].key === "legacy",
+    "exactly one trunk entry (Origins), listed first");
+  ok(BRANCHES.every(b => new RegExp(b.color + ":#[0-9A-Fa-f]{6}\\b").test(rootVars)), "every branch colour has a light value in :root");
+  ok(BRANCHES.every(b => new RegExp(b.color + ":#[0-9A-Fa-f]{6}\\b").test(darkVars)), "every branch colour has a dark value in html.dark");
+  ok(BRANCHES.every(b => typeof I18N.en[b.key] === "string" && I18N.en[b.key] && typeof I18N.fr[b.key] === "string" && I18N.fr[b.key]),
+    "every branch is labelled in both languages");
+  ok(allNodes.some(n => n.p.anchor === "trunk"), "the trunk anchor is present in the encrypted data");
+  ok(BRANCHES.filter(b => !b.trunk).every(b => allNodes.filter(n => n.p.anchor === b.key).length === 1),
+    "every branch key is exactly one anchor in the encrypted data");
+  ok(allNodes.every(n => ids.includes(n.branch)), "every card's branch id is listed in BRANCHES");
+  ok(Object.keys(BRANCH_HEADS).join() === BRANCHES.filter(b => !b.trunk).map(b => b.key).join(),
+    "branch heads are derived from BRANCHES, in its order");
+  ok(!/\.b-(leg|fr|east|west|ohio|doubs|colmar|paris|schw)\b/.test(html), "no per-branch CSS classes remain (one generic rule)");
 }
 
 /* ---------- 8. Search (regressions: accents, duplicates) ----------
