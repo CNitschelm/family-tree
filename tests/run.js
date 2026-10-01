@@ -52,8 +52,8 @@ function report() {
 section("HTML integrity");
 ok(html.trimEnd().endsWith("</html>"), "file is complete (ends with </html>)");
 ok(html.includes('<meta charset="UTF-8">'), "charset declared");
-ok(html.includes('href="favicon.png"'), "favicon is a local file");
-ok(fs.existsSync(path.join(ROOT, "favicon.png")), "favicon.png exists in repo");
+ok(html.includes('href="favicon.ico"') && html.includes('href="favicon.svg"') && html.includes('href="apple-touch-icon.png"'), "the site icons are local files");
+ok(["favicon.ico", "favicon.svg", "apple-touch-icon.png", "favicon.png"].every(f => fs.existsSync(path.join(ROOT, f))), "the icon files exist in repo");
 ok(!/i0\.wp\.com|corynitschelm\.com\/wp-content/.test(html), "no hot-linked wp.com assets");
 ok(html.includes('target="_blank"'), "footer link opens new tab");
 ok(html.includes("html.dark{"), "dark palette defined");

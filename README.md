@@ -18,7 +18,7 @@ node tools/crypt.js encrypt   # writes new ENC into index.html
 node tests/run.js             # must pass before committing
 ```
 
-- `favicon.png` — public (just the logo).
+- `favicon.ico`, `favicon.svg`, `apple-touch-icon.png` and `favicon.png` — public (just the logo, the same as the personal site's).
 - `tests/run.js` — zero-dependency regression suite.
 
 ## Testing

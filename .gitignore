@@ -15,6 +15,11 @@
 !/OPERATING.md
 !/index.html
 !/favicon.png
+!/favicon.ico
+!/favicon.svg
+!/apple-touch-icon.png
+!/CNAME
+!/robots.txt
 !/checks/*.js
 !/tests/run.js
 !/tests/ledger.js
