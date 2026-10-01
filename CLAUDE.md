@@ -29,7 +29,7 @@ layer, not a code comment, not a test fixture, not a regex, not a commit message
 reasons it is stricter than it looks:
 
 1. The repo is **public**. Anyone can read every tracked file without the password.
-2. **GitHub Pages serves every file in the repo.** `…github.io/family-tree/tests/run.js`
+2. **GitHub Pages serves every file in the repo.** `family.corynitschelm.com/tests/run.js`
    returns 200 to anyone holding the family link. The plaintext files are not "developer
    only" — they are part of the published site.
 
@@ -110,7 +110,7 @@ to re-run first. **Check that run before assuming a deploy landed.** Two mount f
 survive: this sandbox has no push credentials (pushing happens in GitHub Desktop), and it cannot
 unlink, so `.git/*.lock` files accumulate and block every git write until cleared.
 
-A green `list_commits` only proves the commit reached `main`. **Always verify the live site actually changed.** Fetch `https://cnitschelm.github.io/family-tree/` and compare `index.html`'s byte length and payload head against the local file. Three commits once sat undeployed for a day while the site quietly served an old payload and every local check was green.
+A green `list_commits` only proves the commit reached `main`. **Always verify the live site actually changed.** Fetch `https://family.corynitschelm.com/` (the old `cnitschelm.github.io/family-tree/` link redirects there) and compare `index.html`'s byte length and payload head against the local file. Three commits once sat undeployed for a day while the site quietly served an old payload and every local check was green.
 
 **If the site is behind, do NOT rewrite, recompress or re-encrypt anything.** Read the failure first:
 

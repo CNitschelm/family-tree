@@ -65,7 +65,7 @@ body{background:var(--paper);color:var(--ink);font-family:'Archivo',system-ui,sa
 #introsearch{flex:1;padding:11px 13px;font-size:15px;border:2px solid var(--you);border-radius:8px;background:var(--panel);color:var(--ink);font-family:inherit;outline:none}
 #introsearch::placeholder{color:var(--ink-soft);opacity:.8}
 #introsearch:focus{box-shadow:0 0 0 3px rgba(122,143,106,.28)}
-#introfind{padding:11px 20px;font-weight:700;white-space:nowrap;font-size:14px;background:var(--you);color:var(--paper);border-color:var(--you);animation:tryPulse 2.6s ease-in-out infinite}
+#introfind{padding:11px 20px;font-weight:700;white-space:nowrap;font-size:14px;background:var(--you);color:var(--paper);border:2px solid var(--you);border-radius:8px;font-family:inherit;cursor:pointer;animation:tryPulse 2.6s ease-in-out infinite}
 #introfind:hover{opacity:.9;animation:none}
 @keyframes tryPulse{0%,100%{box-shadow:0 0 0 0 rgba(122,143,106,.45)}50%{box-shadow:0 0 0 7px rgba(122,143,106,0)}}
 .itrybox{position:relative;flex:1}
@@ -75,7 +75,7 @@ body{background:var(--paper);color:var(--ink);font-family:'Archivo',system-ui,sa
 #introsug .isit span{color:var(--ink-soft);font-size:11.5px;flex-shrink:0}
 #introsug .isit:hover,#introsug .isit.act{background:var(--paper)}
 #introhint{font-size:12px;color:var(--ink-soft);margin-top:7px;min-height:16px}
-#introgo{margin-top:14px;width:100%;font-weight:500;padding:10px;font-size:13px;opacity:.75}
+#introgo{margin-top:14px;width:100%;font-family:inherit;font-weight:500;padding:10px;font-size:13px;color:var(--ink);background:transparent;border:1px solid var(--rule);border-radius:10px;cursor:pointer;opacity:.75}
 #introgo:hover{opacity:1}
 @media (prefers-reduced-motion: reduce){ #intro *{animation:none !important} }
 #stage{flex:1;position:relative;overflow:hidden;cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none}
@@ -112,6 +112,9 @@ body{background:var(--paper);color:var(--ink);font-family:'Archivo',system-ui,sa
 #tip{position:absolute;max-width:290px;background:var(--ink);color:var(--paper);font-size:11.5px;line-height:1.45;padding:7px 11px;border-radius:6px;pointer-events:none;display:none;z-index:7;box-shadow:0 3px 10px rgba(31,42,51,.3)}
 #tip i{opacity:.82}
 #tip.pin{pointer-events:auto}
+#tip.dock{pointer-events:none;font-size:13px;line-height:1.5;padding:10px 14px;border-radius:12px;max-height:11em;overflow:hidden}   /* touch: the selected person's note, docked above the bottom controls; taps go through it, the Bio has the rest */
+#tip.dock.more{-webkit-mask-image:linear-gradient(#000 calc(100% - 2.6em),transparent);mask-image:linear-gradient(#000 calc(100% - 2.6em),transparent)}
+@media (pointer:coarse) and (max-height:520px){ #tip.dock{max-height:7.5em} }   /* a phone held sideways has little height to give */
 #tip a{color:#9FD3FF;text-decoration:underline}
 html.dark #tip a{color:#0f5aa8} /* dark theme inverts the tooltip to a light background */
 .tsrc{margin-top:5px;padding-top:5px;border-top:1px solid rgba(255,255,255,.25);font-size:10.5px;line-height:1.6}
@@ -222,6 +225,8 @@ html.dark #lock .err{color:#EF9A9A}
 }
 @media(pointer:coarse){
   .node .pill{line-height:24px;font-size:11.5px;padding:0 14px}
+  #introsearch{font-size:16px}   /* 16px stops iOS zooming in on focus, held sideways too */
+  #lock input,#lock button{min-height:44px}
   #profile .pclose{font-size:28px;padding:10px 14px;top:2px;right:2px} /* 44px-class touch target */
   #profile .pcard{padding:24px 20px}
 }
@@ -416,7 +421,7 @@ button:focus-visible,#filters .tile:focus-visible{outline:2px solid var(--sel);o
 #goto .glbl:first-child{padding-left:6px}
 #goto #goto-h{padding:0 8px 0 4px}
 #goto button{height:36px;padding:0 12px;border-radius:8px;font-size:14px;font-weight:500;white-space:nowrap}
-#gochip{display:none}
+#gochip{display:none;border:0;margin:0;font-family:'Archivo',system-ui,sans-serif;cursor:pointer}   /* a button that is itself a chip: no browser border (it showed as a bevelled ring) */
 #mapback{grid-column:2;justify-self:center;display:none;align-items:center;gap:8px;height:40px;padding:0 16px 0 12px;border:0;border-radius:20px;
   background:var(--you);color:var(--onyou);font:inherit;font-family:'Archivo',system-ui,sans-serif;font-size:14px;font-weight:700;box-shadow:var(--fl-shadow);cursor:pointer;max-width:100%;min-width:0}
 #mapback.on{display:inline-flex}
@@ -774,8 +779,8 @@ const I18N = {
   en:{search:"Search a name…", search_long:"Search the Nitschelm tree…", search_label:"Search a name", legacy:"Origins", fr:"France", east:"US East", west:"Oregon", ohio:"Ohio", doubs:"Besançon", colmar:"Colmar", paris:"Paris", schw:"Schweitzer",
       fit:"Fit to screen", zoom_in:"Zoom in", zoom_out:"Zoom out", start_over:"Start over", hide:"− hide", more_kids:"more", nomatch:"No match", gen:"Gen", author:"Author", synced:"Data synced",
       synced_note:"Source site note: the family site this tree syncs from sometimes rolls back to an older copy, so a few recent facts here can no longer be seen there.",
-      hint:"Click a person to open their family and trace their line · click the background or “Start over” to go back to the start · drag / scroll to move",
-      pwmsg:"This family tree is password protected.", pwbtn:"Unlock", pwerr:"Wrong password — try again.",
+      hint:"Click a person to open their family and trace their line · click the background or “Start over” to go back to the start · drag / scroll to move", hint_m:"Tap a person to open their family and trace their line · tap the background to go back · drag to move, pinch to zoom",
+      pwmsg:"This family tree is password protected.", pwbtn:"Unlock", pwerr:"Wrong password — try again.", pwph:"Password",
       stats_people:"people", stats_gens:"generations", stats_since:"records since",
       profile_timeline:"Career", profile_links:"Links", profile_btn:"Bio", profile_sources:"Sources", profile_docs:"The original record", profile_transcript:"What it says", profile_doc_src:"see the register", profile_father:"Father", profile_mother:"Mother", profile_nobio:"No life story has been written for this person yet — what is known is on their card and in the records below.", profile_quotes:"In the family’s own words",
       menu:"Menu", close:"Close", done:"Done", view_label:"View", filters:"Filters", branches:"Branches", show_all:"Show all", clear:"Clear",
@@ -783,11 +788,11 @@ const I18N = {
       language:"Language", appearance:"Appearance", th_auto:"Auto", th_light:"Light", th_dark:"Dark",
       dark_mode:"Dark mode", light_mode:"Light mode", lang_switch:"Passer en français", tour_take:"Take the tour",
       intro_title:"Welcome to the Nitschelm Family Tree", intro_go:"skip for now",
-      itry:"★ Try it right now — type a name and see their line light up:", itry_btn:"Find", itry_ph:"e.g. a surname or first name", itry_none:"No one by that name — try another spelling.",
+      itry:"★ Try it right now — type a name and see their line light up:", itry_btn:"Find", itry_ph:"Surname or first name", itry_none:"No one by that name — try another spelling.",
       ipan_d:"Drag anywhere to move around; scroll or use +/− to zoom.",
       ipan_m:"Drag with one finger to move around; pinch to zoom.",
-      itap_d:"Click a person to unfold their family line. Click again to pin their details, sources and Bio.",
-      itap_m:"Tap a person to unfold their family line. Tap again for details, sources and Bio.",
+      itap_d:"Click a person to unfold their family line and see their details; click again to clear. The Bio button opens their full story and sources.",
+      itap_m:"Tap a person to unfold their family line and see their details; tap again to clear. The Bio button opens their full story and sources.",
       itip:"Every card cites its sources — original parish registers, memorials and family letters. Round portraits are women, square ones are men. Look for the Bio button for full life stories.",
       ifilt:"Open Filters to choose which branches of the family are shown; the colored edge on each card tells you its branch.",
       ileg:"Switch to the Map to follow each person’s life from place to place; dashed rings and routes mark places that are inferred rather than documented.",
@@ -807,7 +812,7 @@ const I18N = {
       map_c_s:"south", map_c_sw:"south-west", map_c_w:"west", map_c_nw:"north-west",
       map_noplaces:"No place is recorded for this person yet.",
       map_none:"No one on the map matches these filters.",
-      map_legend:"Everyone at their birthplace · solid ring = documented, dashed = inferred<br>Tap a marker to see who — or pick a person to follow their whole life",
+      map_legend:"Everyone at their birthplace · solid ring = documented, dashed = inferred<br>Click a marker to see who — or pick a person to follow their whole life", map_legend_m:"Everyone at their birthplace · solid ring = documented, dashed = inferred<br>Tap a marker to see who — or pick a person to follow their whole life",
       profile_f_occ:"Occupation", profile_f_born:"Born", profile_f_died:"Died", profile_f_lived:"Lived",
       profile_f_age:"Age at death", profile_f_children:"Children", profile_f_desc:"Descendants",
       profile_intree:"%n in this tree", profile_age_exact:"%n", profile_age_about:"about %n",
@@ -817,8 +822,8 @@ const I18N = {
   fr:{search:"Rechercher un nom…", search_long:"Rechercher dans l'arbre Nitschelm…", search_label:"Rechercher un nom", legacy:"Origines", fr:"France", east:"USA Est", west:"Oregon", ohio:"Ohio", doubs:"Besançon", colmar:"Colmar", paris:"Paris", schw:"Schweitzer",
       fit:"Ajuster à l'écran", zoom_in:"Zoom avant", zoom_out:"Zoom arrière", start_over:"Recommencer", hide:"− masquer", more_kids:"de plus", nomatch:"Aucun résultat", gen:"Gén", author:"Auteur", synced:"Données synchronisées",
       synced_note:"Note sur la source : le site familial dont cet arbre se synchronise revient parfois à une copie plus ancienne ; certains faits récents n'y sont donc plus visibles.",
-      hint:"Cliquez sur une personne pour ouvrir sa famille et suivre sa lignée · cliquez sur le fond ou « Recommencer » pour revenir au départ · glissez / molette pour naviguer",
-      pwmsg:"Cet arbre généalogique est protégé par mot de passe.", pwbtn:"Déverrouiller", pwerr:"Mot de passe incorrect — réessayez.",
+      hint:"Cliquez sur une personne pour ouvrir sa famille et suivre sa lignée · cliquez sur le fond ou « Recommencer » pour revenir au départ · glissez / molette pour naviguer", hint_m:"Touchez une personne pour ouvrir sa famille et suivre sa lignée · touchez le fond pour revenir · glissez pour naviguer, pincez pour zoomer",
+      pwmsg:"Cet arbre généalogique est protégé par mot de passe.", pwbtn:"Déverrouiller", pwerr:"Mot de passe incorrect — réessayez.", pwph:"Mot de passe",
       stats_people:"personnes", stats_gens:"générations", stats_since:"actes depuis",
       profile_timeline:"Parcours", profile_links:"Liens", profile_btn:"Bio", profile_sources:"Sources", profile_docs:"Le document original", profile_transcript:"Ce qu’il dit", profile_doc_src:"voir le registre", profile_father:"Père", profile_mother:"Mère", profile_nobio:"Aucune notice n’a encore été rédigée pour cette personne — ce que l’on sait figure sur sa carte et dans les documents ci-dessous.", profile_quotes:"Dans les mots de la famille",
       menu:"Menu", close:"Fermer", done:"Terminé", view_label:"Affichage", filters:"Filtres", branches:"Branches", show_all:"Tout afficher", clear:"Effacer",
@@ -827,11 +832,11 @@ const I18N = {
       th_light:"Clair", light_mode:"Mode clair", /* ft-allow-names: "clair" is the French word for light (the appearance switch), not a person */
       dark_mode:"Mode sombre", lang_switch:"Switch to English", tour_take:"Faire la visite",
       intro_title:"Bienvenue dans l'arbre familial Nitschelm", intro_go:"passer pour l'instant",
-      itry:"★ Essayez tout de suite — tapez un nom et voyez sa lignée s'illuminer :", itry_btn:"Chercher", itry_ph:"ex. un nom ou un prénom", itry_none:"Personne de ce nom — essayez une autre orthographe.",
+      itry:"★ Essayez tout de suite — tapez un nom et voyez sa lignée s'illuminer :", itry_btn:"Chercher", itry_ph:"Nom ou prénom", itry_none:"Personne de ce nom — essayez une autre orthographe.",
       ipan_d:"Faites glisser pour vous déplacer ; molette ou +/− pour zoomer.",
       ipan_m:"Glissez avec un doigt pour vous déplacer ; pincez pour zoomer.",
-      itap_d:"Cliquez sur une personne pour déplier sa lignée. Cliquez à nouveau pour épingler ses détails, sources et Bio.",
-      itap_m:"Touchez une personne pour déplier sa lignée. Touchez à nouveau pour les détails, sources et Bio.",
+      itap_d:"Cliquez sur une personne pour déplier sa lignée et voir ses détails ; cliquez à nouveau pour effacer. Le bouton Bio ouvre son histoire complète et ses sources.",
+      itap_m:"Touchez une personne pour déplier sa lignée et voir ses détails ; touchez à nouveau pour effacer. Le bouton Bio ouvre son histoire complète et ses sources.",
       itip:"Chaque fiche cite ses sources — registres paroissiaux, mémoriaux, lettres familiales. Les portraits ronds sont des femmes, les carrés des hommes. Le bouton Bio ouvre les récits de vie.",
       ifilt:"Ouvrez Filtres pour choisir les branches de la famille à afficher ; le liseré de couleur de chaque fiche indique sa branche.",
       ileg:"Passez à la Carte pour suivre la vie de chacun de lieu en lieu ; les cercles et trajets en pointillé marquent les lieux déduits plutôt qu'attestés.",
@@ -851,7 +856,7 @@ const I18N = {
       map_c_s:"au sud", map_c_sw:"au sud-ouest", map_c_w:"à l'ouest", map_c_nw:"au nord-ouest",
       map_noplaces:"Aucun lieu n'est encore enregistré pour cette personne.",
       map_none:"Personne ne correspond à ces filtres sur la carte.",
-      map_legend:"Chacun à son lieu de naissance · cercle plein = attesté, pointillé = déduit<br>Touchez un repère pour voir qui — ou choisissez une personne pour suivre toute sa vie",
+      map_legend:"Chacun à son lieu de naissance · cercle plein = attesté, pointillé = déduit<br>Cliquez sur un repère pour voir qui — ou choisissez une personne pour suivre toute sa vie", map_legend_m:"Chacun à son lieu de naissance · cercle plein = attesté, pointillé = déduit<br>Touchez un repère pour voir qui — ou choisissez une personne pour suivre toute sa vie",
       profile_f_occ:"Métier", profile_f_born:"Naissance", profile_f_died:"Décès", profile_f_lived:"Lieux de vie",
       profile_f_age:"Âge au décès", profile_f_children:"Enfants", profile_f_desc:"Descendants",
       profile_intree:"%n dans cet arbre", profile_age_exact:"%n ans", profile_age_about:"environ %n ans",
@@ -918,6 +923,7 @@ function showLock(){
   document.getElementById("lockmsg").textContent = autoOpen ? T("pwopening") : T("pwmsg");
   if(SITE.autoPw){ const h = document.getElementById("lockdemo"); h.innerHTML = T("pwdemo"); h.hidden = false; }  /* public: say it */
   document.getElementById("lockbtn").textContent = T("pwbtn");
+  { const pw = document.getElementById("lockpw"); pw.placeholder = T("pwph"); pw.setAttribute("aria-label", T("pwph")); }
   lockEl.classList.toggle("auto", autoOpen);
   lockEl.style.display = "flex";
   if(autoOpen){
@@ -1231,7 +1237,14 @@ function chromeInsets(){
 function fit(){
   /* always fit the whole visible tree — pinch/zoom in from there */
   const b=bbox(), RW=rulerW(), W=stage.clientWidth, H=stage.clientHeight;
-  const ins = chromeInsets(), T0 = ins.top ? ins.top + 8 : 0, B0 = ins.bottom ? ins.bottom + 8 : 0;
+  const ins = chromeInsets(), B0 = ins.bottom ? ins.bottom + 8 : 0;
+  let T0 = ins.top ? ins.top + 8 : 0;
+  /* the first-visit hint sits under the top controls for a few seconds: start the tree below it, not under it */
+  const hn = document.getElementById("hint");
+  if(hn && hn.style.display !== "none" && hn.style.opacity !== "0"){
+    const hr = hn.getBoundingClientRect();
+    if(hr.height && hr.top < H/2) T0 = Math.max(T0, hr.bottom - 16);
+  }
   const s = Math.min((W-RW)/(b.maxX-b.minX+60), (H-T0-B0)/(b.maxY-b.minY+80), 1.1);
   scale = s;
   tx = RW + (W-RW - (b.maxX-b.minX)*s)/2 - b.minX*s;
@@ -1365,13 +1378,17 @@ function highlight(n, withTip){
     const on = set.has(+el.dataset.a) && set.has(+el.dataset.b);
     el.classList.toggle("lit", on); el.classList.toggle("dim", !on);
   });
+  syncChrome();   /* first: a docked note sits above "Start over", which this shows */
   if(withTip !== false) showTip(n); /* notes for the selected person (works for touch too) */
-  syncChrome();
 }
 
 /* ---------------- Note tooltip (hover on desktop, selection on touch) ---------------- */
 const tip = document.getElementById("tip");
 let tipNode = null;
+/* touch: notes follow the selection, not the replayed mouse events (they hid the note at once) */
+let tipTouch = false;
+document.addEventListener("pointerdown", e=>{ tipTouch = e.pointerType === "touch"; }, true);
+document.addEventListener("pointermove", e=>{ if(e.pointerType === "mouse") tipTouch = false; }, true);
 function noteText(n){
   const pick = (en, fr) => (LANG === "fr" && fr) ? fr : en; /* fall back to English */
   return [pick(n.p.note, n.p.note_fr), ...(n.p.unions||[]).map(u=>pick(u.n, u.n_fr))].filter(Boolean).join(" — ");
@@ -1394,15 +1411,37 @@ function showTip(n){
     html += p.src.filter(s=>s.q).map(s=>`<div class="tsrcq">“${esc(s.q)}” — ${esc(s.l)}</div>`).join("");
   }
   tip.classList.toggle("pin", n===hlNode);
+  tip.classList.toggle("dock", n===hlNode && tipTouch);
   tipNode = n;
   tip.innerHTML = html;
   tip.style.display = "block";
   positionTip();
 }
 function hideTip(){ tipNode = null; tip.style.display = "none"; }
+/* touch: the selected person's note sits along the bottom, above the controls, so it never covers the
+   family the tap just opened */
+function dockTip(){
+  const S = stage.getBoundingClientRect(), W = stage.clientWidth, H = stage.clientHeight;
+  const zr = document.getElementById("zoomctl").getBoundingClientRect();
+  const left = 12, right = zr.width ? Math.max(left + 200, zr.left - S.left - 10) : W - 12;
+  let floor = H - 12;
+  ["dock", "restart", "sync"].forEach(id=>{
+    const el = document.getElementById(id); if(!el) return;
+    const r = el.getBoundingClientRect();
+    if(!r.width || !r.height || r.top - S.top < H/2) return;
+    if(r.right - S.left < left || r.left - S.left > right) return;
+    floor = Math.min(floor, r.top - S.top - 10);
+  });
+  tip.style.maxWidth = Math.min(440, right - left) + "px";
+  tip.style.left = left + "px";
+  tip.classList.toggle("more", tip.scrollHeight > tip.clientHeight + 2);   /* a long note fades out: the Bio has it all */
+  tip.style.top = Math.max(8, floor - tip.offsetHeight) + "px";
+}
 function positionTip(){
   if(!tipNode) return;
   if(!nodes.includes(tipNode)){ hideTip(); return; }
+  if(tip.classList.contains("dock")){ dockTip(); return; }
+  tip.style.maxWidth = "";
   const n = tipNode, W = stage.clientWidth, H = stage.clientHeight;
   const tw = tip.offsetWidth, th = tip.offsetHeight;
   let x = tx + (n.x + NODE_W/2)*scale - tw/2;
@@ -1427,6 +1466,20 @@ function parseDay(d){                     /* "28 May 1870" → [y, m, d]; anythi
   if(!m || MON[m[2].toLowerCase()] === undefined) return null;
   return [+m[3], MON[m[2].toLowerCase()], +m[1]];
 }
+/* exact dates are stored in English ("15 Oct 1911", "June 1903", "from c.1880–85"); French pages get French ones */
+const MON_FR = ["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."];
+const MONL_FR = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
+const MONL = ["january","february","march","april","may","june","july","august","september","october","november","december"];
+function fmtDay(d){
+  d = String(d == null ? "" : d);
+  if(LANG !== "fr") return d;
+  return d.replace(/\b([A-Za-z]{3,9})\.?(?=\s+\d{4}\b)/g, (w, a)=>{
+      const l = a.toLowerCase(), full = MONL.indexOf(l), ab = l.length <= 4 ? MON[l.slice(0, 3)] : undefined;
+      return full >= 0 ? MONL_FR[full] : ab !== undefined ? MON_FR[ab] : w;
+    })
+    .replace(/^1 (?=\D)/, "1er ")
+    .replace(/^from c\.\s*/, "vers ").replace(/^c\.\s*/, "v. ");
+}
 /* the place and its region — "Town, State" — not the county and not the country */
 function gParts(k){
   const g = gp(k); if(!g) return {name:k, reg:""};
@@ -1441,7 +1494,7 @@ function factCert(c){ return c === "doc" ? "" : `<span class="cert ${c}">${T("ma
 function factPlace(rows, t1, t2, pre2){
   const r = rows.find(x => x.t === t1 && gp(x.k)) || rows.find(x => x.t === t2 && gp(x.k));
   if(!r) return "";
-  let when = r.d ? r.d : r.y ? String(r.y) : "";
+  let when = r.d ? fmtDay(r.d) : r.y ? String(r.y) : "";
   if(when && r.t === t2) when = T(pre2) + " " + when;
   return `<div class="v">${esc(gShort(r.k))}${when ? ` <small>· ${esc(when)}</small>` : ""}${factCert(r.c)}</div>`;
 }
@@ -1644,6 +1697,7 @@ window.addEventListener("keydown", e=>{
 });
 
 cards.addEventListener("mouseover",e=>{
+  if(tipTouch) return;   /* a tap replayed as a hover */
   const el = e.target.closest(".node"); if(!el) return;
   const n = nodes.find(m=>m.id===+el.dataset.id);
   if(n) showTip(n);
@@ -1653,7 +1707,7 @@ cards.addEventListener("error",e=>{
   const im = e.target;
   if(im && im.classList && im.classList.contains("av") && im.src !== AV) im.src = AV;
 }, true);
-cards.addEventListener("mouseout",()=>{ hideTip(); }); /* tooltips are hover-only */
+cards.addEventListener("mouseout",()=>{ if(!tipTouch) hideTip(); }); /* hover tooltips; on touch the note follows the selection */
 function reapplyHL(){ if(hlNode && nodes.includes(hlNode)) highlight(hlNode); else hlNode=null; }
 
 /* ---------------- Expand / collapse ---------------- */
@@ -2026,7 +2080,7 @@ if(document.fonts && document.fonts.ready) document.fonts.ready.then(applyPlaceh
 function applyLang(){
   document.documentElement.lang = LANG;
   applyPlaceholder();
-  document.getElementById("hint").textContent = T("hint");
+  document.getElementById("hint").textContent = T(COARSE ? "hint_m" : "hint");   /* touch screens get touch words */
   /* every static label carries its key: data-i18n = text, data-i18n-label = aria-label and tooltip,
      data-i18n-aria = aria-label only, data-i18n-title = tooltip only */
   document.querySelectorAll("[data-i18n]").forEach(el=>{ el.textContent = T(el.dataset.i18n); });
@@ -2110,7 +2164,7 @@ fit();
 /* intro tour: automatic on first visit per device; re-triggerable via the "?" header button */
 function showIntro(){
   const iv = document.getElementById("intro");
-  const MOBQ = matchMedia("(max-width: 700px)").matches;
+  const MOBQ = COARSE;   /* the words follow the input, not the width: a tablet, or a phone held sideways, is touch too */
   document.getElementById("int-title").textContent = T("intro_title");
   document.getElementById("int-pan").textContent  = MOBQ ? T("ipan_m")  : T("ipan_d");
   document.getElementById("int-tap").textContent  = MOBQ ? T("itap_m")  : T("itap_d");
@@ -2266,6 +2320,8 @@ const sy = lat => prjY(lat)*MS + MTY;
 const MF = { branch:new Set(BRANCHES.map(b=>b.key)), life:new Set(), est:true };
 let selPerson = null;      /* node in journey mode, null in overview */
 let pinObjs = [], journey = [], stops = [], animT = 1, animRAF = null, spiderLinks = [], anchorEls = [];
+/* leaving a journey while its entry animation runs: stop it, or its next frames hide the overview's pins */
+function stopAnim(){ if(animRAF){ cancelAnimationFrame(animRAF); animRAF = null; } animT = 1; }
 
 function lifeState(p){
   const y = p.years || "";
@@ -2832,7 +2888,7 @@ function fitVisible(trim){
   fitTo(trim === false ? pts : trimOutliers(pts));
 }
 function goRegion(k){
-  selPerson = null; journey = []; stops = []; closeSheet();
+  stopAnim(); selPerson = null; journey = []; stops = []; closeSheet();
   const r = REGIONS[k];
   if(r) fitTo([r[0], r[1]], 40); else fitVisible(false);
   buildPins();
@@ -2927,7 +2983,7 @@ function closeSheet(){ sheetEl.classList.remove("on"); document.body.classList.r
    the way out — the "Show everyone" button — inside the panel you had just
    closed. Every exit route now runs through here. */
 function exitPerson(){
-  selPerson = null; journey = []; stops = []; spiderLinks = [];
+  stopAnim(); selPerson = null; journey = []; stops = []; spiderLinks = [];
   /* camera first, pins second: clusters are a function of zoom, and building them at the journey's
      zoom left dozens of loose markers on the zoomed-out map (30 Sep 2026) */
   closeSheet(); fitVisible(); buildPins(); syncMapChips();
@@ -2963,7 +3019,7 @@ function openSheet(title, sub, body){
   }
 }
 function fmtWhen(r){
-  if(r.d) return esc(r.d);
+  if(r.d) return esc(fmtDay(r.d));
   if(r.y && r.y2) return r.y + "–" + r.y2;
   if(r.y) return String(r.y);
   return T("map_nodate");
@@ -3061,7 +3117,7 @@ function showJourney(n, animate){
       animRAF = k < 1 ? requestAnimationFrame(step) : null;
       if(k >= 1) pinObjs.forEach(p=>p.el.style.opacity = 1);
     })(t0);
-  } else { animT = 1; drawMap(); }
+  } else { stopAnim(); drawMap(); }
   syncMapChips();
 }
 function journeySheet(){
@@ -3125,7 +3181,7 @@ function mapStartOver(){
   exitPerson();
 }
 function refreshMap(refit){
-  if(selPerson){ selPerson = null; journey = []; stops = []; closeSheet(); }
+  if(selPerson){ stopAnim(); selPerson = null; journey = []; stops = []; closeSheet(); }
   if(refit) fitVisible();
   buildPins();
   if(!refit) mapApply();
@@ -3173,7 +3229,7 @@ window.addEventListener("resize", ()=>{ if(document.body.classList.contains("map
 function syncMapLang(){
   if(!mapLangReady) return;
   /* the map's controls are relabelled with every other [data-i18n] label in applyLang */
-  document.getElementById("maplegend").innerHTML = T("map_legend");
+  document.getElementById("maplegend").innerHTML = T(COARSE ? "map_legend_m" : "map_legend");
   document.getElementById("mapempty").querySelector("span").textContent = T("map_none");
   if(document.body.classList.contains("mapmode")){
     if(selPerson) showJourney(selPerson, false); else { buildPins(); mapApply(); }
