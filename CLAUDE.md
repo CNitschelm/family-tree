@@ -136,7 +136,9 @@ Check https://www.githubstatus.com/api/v2/summary.json **before** theorising. On
   only restate what that card's own bio already says, at the same certainty. They exist only where a
   bio exists. `tests/run.js` enforces the shape; the hedge discipline is enforced by a cold-audit pass,
   not by the linter (see [[machine-checks]] for why C1 is deliberately blind to them).
-- `docs[].img` is a base64 data-URI; every doc needs a **bilingual caption and transcription**.
+- `docs[].img` is a base64 data-URI; every doc needs a **bilingual caption and transcription**. That is data.json; in
+  the page, `docs[].img` and `imgL` become `media:<id>:<w>x<h>` references to encrypted files in `media/` (since 1 Oct
+  2026, `tools/payload.js`), so the first view loads only the cards. Card portraits (`img`) stay in the payload.
 - Provenance tags: `_n26` (added 2026 from family messages), `_g26` (grafted register chain). Test asserts their counts.
 - The `_legacy` reversion block and the `?legacy=1` view were removed on 19 Sep 2026 (Cory: version history is the record). Corrections no longer need a legacy entry.
 

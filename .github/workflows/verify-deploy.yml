@@ -56,6 +56,19 @@ jobs:
               if [ "$live" = "$expected" ]; then
                 echo "MATCH after ${SECONDS}s — the live site is serving this commit's payload."
                 echo "live bytes: $(printf '%s' "$body" | wc -c)"
+                # the bio pictures beside the page (tools/payload.js): every file this commit has in
+                # media/ must be served too, or a bio shows empty frames. Prints file ids only.
+                n=0; bad=0
+                for f in media/*.bin; do
+                  [ -e "$f" ] || continue
+                  n=$(( n + 1 ))
+                  curl -fsIL --max-time 60 "${SITE}${f}" >/dev/null 2>&1 || { bad=$(( bad + 1 )); echo "not served: $f"; }
+                done
+                if [ "$bad" -gt 0 ]; then
+                  echo "::error::${bad} of ${n} bio picture file(s) in media/ are not served."
+                  exit 1
+                fi
+                echo "media/: all ${n} bio picture file(s) served"
                 exit 0
               fi
             else

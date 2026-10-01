@@ -16,7 +16,8 @@
  *               and every value needs a slot: a new slot fails the build until it is decided.
  *   synced, dataNote → the SYNCED date and the comment above it
  *   maplbl    → the reference place names, one "<rank><lon><lat>~<name>~<ISO2>" record per line
- *   data, password, salt, iter → the payload: <data> encrypted exactly as tools/crypt.js does
+ *   data, password, salt, iter → the payload: <data> encrypted as tools/crypt.js does (v2, compressed),
+ *               except that every picture stays inline: the demo is one file
  *
  * The demo's config and data are NOT in this repo (it is public and GitHub Pages serves every
  * file in it); they live with the site that publishes the demo. This file carries no names and
@@ -140,18 +141,12 @@ async function encrypt(html, cfg, dir) {
   if (!all.some(x => x.p.anchor === "trunk")) die("data: no card carries the anchor \"trunk\"");
   cfg.branches.filter(b => !b.trunk).forEach(b => { if (all.filter(x => x.p.anchor === b.key).length !== 1) die("data: branch \"" + b.key + "\" is not exactly one anchor"); });
   all.forEach(x => { if (!cfg.branches.some(b => b.id === x.b)) die("data: a card's branch \"" + x.b + "\" is not in branches"); });
-  const subtle = webcrypto.subtle, b = s => Buffer.from(s, "base64");
-  const salt = cfg.salt ? b(cfg.salt) : webcrypto.getRandomValues(new Uint8Array(16));
+  const salt = cfg.salt || Buffer.from(webcrypto.getRandomValues(new Uint8Array(16))).toString("base64");
   const iter = cfg.iter || 600000;
-  const iv = webcrypto.getRandomValues(new Uint8Array(12));
-  const km = await subtle.importKey("raw", Buffer.from(cfg.password), "PBKDF2", false, ["deriveKey"]);
-  const k = await subtle.deriveKey({ name: "PBKDF2", salt, iterations: iter, hash: "SHA-256" }, km,
-    { name: "AES-GCM", length: 256 }, false, ["encrypt"]);
-  const ct = new Uint8Array(await subtle.encrypt({ name: "AES-GCM", iv }, k, Buffer.from(JSON.stringify(data))));
-  const b64 = u => Buffer.from(u).toString("base64");
-  const line = `const ENC = {v:1, iter:${iter}, salt:"${b64(salt)}", iv:"${b64(iv)}", ct:"${b64(ct)}"};`;
+  /* tools/payload.js: v2, compressed; split:false keeps every picture inline — the demo is one file */
+  const sealed = require("./payload.js").sealData(data, cfg.password, { salt, iter, split: false });
   if (!/const ENC = \{[^\n]*\};/.test(html)) die("template has no ENC line");
-  return { html: html.replace(/const ENC = \{[^\n]*\};/, () => line), iv: b64(iv), people: count(data) };
+  return { html: html.replace(/const ENC = \{[^\n]*\};/, () => sealed.line), iv: sealed.enc.iv, people: count(data) };
 }
 function count(p) { let n = 1; (p.unions || []).forEach(u => (u.c || []).forEach(c => { n += count(c); })); return n; }
 

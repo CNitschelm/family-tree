@@ -33,8 +33,6 @@
 "use strict";
 const fs = require("fs");
 const path = require("path");
-const { webcrypto } = require("node:crypto");
-const subtle = webcrypto.subtle;
 
 const ROOT = path.join(__dirname, "..");
 const MAX_LEN = 72;
@@ -126,13 +124,8 @@ async function loadNames() {
   if (!m) return null;
   try {
     const o = JSON.parse(m[1].replace(/(\w+):/g, '"$1":'));
-    const b = s => Buffer.from(s, "base64");
-    const base = await subtle.importKey("raw", Buffer.from(pw, "utf8"), "PBKDF2", false, ["deriveKey"]);
-    const k = await subtle.deriveKey(
-      { name: "PBKDF2", salt: b(o.salt), iterations: o.iter, hash: "SHA-256" },
-      base, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
-    const pt = await subtle.decrypt({ name: "AES-GCM", iv: b(o.iv) }, k, b(o.ct));
-    const t = namesFromPayload(JSON.parse(Buffer.from(pt).toString("utf8")));
+    /* v1 or v2 (tools/payload.js); the names are in the payload itself, so media/ is not needed */
+    const t = namesFromPayload(require("./payload.js").openEnc(o, pw, null, { core: true }));
     if (t.size) return { toks: t, via: "index.html" };
   } catch (_) { /* fall through */ }
   return null;

@@ -10,12 +10,18 @@
  * Photos: put them in a person's "img" field in data.json as a data URI
  * ("data:image/jpeg;base64,...."). Keep originals wherever you like — they
  * are not stored in the repo.
+ *
+ * Since 1 Oct 2026 the payload is v2 (tools/payload.js): compressed, and the bio
+ * pictures (imgL, profile.docs[].img) are written to media/ as encrypted files of
+ * their own, so the page carries only what the first view needs. data.json is
+ * unchanged by this: it always holds every picture inline. Commit media/ with
+ * index.html — the commit hook refuses one without the other.
  */
 "use strict";
 const fs = require("fs");
 const path = require("path");
 const { webcrypto, createHash } = require("node:crypto");
-const subtle = webcrypto.subtle;
+const P = require("./payload.js");
 
 const ROOT = path.join(__dirname, "..");
 const JSON_FILE = path.join(ROOT, "data.json");
@@ -89,13 +95,6 @@ function readEnc(html) {
   if (!m) { console.error("ENC block not found in index.html"); process.exit(1); }
   return { obj: JSON.parse(m[1].replace(/(\w+):/g, '"$1":')), raw: m[0] };
 }
-const b = s => Buffer.from(s, "base64");
-
-async function key(pw, salt, iter, usages) {
-  const km = await subtle.importKey("raw", Buffer.from(pw), "PBKDF2", false, ["deriveKey"]);
-  return subtle.deriveKey({ name: "PBKDF2", salt, iterations: iter, hash: "SHA-256" },
-    km, { name: "AES-GCM", length: 256 }, false, usages);
-}
 
 (async () => {
   const mode = process.argv[2];
@@ -104,9 +103,8 @@ async function key(pw, salt, iter, usages) {
 
   if (mode === "decrypt") {
     const { obj } = readEnc(html);
-    const k = await key(pw, b(obj.salt), obj.iter, ["decrypt"]);
-    const pt = await subtle.decrypt({ name: "AES-GCM", iv: b(obj.iv) }, k, b(obj.ct));
-    const data = JSON.parse(Buffer.from(pt).toString("utf8"));
+    /* v1 or v2; a v2 payload's bio pictures are put back from media/, so data.json is the full data */
+    const data = P.openEnc(obj, pw, P.mediaFromDir(ROOT));
     fs.writeFileSync(JSON_FILE, JSON.stringify(data, null, 1));
     writeStamp(obj); /* record which payload this data.json descends from */
     console.log("wrote data.json — edit it, then run: node tools/crypt.js encrypt");
@@ -119,12 +117,14 @@ async function key(pw, salt, iter, usages) {
     /* Before anything else: is data.json actually a descendant of THIS index.html? */
     assertFresh(cur, process.argv.includes("--force"));
     const newSalt = process.argv.includes("--newsalt");
-    const salt = newSalt ? webcrypto.getRandomValues(new Uint8Array(16)) : b(cur.salt);
+    const salt = newSalt ? Buffer.from(webcrypto.getRandomValues(new Uint8Array(16))).toString("base64") : cur.salt;
     const iter = newSalt ? 600000 : cur.iter; /* OWASP-recommended PBKDF2-SHA256 count */
-    const iv = webcrypto.getRandomValues(new Uint8Array(12));
-    const k = await key(pw, salt, iter, ["encrypt"]);
-    const ct = new Uint8Array(await subtle.encrypt({ name: "AES-GCM", iv }, k, Buffer.from(JSON.stringify(data))));
-    const line = `const ENC = {v:1, iter:${iter}, salt:"${Buffer.from(salt).toString("base64")}", iv:"${Buffer.from(iv).toString("base64")}", ct:"${Buffer.from(ct).toString("base64")}"};`;
+    /* v2 (tools/payload.js): sealData compresses the JSON, moves the bio pictures out into files
+     * of their own, and proves the whole thing reads back as exactly this data before returning.
+     * The pictures are written first: the page must never reference a file that is not there. */
+    const sealed = P.sealData(data, pw, { salt, iter });
+    const line = sealed.line;
+    const mw = P.writeMedia(ROOT, sealed.media);
     /* atomic-ish replace: in-place overwrites through the Cowork mount have
      * truncated the file before (grown files got capped at the old length).
      * Writing a new file and renaming over the original avoids that. */
@@ -163,8 +163,12 @@ async function key(pw, salt, iter, usages) {
     }
     /* data.json now descends from the payload we just wrote — re-stamp it, so a second
      * encrypt in the same session is not refused by the freshness guard above. */
-    writeStamp({ iv: Buffer.from(iv).toString("base64"), ct: Buffer.from(ct).toString("base64") });
-    console.log("re-encrypted DATA into index.html (" + ct.length + " bytes). Run tests, then commit.");
+    writeStamp(sealed.enc);
+    console.log("re-encrypted DATA into index.html (page " + Buffer.byteLength(out) + " bytes; " + sealed.media.size +
+      " bio pictures in media/: " + mw.written + " written, " + mw.kept + " unchanged). Run the gate, then commit index.html and media/ together.");
+    const orphans = P.orphanMedia(ROOT, new Set(sealed.media.keys()));
+    if (orphans.length) console.log("note: " + orphans.length + " file(s) in media/ are no longer used by the payload " +
+      "(a picture changed or went). They are harmless; removing them is a deletion, so it is the owner's call.");
     console.log(newSalt
       ? "note: NEW SALT — every family member must re-enter the password."
       : "note: salt unchanged — family devices stay unlocked.");

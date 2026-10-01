@@ -20,6 +20,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { execFileSync } = require('child_process');
 const zlib = require('zlib');
+const P = require('./payload.js');
 
 const ROOT = process.env.FT_ROOT || path.join(__dirname, '..');
 const LEDGER = process.env.FT_LEDGER || path.join(ROOT, 'ledger');
@@ -405,16 +406,10 @@ function readEnc(html) {
   return JSON.parse(m[1].replace(/(\w+):/g, '"$1":'));
 }
 const fingerprint = enc => enc.iv + ':' + crypto.createHash('sha256').update(enc.ct).digest('hex').slice(0, 16);
-const _keys = new Map();
-function decryptEnc(enc) {
-  const k = enc.salt + ':' + enc.iter;
-  if (!_keys.has(k)) _keys.set(k, crypto.pbkdf2Sync(Buffer.from(password()), Buffer.from(enc.salt, 'base64'), enc.iter, 32, 'sha256'));
-  const ct = Buffer.from(enc.ct, 'base64');
-  const d = crypto.createDecipheriv('aes-256-gcm', _keys.get(k), Buffer.from(enc.iv, 'base64'));
-  d.setAuthTag(ct.subarray(ct.length - 16));
-  return JSON.parse(Buffer.concat([d.update(ct.subarray(0, ct.length - 16)), d.final()]).toString('utf8'));
-}
-function payloadAt(rev) { return decryptEnc(readEnc(git(['show', `${rev}:index.html`]))); }
+// v1 or v2 (tools/payload.js). A v2 payload's bio pictures are put back from media/ — the working
+// tree by default, or the commit the payload came from — so every hash is over the full data.
+function decryptEnc(enc, readMedia = P.mediaFromDir(ROOT)) { return P.openEnc(enc, password(), readMedia); }
+function payloadAt(rev) { return decryptEnc(readEnc(git(['show', `${rev}:index.html`])), P.mediaFromGit(ROOT, rev)); }
 
 // Give every card of an older payload the id of the card it became, by walking back one
 // version at a time: same name and years, else same name, else same place in the tree.

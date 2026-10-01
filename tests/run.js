@@ -162,20 +162,33 @@ if (!PW) {
 const encM = js.match(/const ENC = (\{[^}]*\});/);
 ok(!!encM, "ENC parseable");
 const ENC = JSON.parse(encM[1].replace(/(\w+):/g, '"$1":'));
-const b = s => Buffer.from(s, "base64");
+const P = require("../tools/payload.js");
 let dataJson;
 try {
-  const km = await webcrypto.subtle.importKey("raw", Buffer.from(PW), "PBKDF2", false, ["deriveKey"]);
-  const key = await webcrypto.subtle.deriveKey(
-    { name: "PBKDF2", salt: b(ENC.salt), iterations: ENC.iter, hash: "SHA-256" },
-    km, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
-  const pt = await webcrypto.subtle.decrypt({ name: "AES-GCM", iv: b(ENC.iv) }, key, b(ENC.ct));
-  dataJson = Buffer.from(pt).toString("utf8");
+  /* v1 or v2 (tools/payload.js): the bio pictures come back from media/, so the suite sees the full data */
+  dataJson = JSON.stringify(P.openEnc(ENC, PW, P.mediaFromDir(ROOT)));
 } catch (e) {
-  ok(false, "decryption with configured password");
+  ok(false, "decryption with configured password (" + e.message + ")");
   report();
 }
 ok(true, "decryption with configured password");
+/* v2 (1 Oct 2026): the page carries a compressed payload with the card portraits; each bio picture is
+ * an encrypted file in media/, fetched when a bio shows it. The page went from 11 MB to about 1 MB. */
+{
+  const core = P.openEnc(ENC, PW, null, { core: true }), refs = [...P.refsIn(core)];
+  ok(ENC.v === 2 && ENC.z === 1 && ENC.n > 0, "the payload is v2: compressed, with its length");
+  ok(refs.length > 0 && refs.every(id => fs.existsSync(path.join(ROOT, P.MEDIA_DIR, id + ".bin"))),
+    "every bio picture the payload references is in media/ (" + refs.length + ")");
+  let inline = 0, cardImgs = 0;
+  (function walk(p) {
+    if (p.img) { cardImgs++; if (!/^data:image\//.test(p.img)) inline++; }
+    (p.unions || []).forEach(u => (u.c || []).forEach(walk));
+  })(core);
+  ok(cardImgs > 0 && inline === 0, "card portraits stay in the payload: the first view needs nothing from media/");
+  ok(html.length < 3e6, "the page stays small (" + (html.length / 1e6).toFixed(2) + " MB): the bio pictures are not in it");
+  ok(js.includes("function tinf_uncompress") && js.includes('new DecompressionStream("deflate-raw")'),
+    "the page inflates the payload, with a fallback decoder for older browsers");
+}
 
 /* ---------- 4. Build vm context: decrypted DATA + extracted logic ---------- */
 function grab(start, end) {
@@ -603,6 +616,8 @@ ok(gazKeys.every(k => {
 ok(gazKeys.every(k => GAZ[k].n && GAZ[k].n_fr), "gazetteer names bilingual");
 ok(gazKeys.every(k => GAZ[k].c !== undefined && GAZ[k].c_fr !== undefined),
   "gazetteer contexts bilingual");
+ok(/function goRegion\(k\)\{[^}]*selPerson = null;/.test(js),
+  "Go to on the map lets go of a picked person, so the place shows everyone there");
 ok(!/gaz:\s*\{|"lat":/.test(html.replace(/const ENC = \{[\s\S]*?\};/, "")),
   "no gazetteer leaks outside the ciphertext");
 
@@ -915,6 +930,7 @@ section("No names in the plaintext repo");
 
     const hits = [];
     for (const f of files) {
+      if (/^media\/[0-9a-f]{24}\.bin$/.test(f)) continue;   /* ciphertext — proven to be, below */
       let text;
       try { text = fsx.readFileSync(require("path").join(ROOT, f), "utf8"); } catch (_) { continue; }
       if (f === "index.html") text = text
@@ -929,6 +945,19 @@ section("No names in the plaintext repo");
       livingGiven.forEach(g => { if (words.has(g)) bad.add(g); });
       if (bad.size) hits.push({ f, bad: [...bad] });
     }
+    /* media/ holds the bio pictures, AES-GCM encrypted under the payload key (tools/payload.js). Random
+     * bytes read as text collide with short names by pure chance, so those files are not scanned as
+     * text above. Instead every file there must be named as payload.js names them and open with the
+     * payload key — which no plaintext file can. */
+    let mediaNames = [];
+    try { mediaNames = fsx.readdirSync(require("path").join(ROOT, P.MEDIA_DIR)); } catch (_) { /* none yet */ }
+    const notSealed = mediaNames.filter(n => {
+      if (!/^[0-9a-f]{24}\.bin$/.test(n)) return true;
+      try { P.openMediaFile(ENC, PW, fsx.readFileSync(require("path").join(ROOT, P.MEDIA_DIR, n))); return false; }
+      catch (_) { return true; }
+    });
+    ok(!notSealed.length, "every file in media/ is a picture sealed under the payload key (" + mediaNames.length + ")" +
+      (notSealed.length ? " — not: " + notSealed.slice(0, 5).join(", ") : ""));
     ok(!unclosed.length, "every ft-allow-names block is closed" +
       (unclosed.length ? " — unterminated in " + unclosed.join(", ") : ""));
     ok(!hits.length, "no person names in the " + files.length + " tracked files" +

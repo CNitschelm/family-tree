@@ -46,7 +46,8 @@ node tools/card.js <c042 | "Name|years" | part of a name> [--history]
 node tools/change.js ledger/pending/<file>.json   # 4. applies it, or refuses and says why
 node tools/crypt.js encrypt                  # 5. salt unchanged — never --newsalt, never --force
 node checks/gate.js                          # 6. proves the payload is the ledger; runs the tests
-                                             # 7. commit in GitHub Desktop (the hook checks the gate)
+                                             # 7. commit in GitHub Desktop, index.html and media/ together
+                                             #    (the hook checks the gate, and refuses loose media/ files)
                                              # 8. push; verify the live iv; changelog entry
 node tools/lock.js release "<who>"
 ```
@@ -176,6 +177,7 @@ traps). Record the live commit at the top of `OPEN-ITEMS.md`.
 | | what | public? |
 |---|---|---|
 | `index.html` | the site: encrypted payload + app | yes |
+| `media/` | the bio pictures, encrypted one per file (`tools/payload.js`); committed with `index.html` | yes |
 | `tools/` `checks/` `tests/` `githooks/` | the tools above; `tests/run.js` (site) and `tests/ledger.js` (this loop) | yes |
 | `data.json`, `.password`, `.data-stamp`, `.gate-stamp` | working copy, password, provenance stamps | no |
 | `ledger/` | `register.jsonl` (settled questions), `changes.jsonl` (every applied change), `pending/` (change files), `history/` (payload history cache), `LOCK` | no |
@@ -194,6 +196,7 @@ traps). Record the live commit at the top of `OPEN-ITEMS.md`.
 | `checks/gate.js` | before every commit: payload = ledger, evidence still holds, tests, no new HIGH lint |
 | `tools/lock.js` | one writer at a time |
 | `tools/crypt.js` | decrypt / encrypt the payload |
+| `tools/payload.js` | the payload format (v2: compressed; bio pictures in `media/`), used by every tool that reads or writes it |
 | `tools/doctor.js` | local state |
 | `checks/run.js` | prose linter (report only; the gate fails on new HIGH findings) |
 | `checks/manifest.js` | regenerate `sources/urls.tsv` for the archive |
