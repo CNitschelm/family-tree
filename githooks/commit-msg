@@ -28,10 +28,10 @@ if git diff --cached --name-only 2>/dev/null | grep -qx 'index.html'; then
   [ "$stamp" = "$iv" ] || die "index.html is staged, but checks/gate.js has not passed on this payload
   (staged iv $iv; .gate-stamp says ${stamp:-nothing}). Run:  node checks/gate.js
   It proves every change is in the ledger with its evidence and the tests pass."
-  # 0b. The bio pictures live beside the page, encrypted, in media/ (tools/payload.js, 1 Oct 2026).
-  # A page committed without its pictures shows empty frames in every bio that has new ones.
+  # 0b. The bios, notes and places, and the bio pictures, live beside the page, encrypted, in media/
+  # (tools/payload.js, 1 Oct 2026). A page committed without them shows no bios at all.
   loose=$( (git ls-files --others --exclude-standard -- media; git diff --name-only -- media) 2>/dev/null)
-  [ -z "$loose" ] || die "index.html is staged, but media/ has bio pictures that are not:
+  [ -z "$loose" ] || die "index.html is staged, but media/ has changes that are not:
 $(printf '%s\n' "$loose" | head -n 5)
   Commit them together with index.html (in GitHub Desktop: tick them too)."
 fi

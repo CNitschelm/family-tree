@@ -177,7 +177,7 @@ traps). Record the live commit at the top of `OPEN-ITEMS.md`.
 | | what | public? |
 |---|---|---|
 | `index.html` | the site: encrypted payload + app | yes |
-| `media/` | the bio pictures, encrypted one per file (`tools/payload.js`); committed with `index.html` | yes |
+| `media/` | what the cards don't show, encrypted (`tools/payload.js`): one file of bios, notes, sources and places, and one per bio picture; committed with `index.html` (encrypt moves files no longer used to `_to_delete/`) | yes |
 | `tools/` `checks/` `tests/` `githooks/` | the tools above; `tests/run.js` (site) and `tests/ledger.js` (this loop) | yes |
 | `data.json`, `.password`, `.data-stamp`, `.gate-stamp` | working copy, password, provenance stamps | no |
 | `ledger/` | `register.jsonl` (settled questions), `changes.jsonl` (every applied change), `pending/` (change files), `history/` (payload history cache), `LOCK` | no |
@@ -196,7 +196,7 @@ traps). Record the live commit at the top of `OPEN-ITEMS.md`.
 | `checks/gate.js` | before every commit: payload = ledger, evidence still holds, tests, no new HIGH lint |
 | `tools/lock.js` | one writer at a time |
 | `tools/crypt.js` | decrypt / encrypt the payload |
-| `tools/payload.js` | the payload format (v2: compressed; bio pictures in `media/`), used by every tool that reads or writes it |
+| `tools/payload.js` | the payload format (v3: the cards in the page, the rest in `media/`), used by every tool that reads or writes it |
 | `tools/doctor.js` | local state |
 | `checks/run.js` | prose linter (report only; the gate fails on new HIGH findings) |
 | `checks/manifest.js` | regenerate `sources/urls.tsv` for the archive |

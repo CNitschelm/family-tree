@@ -172,11 +172,22 @@ try {
   report();
 }
 ok(true, "decryption with configured password");
-/* v2 (1 Oct 2026): the page carries a compressed payload with the card portraits; each bio picture is
- * an encrypted file in media/, fetched when a bio shows it. The page went from 11 MB to about 1 MB. */
+/* v3 (1 Oct 2026): the page carries only what the tree's cards show (compressed, with the card portraits);
+ * bios, notes, sources and places are one more encrypted file in media/, and each bio picture is one too.
+ * The page went from 11 MB to 0.8 MB. */
 {
-  const core = P.openEnc(ENC, PW, null, { core: true }), refs = [...P.refsIn(core)];
-  ok(ENC.v === 2 && ENC.z === 1 && ENC.n > 0, "the payload is v2: compressed, with its length");
+  const core = P.openEnc(ENC, PW, null, { core: true });
+  const refs = [...P.refsIn(P.openEnc(ENC, PW, P.mediaFromDir(ROOT), { stage: "refs" }))];
+  ok(ENC.v === 3 && ENC.z === 1 && ENC.n > 0 && /^[0-9a-f]{24}$/.test(ENC.x || "") && ENC.xn > 0 &&
+    fs.existsSync(path.join(ROOT, P.MEDIA_DIR, ENC.x + ".bin")),
+    "the payload is v3: compressed, the cards in the page and the rest in media/" + ENC.x + ".bin");
+  let stray = [];
+  (function walk(p) {
+    Object.keys(p).forEach(k => { if (!P.CARD_KEYS.has(k)) stray.push(k); });
+    if (p.profile && Object.keys(p.profile).length) stray.push("profile.*");
+    (p.unions || []).forEach(u => { Object.keys(u).forEach(k => { if (!P.UNION_KEYS.has(k)) stray.push("union." + k); }); (u.c || []).forEach(walk); });
+  })(core);
+  ok(!stray.length, "the page's own payload holds only what the cards show" + (stray.length ? " — also: " + [...new Set(stray)].join(", ") : ""));
   ok(refs.length > 0 && refs.every(id => fs.existsSync(path.join(ROOT, P.MEDIA_DIR, id + ".bin"))),
     "every bio picture the payload references is in media/ (" + refs.length + ")");
   let inline = 0, cardImgs = 0;
@@ -185,7 +196,8 @@ ok(true, "decryption with configured password");
     (p.unions || []).forEach(u => (u.c || []).forEach(walk));
   })(core);
   ok(cardImgs > 0 && inline === 0, "card portraits stay in the payload: the first view needs nothing from media/");
-  ok(html.length < 3e6, "the page stays small (" + (html.length / 1e6).toFixed(2) + " MB): the bio pictures are not in it");
+  ok(html.length < 1.5e6, "the page stays small (" + (html.length / 1e6).toFixed(2) + " MB): only the cards are in it");
+  ok(js.includes("function mergeExtras") && js.includes("const EXTRAS_BUF"), "the page merges the rest of the data in when it lands");
   ok(js.includes("function tinf_uncompress") && js.includes('new DecompressionStream("deflate-raw")'),
     "the page inflates the payload, with a fallback decoder for older browsers");
 }
@@ -956,7 +968,7 @@ section("No names in the plaintext repo");
       try { P.openMediaFile(ENC, PW, fsx.readFileSync(require("path").join(ROOT, P.MEDIA_DIR, n))); return false; }
       catch (_) { return true; }
     });
-    ok(!notSealed.length, "every file in media/ is a picture sealed under the payload key (" + mediaNames.length + ")" +
+    ok(!notSealed.length, "every file in media/ is sealed under the payload key (" + mediaNames.length + ")" +
       (notSealed.length ? " — not: " + notSealed.slice(0, 5).join(", ") : ""));
     ok(!unclosed.length, "every ft-allow-names block is closed" +
       (unclosed.length ? " — unterminated in " + unclosed.join(", ") : ""));

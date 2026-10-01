@@ -11,11 +11,11 @@
  * ("data:image/jpeg;base64,...."). Keep originals wherever you like — they
  * are not stored in the repo.
  *
- * Since 1 Oct 2026 the payload is v2 (tools/payload.js): compressed, and the bio
- * pictures (imgL, profile.docs[].img) are written to media/ as encrypted files of
- * their own, so the page carries only what the first view needs. data.json is
- * unchanged by this: it always holds every picture inline. Commit media/ with
- * index.html — the commit hook refuses one without the other.
+ * Since 1 Oct 2026 the payload is v3 (tools/payload.js): the page carries only what
+ * the tree's cards show; bios, notes, sources and places are one encrypted file in
+ * media/, and each bio picture (imgL, profile.docs[].img) is one more. data.json is
+ * unchanged by this: it always holds everything, every picture inline. Commit media/
+ * with index.html — the commit hook refuses one without the other.
  */
 "use strict";
 const fs = require("fs");
@@ -165,10 +165,15 @@ function readEnc(html) {
      * encrypt in the same session is not refused by the freshness guard above. */
     writeStamp(sealed.enc);
     console.log("re-encrypted DATA into index.html (page " + Buffer.byteLength(out) + " bytes; " + sealed.media.size +
-      " bio pictures in media/: " + mw.written + " written, " + mw.kept + " unchanged). Run the gate, then commit index.html and media/ together.");
-    const orphans = P.orphanMedia(ROOT, new Set(sealed.media.keys()));
-    if (orphans.length) console.log("note: " + orphans.length + " file(s) in media/ are no longer used by the payload " +
-      "(a picture changed or went). They are harmless; removing them is a deletion, so it is the owner's call.");
+      " files in media/: " + mw.written + " written, " + mw.kept + " unchanged). Run the gate, then commit index.html and media/ together.");
+    /* files the payload no longer uses (the last edit's extras, a picture that changed) leave the site:
+     * moved to _to_delete/, never deleted. git sees them as removed; that goes in the same commit. */
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    const moved = P.parkOrphans(ROOT, new Set(sealed.media.keys()), path.join("_to_delete", "media-" + stamp));
+    if (moved.length) console.log("note: " + moved.length + " file(s) the payload no longer uses moved from media/ to " +
+      "_to_delete/media-" + stamp + "/ — commit their removal with index.html.");
+    const left = P.orphanMedia(ROOT, new Set(sealed.media.keys()));
+    if (left.length) console.log("note: " + left.length + " unused file(s) could not be moved out of media/: " + left.slice(0, 3).join(", "));
     console.log(newSalt
       ? "note: NEW SALT — every family member must re-enter the password."
       : "note: salt unchanged — family devices stay unlocked.");

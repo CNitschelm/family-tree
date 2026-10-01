@@ -18,7 +18,7 @@ node tools/crypt.js encrypt   # writes new ENC into index.html
 node tests/run.js             # must pass before committing
 ```
 
-- `media/` — the bio pictures (large portraits and the original records), each AES-GCM encrypted under the same key, one file per picture; the page fetches them once the tree is on screen. `tools/payload.js` is the one place that reads and writes the payload and these files; `data.json` still holds every picture inline.
+- `media/` — everything the tree's cards don't show, AES-GCM encrypted under the same key: one file with the bios, notes, sources and places, and one per bio picture (large portraits and the original records). The page itself carries only the cards; it downloads the rest at once and the pictures after it. `tools/payload.js` is the one place that reads and writes the payload and these files; `data.json` still holds everything, every picture inline.
 - `favicon.ico`, `favicon.svg`, `apple-touch-icon.png` and `favicon.png` — public (just the logo, the same as the personal site's).
 - `tests/run.js` — zero-dependency regression suite.
 
