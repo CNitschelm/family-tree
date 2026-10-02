@@ -29,7 +29,7 @@ const ok = (c, m) => { if (c) { pass++; console.log('  ok  ' + m); } else { fail
 
 // ---- a throwaway repo with the real tools in it
 fs.mkdirSync(path.join(T, 'tools')); fs.mkdirSync(path.join(T, 'checks'));
-for (const f of ['tools/ledger.js', 'tools/change.js', 'tools/crypt.js', 'tools/lock.js']) fs.copyFileSync(path.join(SRC, f), path.join(T, f));
+for (const f of ['tools/ledger.js', 'tools/payload.js', 'tools/change.js', 'tools/crypt.js', 'tools/lock.js']) fs.copyFileSync(path.join(SRC, f), path.join(T, f));
 const PW = 'test-only-password';
 fs.writeFileSync(path.join(T, '.password'), PW);
 const SALT = crypto.randomBytes(16).toString('base64'), ITER = 1000;
@@ -189,6 +189,16 @@ console.log('== reading the archive');
 ok(L.quoteIn(URL_C, 'Probus Épervine (1850, 1920)').ok === true, 'an accent written as an HTML entity matches a quote that spells it out');
 ok(L.quoteIn(URL_C, 'née à Marrowby — café').ok === true, 'a Latin-1 page is read as Latin-1, not as broken UTF-8');
 ok(L.quoteIn(URL_D, 'anything').ok === null, 'a copy with no words in it counts as unread, not as a copy that lacks the quote');
+
+console.log('== the gazetteer path');
+{
+  const root = { id: 'c001', gaz: { valeton: { n: 'Valeton' } }, unions: [{ c: [{ id: 'c002' }] }] };
+  ok(L.getField(root, 'gaz.valeton').n === 'Valeton' && L.getField(root, 'gaz.marrowby') === undefined, 'gaz.<key> reads one gazetteer entry on the root card');
+  L.setField(root, 'gaz.marrowby', { n: 'Marrowby', lat: 1, lon: 2 });
+  ok(root.gaz.marrowby && root.gaz.marrowby.n === 'Marrowby' && root.gaz.valeton.n === 'Valeton', 'gaz.<key> adds one entry and leaves the others alone');
+  let refused = false; try { L.setField(root.unions[0].c[0], 'gaz.x', { n: 'X' }); } catch (e) { refused = true; }
+  ok(refused && root.unions[0].c[0].gaz === undefined, 'a card that is not the root cannot be given a gazetteer');
+}
 
 fs.rmSync(T, { recursive: true, force: true });
 console.log(`\n${pass} passed, ${failN} failed`);

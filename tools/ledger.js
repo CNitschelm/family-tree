@@ -69,6 +69,7 @@ const nextId = (data, retired = []) => {
 //   headline headline_fr  bio[2]  bio_fr[2]  hl[0]  hl_fr[0]
 //   sources[1].label  sources[url=https://…].label_fr  docs[0].tr
 //   src[3].l  src[url=https://…].q  pl[4].c  pl[t=arrival,k=town].w  union[0].n_fr
+//   gaz.<key> (root card only: one gazetteer entry, set whole with from/to)
 const PROFILE_LISTS = new Set(['bio', 'bio_fr', 'hl', 'hl_fr', 'sources', 'docs']);
 const PROFILE_SCALARS = new Set(['headline', 'headline_fr']);
 const NODE_LISTS = { src: 'src', pl: 'pl', union: 'unions' };
@@ -104,6 +105,12 @@ function pick(list, sel, head) {
 }
 function resolve(node, p) {
   const { head, sel, key } = parsePath(p);
+  // The gazetteer lives on the root card only, as one object keyed by place: "gaz.<key>" names one
+  // entry. A card without a gazetteer cannot be given one this way (that would split the gazetteer).
+  if (head === 'gaz' && sel === undefined && key) {
+    if (!node.gaz || typeof node.gaz !== 'object') return { obj: null, prop: key, missing: 'the gazetteer lives on the root card' };
+    return { obj: node.gaz, prop: key };
+  }
   if (sel === undefined && !key) {
     if (PROFILE_SCALARS.has(head)) return { obj: node.profile || null, prop: head, ensure: () => (node.profile = node.profile || {}) };
     if (PROFILE_LISTS.has(head) || NODE_LISTS[head]) throw new Error(`"${p}" names a whole list; name one element`);
