@@ -23,9 +23,13 @@
 # the bio pictures, AES-GCM encrypted under the payload key (tools/payload.js); tests/run.js §14
 # proves every file there opens with that key, so nothing readable can be filed under this name
 !/media/*.bin
+# the map's base layers (public geography, no family data; tools/mapfile.js) — tests/run.js decodes them
+!/map/*.json
 !/checks/*.js
 !/tests/run.js
 !/tests/ledger.js
+!/tests/browser.js
+!/tests/research.js
 !/tools/*.js
 !/githooks/*
 

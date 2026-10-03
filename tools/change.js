@@ -33,6 +33,9 @@
  *     { "card": "c042", "op": "remove", "list": "pl", "at": "t=residence,k=chenoa", "kind": "fact", "evidence": [ … ] }
  *   ]
  * }
+ * and, since 3 Oct 2026, what it does to the Research view's data (CLAUDE.md, "Research"):
+ *   "research": "i3 s9a"            the research items this change moves (investigation, source or visit ids)
+ *   "research": "none: <why>"       or why it moves none
  * kind: fact | grade | source | wording | translation | structure | owner
  * evidence item: { src, quote } | { src, absent: ["word", …] } | { src, read: "image"|"pdf"|"original", transcription }
  *                and always "opened": the date the source was actually opened.
@@ -57,6 +60,22 @@ let cs;
 try { cs = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { console.error(`cannot read ${file}: ${e.message}`); process.exit(2); }
 if (!cs.why || typeof cs.why !== 'string') errors.push('the change file needs "why": one line saying what it does and why');
 if (!Array.isArray(cs.edits) || !cs.edits.length) errors.push('the change file needs "edits": [ … ]');
+/* Cory, 2 Oct 2026: the Research view is kept current without being asked. So every change says which
+   research items it moves — and research.json must show them by the time the gate runs — or why none. */
+if (typeof cs.research !== 'string' || !cs.research.trim()) {
+  errors.push('the change file needs "research": the research ids it moves ("i3 s9a"), or "none: <why>". Update research.json first: node tools/research.js log|set …');
+} else if (/^none\s*:/i.test(cs.research)) {
+  if (cs.research.replace(/^none\s*:/i, '').trim().length < 8) errors.push('"research": "none: <why>" needs a reason of a few words');
+} else if (!/^[a-z][a-z0-9-]*(?:[\s,;]+[a-z][a-z0-9-]*)*$/i.test(cs.research.trim())) {
+  errors.push('"research" must list research ids ("i3 s9a") or say "none: <why>"');
+} else {
+  let RJ = null, R = null;
+  try { RJ = require('./research.js'); R = RJ.load(); } catch (_) {}
+  if (R) {
+    const unknown = cs.research.split(/[\s,;]+/).filter(Boolean).filter(id => !RJ.find(R, id));
+    if (unknown.length) errors.push('"research" names ' + unknown.join(', ') + ', which research.json does not have');
+  } else warnings.push('research.json is not here, so the research ids were not checked (the gate will check them)');
+}
 
 try { L.assertLock(who); } catch (e) { console.error('REFUSED: ' + e.message); process.exit(1); }
 
@@ -369,7 +388,7 @@ if (errors.length) {
 const afterHash = L.hashData(working);
 const rec = {
   id: 'CS-' + new Date().toISOString().replace(/[-:]/g, '').slice(0, 15),
-  at: new Date().toISOString(), who, why: cs.why, file: path.basename(file),
+  at: new Date().toISOString(), who, why: cs.why, research: cs.research, file: path.basename(file),
   before_hash: beforeHash, after_hash: afterHash, edits: applied,
   retired: applied.flatMap(a => a.retired || []),
 };

@@ -29,7 +29,7 @@ const ok = (c, m) => { if (c) { pass++; console.log('  ok  ' + m); } else { fail
 
 // ---- a throwaway repo with the real tools in it
 fs.mkdirSync(path.join(T, 'tools')); fs.mkdirSync(path.join(T, 'checks'));
-for (const f of ['tools/ledger.js', 'tools/payload.js', 'tools/change.js', 'tools/crypt.js', 'tools/lock.js']) fs.copyFileSync(path.join(SRC, f), path.join(T, f));
+for (const f of ['tools/ledger.js', 'tools/payload.js', 'tools/change.js', 'tools/crypt.js', 'tools/lock.js', 'tools/research.js']) fs.copyFileSync(path.join(SRC, f), path.join(T, f));
 const PW = 'test-only-password';
 fs.writeFileSync(path.join(T, '.password'), PW);
 const SALT = crypto.randomBytes(16).toString('base64'), ITER = 1000;
@@ -90,6 +90,10 @@ delete env.FT_WHO;
 let n = 0;
 function change(cs, extra = []) {
   const f = path.join(T, `cs${++n}.json`);
+  /* every change says what it does to the research data (3 Oct 2026); the tests below that are not about
+     that say "none"; research: null leaves the field out */
+  cs = Object.assign({ research: 'none: a test of the change loop' }, cs);
+  if (cs.research === null) delete cs.research;
   fs.writeFileSync(f, JSON.stringify(cs));
   const r = spawnSync(process.execPath, [path.join(T, 'tools', 'change.js'), f, ...extra], { cwd: T, env, encoding: 'utf8' });
   return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
@@ -163,6 +167,17 @@ r = change({ why: 'test', edits: [
 ok(r.code === 1 && /evidence the ruling did not consider/.test(r.out), 'reopening a settled question with evidence it already weighed is refused');
 r = change(E({ field: 'note', find: 'Farmer.', replace: 'A farmer.', kind: 'wording' }));
 ok(r.code === 0, 'an edit the register does not cover goes through');
+
+console.log('== every change says what it does to the research data');
+r = change(Object.assign(E({ field: 'note', find: 'Farmer.', replace: 'A farmer.', kind: 'wording' }), { research: null }));
+ok(r.code === 1 && /needs "research"/.test(r.out), 'a change file that does not say which research items it moves is refused');
+r = change(Object.assign(E({ field: 'note', find: 'Farmer.', replace: 'A farmer.', kind: 'wording' }), { research: 'none:' }));
+ok(r.code === 1 && /needs a reason/.test(r.out), '"none" needs its reason');
+fs.writeFileSync(path.join(T, 'research.json'), JSON.stringify({ schema: 1, updated: '2026-09-24', themes: [], visits: {}, investigations: [
+  { id: 'i1', theme: 't1', qs: [{ q: 'x', state: 'open', src: [{ id: 's1', t: 'x', st: 'ready' }] }] }] }));
+r = change(Object.assign(E({ field: 'note', find: 'Farmer.', replace: 'A farmer.', kind: 'wording' }), { research: 'i1 s99' }));
+ok(r.code === 1 && /s99, which research\.json does not have/.test(r.out), 'a change naming a research item that does not exist is refused');
+fs.rmSync(path.join(T, 'research.json'));
 
 console.log('== one writer, fresh copies, no people added without asking');
 execFileSync(process.execPath, [path.join(T, 'tools', 'lock.js'), 'take', 'other session', 'testing'], { cwd: T, env });

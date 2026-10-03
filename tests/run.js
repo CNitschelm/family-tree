@@ -79,6 +79,42 @@ const js = mScript[1];
 let syntaxOk = true;
 try { new Function(js); } catch (e) { syntaxOk = false; console.error("   " + e.message); }
 ok(syntaxOk, "whole script parses (new Function)");
+/* the script with its comments taken out, for the checks below that count calls: a comment that names a
+   function must not pass or fail them (review, 3 Oct 2026). A small lexer that knows strings, template
+   literals with ${…} in them, and regular expressions; tests/browser.js proves the behaviour itself. */
+function stripComments(src) {
+  let out = "", i = 0, depth = 0, last = "";
+  const n = src.length, tpl = [];
+  const reOK = () => last === "" || /^[(,=:[!&|?{};+\-*%<>~^]$/.test(last) || /^(?:return|typeof|case|do|else|in|of|new|delete|void|throw|yield|await)$/.test(last);
+  while (i < n) {
+    const c = src[i], d = src[i + 1];
+    if (c === "/" && d === "*") { const e = src.indexOf("*/", i + 2); i = e < 0 ? n : e + 2; out += " "; continue; }
+    if (c === "/" && d === "/") { while (i < n && src[i] !== "\n") i++; continue; }
+    if (c === '"' || c === "'") { let j = i + 1; while (j < n && src[j] !== c) { if (src[j] === "\\") j++; j++; } out += src.slice(i, j + 1); i = j + 1; last = c; continue; }
+    if (c === "`" || (c === "}" && tpl.length && depth === tpl[tpl.length - 1])) {
+      if (c === "}") tpl.pop();
+      let j = i + 1;
+      while (j < n && src[j] !== "`" && !(src[j] === "$" && src[j + 1] === "{")) { if (src[j] === "\\") j++; j++; }
+      if (src[j] === "$") { out += src.slice(i, j + 2); tpl.push(depth); i = j + 2; last = "{"; continue; }
+      out += src.slice(i, j + 1); i = j + 1; last = "`"; continue;
+    }
+    if (c === "/" && reOK()) {
+      let j = i + 1, cls = false;
+      while (j < n && src[j] !== "\n") { const ch = src[j]; if (ch === "\\") { j += 2; continue; } if (ch === "[") cls = true; else if (ch === "]") cls = false; else if (ch === "/" && !cls) break; j++; }
+      j++; while (j < n && /[a-z]/i.test(src[j])) j++;
+      out += src.slice(i, j); i = j; last = "/"; continue;
+    }
+    if (c === "{") depth++; else if (c === "}") depth--;
+    out += c; i++;
+    if (!/\s/.test(c)) last = /[\w$]/.test(c) && /^[\w$]+$/.test(last) ? last + c : c;
+  }
+  return out;
+}
+const code = stripComments(js);
+let codeOk = true;
+try { new Function(code); } catch (e) { codeOk = false; console.error("   " + e.message); }
+ok(codeOk && code.length < js.length && !/\/\*[\s\S]*?\*\//.test(code.replace(/"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'/g, "")),
+  "the script still parses with its comments taken out (" + Math.round((js.length - code.length) / 1024) + " KB of comments)");
 
 /* ---------- 2b. One template, two builds ----------
  * index.html is the family build AND the template of the public demo (tools/build-demo.js).
@@ -96,6 +132,7 @@ section("Build template");
   ok(SITE && SITE.store === "ft-" && /SITE\.store \+ "keydb"/.test(js),
     "family storage prefix is ft- (key cache stays ft-keydb)");
   ok(SITE && SITE.autoPw === "" && SITE.search === true && SITE.bornAt === false, "family build asks for its password, has search, no birthplace line");
+  ok(SITE && SITE.research === true, "family build has the Research view");
   const opens = [...html.matchAll(/<!--build:([a-z0-9_-]+)-->/g)].map(m => m[1]);
   const closes = [...html.matchAll(/<!--\/build:([a-z0-9_-]+)-->/g)].map(m => m[1]);
   ok(opens.length > 0 && opens.join() === closes.join(), "build slots are balanced (" + [...new Set(opens)].join(", ") + ")");
@@ -107,7 +144,7 @@ section("Build template");
     fs.writeFileSync(path.join(tmp, "l.txt"), "0AA~Alpha~FR\n1CC~Beta~US\n");
     const slots = {}; opens.forEach(k => { slots[k] = k === "head" ? "<title>Test Tree</title>" : k === "title" ? "Test Tree" : ""; });
     const cfg = { maplbl: "l.txt", synced: "2026-01-01", dataNote: "test build", slots,
-      site: Object.assign({}, SITE, { store: "fttest-", autoPw: "x", search: false }),
+      site: Object.assign({}, SITE, { store: "fttest-", autoPw: "x", search: false, research: false }),
       branches: [tBr[0], tBr[1]], regions: tRg,
       i18n: { en: { intro_title: "Test", search_long: "Test", pwopening: "Opening", pwdemo: "Password: x" },
               fr: { intro_title: "Test", search_long: "Test", pwopening: "Ouverture", pwdemo: "Mot de passe : x" } } };
@@ -119,6 +156,9 @@ section("Build template");
     ok(threw, "a slot the demo config leaves unfilled stops the demo build");
     let threw2 = false; try { const c3 = JSON.parse(JSON.stringify(cfg)); delete c3.i18n.fr.pwopening; BD.build(html, c3, tmp); } catch (_) { threw2 = true; }
     ok(threw2, "a public-password build without its lock-screen words stops the demo build");
+    let threw3 = false; try { const c4 = JSON.parse(JSON.stringify(cfg)); c4.site.research = true; BD.build(html, c4, tmp); } catch (_) { threw3 = true; }
+    ok(threw3, "a demo with the Research view on but no research file of its own stops the demo build");
+    ok(/const MAPFILE = "data:application\/json;base64,/.test(r.html), "the demo carries its map layers inline (it is one file)");
   } catch (e) { ok(false, "tools/build-demo.js still builds from this file — " + e.message); }
   finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 }
@@ -149,6 +189,94 @@ section("Floating controls");
      /id="drawer"[^>]*aria-modal="true"/.test(chrome), "the Filters panel and the menu are labelled dialogs");
   ok(/role="switch"[^>]*aria-checked=/.test(chrome) && /data-view="tree" aria-pressed=/.test(chrome), "switch and toggles expose their state");
   ok(/<div id="filters"[\s\S]*class="tiles"/.test(chrome) && /\.tile\[aria-pressed="true"\]/.test(html), "branch tiles are generated into the Filters panel, one generic rule");
+}
+
+/* ---------- 2d. The map's layers load on open (3 Oct 2026) ----------
+ * Cory, 2 Oct 2026: the Map's data loads only when the Map is opened. The coastlines, borders, detail
+ * boxes and reference town names (245 KB, 123 KB over the wire) moved out of the page into
+ * map/<hash>.json (tools/mapfile.js); the page names it in MAPFILE and fetches it in one place,
+ * needMapData(), which only the map's own drawing paths reach. tests/browser.js proves it in a browser. */
+section("Map layers (load on open)");
+{
+  const MF = require("../tools/mapfile.js");
+  let info = null;
+  try { info = MF.check(html); } catch (e) { console.error("   " + e.message); }
+  ok(!!info, "index.html names its map file, which exists and is what its name says" + (info ? " (" + info.name + ", " + info.bytes + " bytes)" : ""));
+  ok(!/const (MAPGEO|MAPHI|MAPLBL) = /.test(html), "no map layer is inline in the page any more");
+  ok((code.match(/fetch\(MAPFILE\b/g) || []).length === 1 && /function needMapData\(\)\{[\s\S]{0,240}?fetch\(MAPFILE/.test(code),
+    "the map file is fetched in exactly one place, needMapData()");
+  ok((code.match(/\bneedMapData\(\)/g) || []).length === 2 && /const needMap = \(\) => Promise\.all\(\[needExtras\(\), needMapData\(\)\]\);/.test(code),
+    "needMapData() runs only through needMap()");
+  /* the function each call sits in: the nearest "function NAME(" before it */
+  const callers = [...code.matchAll(/\bneedMap\(\)/g)].map(m => { const fns = [...code.slice(0, m.index).matchAll(/\nfunction (\w+)\(/g)]; return fns.length ? fns[fns.length - 1][1] : ""; });
+  ok(callers.length === 2 && callers.sort().join() === "buildPins,showJourney", "needMap() is called only where the map draws (" + callers.join(", ") + ")");
+  ok(/fetch\(MAPFILE, \{cache: mapTries\+\+ \? "no-cache" : "force-cache"\}\)/.test(code), "a second try for the map file asks the server, not the stored error");
+  if (info) {
+    const layers = JSON.parse(fs.readFileSync(path.join(ROOT, info.name), "utf8"));
+    /* the encoder is delta + zig-zag base64 varints; decode it here the same way the page does,
+       so a change to either side fails loudly */
+    const IDX = {}; "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".split("").forEach((c, i) => IDX[c] = i);
+    const decode = str => str.split("|").map(r => {
+      const pts = []; let i = 0, x = 0, y = 0, c, v, sh;
+      while (i < r.length) {
+        v = 0; sh = 0; do { c = IDX[r[i++]]; v |= (c & 31) << sh; sh += 5; } while (c & 32);
+        x += (v & 1) ? -((v + 1) >>> 1) : (v >>> 1);
+        v = 0; sh = 0; do { c = IDX[r[i++]]; v |= (c & 31) << sh; sh += 5; } while (c & 32);
+        y += (v & 1) ? -((v + 1) >>> 1) : (v >>> 1);
+        pts.push([x / 1000, y / 1000]);
+      }
+      return pts;
+    });
+    const land = decode(layers.geo.land);
+    ok(land.length > 200, "basemap decodes to " + land.length + " land rings");
+    ok(land.flat().every(([lo, la]) => lo >= -180.5 && lo <= 180.5 && la >= -90 && la <= 90), "every decoded coordinate is a real lon/lat");
+    ok(decode(layers.geo.usst).length > 20, "US state borders decode");
+    ok(layers.hi.length >= 10 && layers.hi.every(h => decode(h.land || "").length >= 0 && h.b.length === 4), "the detail boxes decode (" + layers.hi.length + ")");
+    const recs = layers.lbl.split("\t");
+    ok(recs.length > 3000, "reference place labels present (" + recs.length + ")");
+    let lx = 0, ly = 0; const pts = [];
+    for (const rec of recs) {
+      let i = 1, v, sh, c;
+      v = 0; sh = 0; do { c = IDX[rec[i++]]; v |= (c & 31) << sh; sh += 5; } while (c & 32);
+      lx += (v & 1) ? -((v + 1) >>> 1) : (v >>> 1);
+      v = 0; sh = 0; do { c = IDX[rec[i++]]; v |= (c & 31) << sh; sh += 5; } while (c & 32);
+      ly += (v & 1) ? -((v + 1) >>> 1) : (v >>> 1);
+      const parts = rec.slice(i).split("~");
+      pts.push({ r: +rec[0], lon: lx / 1000, lat: ly / 1000, n: parts[1], cc: parts[2] });
+    }
+    ok(pts.every(p => p.r >= 0 && p.r <= 6 && p.n && p.cc && Math.abs(p.lat) <= 90 && Math.abs(p.lon) <= 180), "every reference label decodes to a real point");
+    const near = (lo, la, d) => pts.filter(p => Math.abs(p.lon - lo) < d && Math.abs(p.lat - la) < d).length;
+    ok(near(7.17, 48.03, 0.4) >= 4, "the Munster valley has towns to orient by");
+    ok(near(-122.44, 45.92, 0.6) >= 4, "the Amboy country has towns to orient by");
+    ok(near(-88.84, 41.35, 0.6) >= 4, "the Ottawa country has towns to orient by");
+    ok(near(-70.76, 43.07, 0.5) >= 4, "the Portsmouth country has towns to orient by");
+    ok(!/Nitschelm|Schweitzer/.test(layers.lbl), "reference labels carry no family names");
+    ok(!/Nitschelm|Gunsbach|Amboy/.test(JSON.stringify({ geo: layers.geo, hi: layers.hi })), "the base layers carry no family place names");
+  }
+}
+
+/* ---------- 2e. The Research view (3 Oct 2026) ----------
+ * Its data is media/research.bin, sealed by tools/research.js under the payload key and fetched the
+ * first time the view is opened (Cory, 2 Oct 2026); the badges come from media/research-cards.bin.
+ * The page itself carries no research content. */
+section("Research view (load on open)");
+{
+  ok(/const RESFILES = \{data:"media\/research\.bin", cards:"media\/research-cards\.bin"\};/.test(js), "the page names the two research files");
+  ok((code.match(/openResearchFile\(RESFILES\.data\b/g) || []).length === 1 && /function needResearch\(\)\{[\s\S]{0,200}?openResearchFile\(RESFILES\.data/.test(code),
+    "the research file is fetched in exactly one place, needResearch()");
+  const nr = (code.match(/\bneedResearch\(\)/g) || []).length;
+  ok(nr === 3, "needResearch() is reached only from openResearch() and its Retry button (" + nr + " mentions)");
+  ok(/\{cache:"no-cache"\}/.test(code.slice(code.indexOf("function openResearchFile"), code.indexOf("function needResearch"))), "the research files are revalidated (stable names)");
+  ok((code.match(/\bopenResearch\(/g) || []).length === 3, "openResearch() runs only from setView and an address that names it");
+  const need = ["view_research", "res_title", "res_loading", "res_err", "rs_cory", "rs_done", "rq_answered", "rt_assist", "ri_3", "rq_bio_open"];
+  ok(need.every(k => /\S/.test((js.match(new RegExp("\\b" + k + ':"([^"]*)"', "g")) || []).join(""))), "Research strings exist");
+  /* no research content in the page: none of research.json's titles, when it is here */
+  let R = null; try { R = JSON.parse(fs.readFileSync(path.join(ROOT, "research.json"), "utf8")); } catch (_) {}
+  if (R) {
+    const leaked = (R.investigations || []).map(iv => iv.title).filter(t => t && t.length > 12 && html.includes(t));
+    ok(!leaked.length, "no research content in the page" + (leaked.length ? ": " + leaked.slice(0, 3).join("; ") : ""));
+  }
+  ok(/data-view="research"/.test(html) && /id="resview"/.test(html), "the Research tab and view are in the markup");
 }
 
 /* ---------- 3. Decrypt DATA ---------- */
@@ -553,10 +681,7 @@ ok(new Set(allNodes.map(n => n.gen)).size >= 13, "generations computed");
 
 /* ---------- 12. Map view ---------- */
 section("Map view");
-ok(/const MAPGEO = \{/.test(html), "basemap geometry present in the plaintext layer");
 ok(html.includes('id="mapview"') && html.includes('id="mapcanvas"'), "map view markup present");
-ok(!/\bMAPGEO\b[\s\S]{0,400}?(Nitschelm|Gunsbach|Amboy)/.test(html),
-  "basemap block carries no family place names");
 /* The map overlays are children of #mapview, so their wheel events bubble into
    the zoom handler. Without the guard, two fingers on a trackpad over the
    journey sheet zoomed the map instead of scrolling the text. */
@@ -566,54 +691,6 @@ ok(/mapEl\.addEventListener\("wheel"[\s\S]{0,600}?closest\(MAP_OVERLAYS\)\)\s*re
   "map zoom ignores wheel events that land on an overlay, and bails before preventDefault");
 ok(/#mapsheet\{[^}]*overscroll-behavior:contain/.test(html),
   "journey sheet contains its own scroll");
-{
-  /* the encoder is delta + zig-zag base64 varints; decode it here the same way
-     the page does, so a change to either side fails loudly */
-  const IDX = {}; "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-    .split("").forEach((c, i) => IDX[c] = i);
-  const geoSrc = html.match(/const MAPGEO = \{[\s\S]*?\n\};/)[0];
-  const MAPGEO = vm.runInNewContext(geoSrc + " MAPGEO");
-  const decode = str => str.split("|").map(r => {
-    const pts = []; let i = 0, x = 0, y = 0, c, v, sh;
-    while (i < r.length) {
-      v = 0; sh = 0; do { c = IDX[r[i++]]; v |= (c & 31) << sh; sh += 5; } while (c & 32);
-      x += (v & 1) ? -((v + 1) >>> 1) : (v >>> 1);
-      v = 0; sh = 0; do { c = IDX[r[i++]]; v |= (c & 31) << sh; sh += 5; } while (c & 32);
-      y += (v & 1) ? -((v + 1) >>> 1) : (v >>> 1);
-      pts.push([x / 1000, y / 1000]);
-    }
-    return pts;
-  });
-  const land = decode(MAPGEO.land);
-  const all = land.flat();
-  ok(land.length > 200, "basemap decodes to " + land.length + " land rings");
-  ok(all.every(([lo, la]) => lo >= -180.5 && lo <= 180.5 && la >= -90 && la <= 90),
-    "every decoded coordinate is a real lon/lat");
-  ok(decode(MAPGEO.usst).length > 20, "US state borders decode");
-
-  /* the reference place-name layer: what keeps a zoomed-in view from being blank */
-  const MAPLBL = vm.runInNewContext(html.match(/const MAPLBL = "[\s\S]*?";/)[0] + " MAPLBL");
-  const recs = MAPLBL.split("\t");
-  ok(recs.length > 3000, "reference place labels present (" + recs.length + ")");
-  let lx = 0, ly = 0; const pts = [];
-  for (const rec of recs) {
-    let i = 1, v, sh, c;
-    v = 0; sh = 0; do { c = IDX[rec[i++]]; v |= (c & 31) << sh; sh += 5; } while (c & 32);
-    lx += (v & 1) ? -((v + 1) >>> 1) : (v >>> 1);
-    v = 0; sh = 0; do { c = IDX[rec[i++]]; v |= (c & 31) << sh; sh += 5; } while (c & 32);
-    ly += (v & 1) ? -((v + 1) >>> 1) : (v >>> 1);
-    const parts = rec.slice(i).split("~");
-    pts.push({ r: +rec[0], lon: lx / 1000, lat: ly / 1000, n: parts[1], cc: parts[2] });
-  }
-  ok(pts.every(p => p.r >= 0 && p.r <= 6 && p.n && p.cc &&
-    Math.abs(p.lat) <= 90 && Math.abs(p.lon) <= 180), "every reference label decodes to a real point");
-  const near = (lo, la, d) => pts.filter(p => Math.abs(p.lon - lo) < d && Math.abs(p.lat - la) < d).length;
-  ok(near(7.17, 48.03, 0.4) >= 4, "the Munster valley has towns to orient by");
-  ok(near(-122.44, 45.92, 0.6) >= 4, "the Amboy country has towns to orient by");
-  ok(near(-88.84, 41.35, 0.6) >= 4, "the Ottawa country has towns to orient by");
-  ok(near(-70.76, 43.07, 0.5) >= 4, "the Portsmouth country has towns to orient by");
-  ok(!/Nitschelm|Schweitzer/.test(MAPLBL), "reference labels carry no family names");
-}
 
 /* gazetteer + place trails live INSIDE the ciphertext, like every other fact */
 const DATA = get("DATA");
@@ -942,12 +1019,13 @@ section("No names in the plaintext repo");
 
     const hits = [];
     for (const f of files) {
-      if (/^media\/[0-9a-f]{24}\.bin$/.test(f)) continue;   /* ciphertext — proven to be, below */
+      if (/^media\/[0-9a-f]{24}\.bin$/.test(f) || P.STABLE_MEDIA.has(f.replace(/^media\//, ""))) continue;   /* ciphertext — proven to be, below */
       let text;
       try { text = fsx.readFileSync(require("path").join(ROOT, f), "utf8"); } catch (_) { continue; }
       if (f === "index.html") text = text
         .replace(/const ENC = \{[\s\S]*?\};/, "")
-        .replace(/const MAPLBL = "[\s\S]*?";/, "");   /* world city labels, not people */
+        .replace(/const MAPLBL = "[\s\S]*?";/, "");   /* world city labels, not people (before 3 Oct 2026) */
+      if (/^map\/[0-9a-f]{16}\.json$/.test(f)) text = text.replace(/"lbl":"(?:[^"\\]|\\.)*"/, "");   /* the same labels, since */
       text = stripAllowed(text, f);
       const low = text.toLowerCase();
       const bad = new Set();
@@ -964,7 +1042,7 @@ section("No names in the plaintext repo");
     let mediaNames = [];
     try { mediaNames = fsx.readdirSync(require("path").join(ROOT, P.MEDIA_DIR)); } catch (_) { /* none yet */ }
     const notSealed = mediaNames.filter(n => {
-      if (!/^[0-9a-f]{24}\.bin$/.test(n)) return true;
+      if (!/^[0-9a-f]{24}\.bin$/.test(n) && !P.STABLE_MEDIA.has(n)) return true;
       try { P.openMediaFile(ENC, PW, fsx.readFileSync(require("path").join(ROOT, P.MEDIA_DIR, n))); return false; }
       catch (_) { return true; }
     });

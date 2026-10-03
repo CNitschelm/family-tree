@@ -15,9 +15,15 @@
  *               a file in with {{include:<file>}}. Every slot in the template needs a value,
  *               and every value needs a slot: a new slot fails the build until it is decided.
  *   synced, dataNote → the SYNCED date and the comment above it
- *   maplbl    → the reference place names, one "<rank><lon><lat>~<name>~<ISO2>" record per line
+ *   maplbl    → the reference place names, one "<rank><lon><lat>~<name>~<ISO2>" record per line. Since
+ *               3 Oct 2026 the family page fetches its map layers from map/<hash>.json on the first Map
+ *               open; the demo is one file, so it carries the same layers (with these names) inline, as a
+ *               data: address in MAPFILE — still decoded only when the Map is opened.
  *   data, password, salt, iter → the payload: <data> encrypted as tools/crypt.js does (v2, compressed),
  *               except that every picture stays inline: the demo is one file
+ *   research  → when site.research is true: a made-up research file for the demo's own invented people
+ *               (tools/research.js's format; card ids from <data>), sealed under the demo's password and
+ *               inlined in RESFILES. With site.research false the Research tab is hidden.
  *
  * The demo's config and data are NOT in this repo (it is public and GitHub Pages serves every
  * file in it); they live with the site that publishes the demo. This file carries no names and
@@ -63,8 +69,9 @@ const js = v => JSON.stringify(v);
 /* slot markers: <!--build:NAME--> … <!--/build:NAME--> */
 const SLOT = /<!--build:([a-z0-9_-]+)-->([\s\S]*?)<!--\/build:\1-->/g;
 
-function build(template, cfg, dir) {
+function build(template, cfg, dir, opts = {}) {
   let html = template;
+  const root = opts.root || path.join(__dirname, "..");   /* where the template's map file is */
   const file = f => { const p = path.join(dir, f); if (!fs.existsSync(p)) die("missing " + f + " in the demo folder"); return fs.readFileSync(p, "utf8"); };
   const include = v => String(v).replace(/\{\{include:([^}]+)\}\}/g, (_, f) => file(f.trim()).replace(/\s+$/, ""));
 
@@ -125,12 +132,21 @@ function build(template, cfg, dir) {
     () => "/* ---------------- DATA (" + cfg.dataNote + ") ---------------- */\nconst SYNCED = \"" + cfg.synced + "\";");
   if (!html.includes('const SYNCED = "' + cfg.synced + '";')) die("could not set SYNCED");
 
-  /* 6. reference place names: one record per line in the file, tab-joined in the page */
+  /* 6. the map's layers: the template's coastlines and borders with the demo's reference place names
+     (one record per line in the file), inline as a data: address — the demo is one file */
   const recs = file(cfg.maplbl).split(/\r?\n/).filter(Boolean);
   if (!recs.every(r => /^[0-6][A-Za-z0-9+/]+~[^~\t]+~[A-Z]{2}$/.test(r))) die("maplbl: a record is malformed");
-  const lbl = html.match(/const MAPLBL = "(?:[^"\\]|\\.)*";/);
-  if (!lbl) die("template has no MAPLBL line");
-  html = html.replace(lbl[0], () => "const MAPLBL = " + js(recs.join("\t")) + ";");
+  const mf = html.match(/const MAPFILE = "([^"]*)";/);
+  if (!mf) die("template has no MAPFILE line");
+  let layers;
+  try { layers = JSON.parse(fs.readFileSync(path.join(root, mf[1]), "utf8")); } catch (e) { die("cannot read the template's map file " + mf[1] + ": " + e.message); }
+  layers.lbl = recs.join("\t");
+  require("./mapfile.js").validate(layers);
+  html = html.replace(mf[0], () => "const MAPFILE = " + js("data:application/json;base64," + require("./mapfile.js").serialise(layers).toString("base64")) + ";");
+  /* 7. Research: the demo decides (site.research); on, it needs its own made-up research file */
+  if (!/const RESFILES = \{[^\n]*\};/.test(html)) die("template has no RESFILES line");
+  if (cfg.site.research && !cfg.research) die("site.research is on, so the demo needs a research file (\"research\" in demo.json) — or set site.research to false");
+  if (cfg.site.research) file(cfg.research);
   return { html, defaults };
 }
 
@@ -146,7 +162,18 @@ async function encrypt(html, cfg, dir) {
   /* tools/payload.js: v2, compressed; split:false keeps every picture inline — the demo is one file */
   const sealed = require("./payload.js").sealData(data, cfg.password, { salt, iter, split: false });
   if (!/const ENC = \{[^\n]*\};/.test(html)) die("template has no ENC line");
-  return { html: html.replace(/const ENC = \{[^\n]*\};/, () => sealed.line), iv: sealed.enc.iv, people: count(data) };
+  html = html.replace(/const ENC = \{[^\n]*\};/, () => sealed.line);
+  if (cfg.site.research) {
+    /* the demo's research, checked like the family's (its people must be the demo's cards), sealed the same way */
+    const RJ = require("./research.js");
+    const R = JSON.parse(fs.readFileSync(path.join(dir, cfg.research), "utf8"));
+    const v = RJ.validate(R, { cards: all.map(x => ({ id: x.p.id, name: x.p.name, years: x.p.years })), branches: cfg.branches.map(b => b.key), quiet: true });
+    if (v.errors.length) die("research: " + v.errors.slice(0, 5).join("; "));
+    const f = RJ.sealed(R, cfg.password, sealed.enc);
+    const uri = b => "data:application/octet-stream;base64," + b.toString("base64");
+    html = html.replace(/const RESFILES = \{[^\n]*\};/, () => "const RESFILES = " + JSON.stringify({ data: uri(f.data), cards: uri(f.cards) }) + ";");
+  }
+  return { html, iv: sealed.enc.iv, people: count(data) };
 }
 function count(p) { let n = 1; (p.unions || []).forEach(u => (u.c || []).forEach(c => { n += count(c); })); return n; }
 

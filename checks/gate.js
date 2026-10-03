@@ -14,7 +14,10 @@
  *   3. every edit's evidence still holds against the archive: its quote is in our copy of
  *      the source, and a "no record says X" is still true of that copy;
  *   4. every register entry an edit cites exists, and nothing reuses a retired card id;
- *   5. tests/run.js passes, and the prose linter finds no new HIGH on any card.
+ *   5. tests/run.js and tests/research.js pass, and the prose linter finds no new HIGH on any card;
+ *   6. research.json is valid, media/research.bin and research-cards.bin are exactly what it makes, and
+ *      every change set above that says it moves research items shows them moved in research.json
+ *      (Cory, 2 Oct 2026: the Research view is kept current without anyone asking).
  * On a pass it writes .gate-stamp with the payload's iv. The commit-msg hook refuses to
  * commit an index.html whose iv has no passing stamp — so skipping the gate is not an option,
  * and neither is editing after it passed.
@@ -130,6 +133,11 @@ const tl = (t.stdout || '').trim().split('\n');
 const summary = tl.filter(l => /passed|failed|FAIL/i.test(l)).slice(-3).join(' | ');
 if (t.status !== 0) fail(`tests/run.js failed: ${summary}\n    ` + tl.filter(l => /^\s*(FAIL|✗|not ok)/.test(l)).slice(0, 10).join('\n    '));
 else console.log(`  ok  tests: ${summary}`);
+/* the research tools' own tests (privacy rules, claims, the hook, crypt.js's keep rule): invented data, a temp repo */
+const tr = spawnSync(process.execPath, [path.join(L.ROOT, 'tests', 'research.js')], { cwd: L.ROOT, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
+const trl = (tr.stdout || '').trim().split('\n');
+if (tr.status !== 0) fail(`tests/research.js failed: ${trl.slice(-1)[0]}\n    ` + trl.filter(l => /^\s*FAIL/.test(l)).slice(0, 10).join('\n    '));
+else console.log(`  ok  research tools: ${trl.slice(-1)[0]}`);
 
 function lint(d) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-'));
@@ -157,6 +165,25 @@ if (trail.length) {
     if (freshMed.length) note(`${freshMed.length} new medium finding(s) on changed cards — read them: ` + freshMed.slice(0, 4).map(x => `${x.cid} ${x.check} ${x.path}`).join('; '));
   } catch (e) { fail(`the prose linter did not run: ${e.message}`); }
 } else console.log('  --  no payload change; linter comparison skipped');
+
+// ---------------------------------------------------------------- 6. the Research view's data
+section('6. research data');
+{
+  let RJ = null, R = null;
+  try { RJ = require('../tools/research.js'); } catch (e) { fail(`tools/research.js does not load: ${e.message}`); }
+  if (RJ) {
+    try { R = RJ.load(); } catch (e) { fail(`research.json: ${e.message}. Every session keeps it current (CLAUDE.md, "Research").`); }
+    if (R) {
+      const r = RJ.check(R, RJ.password());
+      r.warnings.forEach(w => note('research: ' + w));
+      r.problems.forEach(p => fail('research: ' + p));
+      const claims = RJ.claimsFor(R, trail);
+      claims.forEach(c => fail('research: ' + c));
+      const named = trail.filter(c => c.research && !/^none:/i.test(c.research)).length;
+      if (!r.problems.length && !claims.length) console.log(`  ok  research.json valid (updated ${R.updated}); media/research*.bin match it; ${named} change set(s) name research items, all shown`);
+    }
+  }
+}
 
 finish();
 fs.writeFileSync(STAMP, `${enc.iv}\n${new Date().toISOString()} PASS ${trail.length} change set(s) ${edits.length} edit(s) over ${base}\n`);

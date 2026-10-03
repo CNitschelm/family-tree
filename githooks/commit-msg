@@ -36,6 +36,23 @@ $(printf '%s\n' "$loose" | head -n 5)
   Commit them together with index.html (in GitHub Desktop: tick them too)."
 fi
 
+# 0c. The Research view's two files are committed only as tools/research.js built them, from a
+# research.json that validated: `research.js build` writes git's id for each file to .research-stamp
+# (3 Oct 2026). A research-only update is just these two files; this is its check.
+gone_res=$(git diff --cached --name-only --diff-filter=D 2>/dev/null | grep -E '^media/research(-cards)?\.bin$')
+[ -z "$gone_res" ] || die "$(printf '%s' "$gone_res" | head -n 1) is staged as DELETED. The Research view and the badges on the cards
+  read both research files; without them every visitor sees \"The research didn't load\". Unstage the deletion
+  (in GitHub Desktop: untick it). Taking the Research view down is Cory's call, made in index.html (SITE.research)."
+staged_res=$(git diff --cached --name-only --diff-filter=d 2>/dev/null | grep -E '^media/research(-cards)?\.bin$')
+if [ -n "$staged_res" ]; then
+  root=$(git rev-parse --show-toplevel 2>/dev/null) || die "cannot find the repository root - REFUSED."
+  for f in $staged_res; do
+    id=$(git ls-files -s -- "$f" | cut -d' ' -f2)
+    grep -q "^$id $f\$" "$root/.research-stamp" 2>/dev/null || die "$f is staged, but tools/research.js did not build it from a valid research.json
+  (its id ${id:-none} is not in .research-stamp). Run:  node tools/research.js build"
+  done
+fi
+
 if command -v node >/dev/null 2>&1; then
   exec node "$dir/../tools/check-commit-msg.js" "$1"
 fi

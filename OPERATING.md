@@ -6,6 +6,13 @@ enforced by a tool unless it says otherwise; where a rule is only written down, 
 
 ---
 
+## The research rule (2 Oct 2026)
+
+Read the Research view's data before investigating (`node tools/research.js status`), and in the same
+session record every change of research state with `tools/research.js`, then commit
+`media/research.bin` and `media/research-cards.bin`. Cory never has to ask. CLAUDE.md, "Research", has
+the details; `change.js`, the gate and the commit hook enforce it.
+
 ## The one rule
 
 **Every change to what the site says goes through one door — `tools/change.js` — with its reason and
@@ -49,6 +56,8 @@ node checks/gate.js                          # 6. proves the payload is the ledg
                                              # 7. commit in GitHub Desktop, index.html and media/ together
                                              #    (the hook checks the gate, and refuses loose media/ files)
                                              # 8. push; verify the live iv; changelog entry
+node tools/research.js log|set|answer …      # 9. the research state this session changed (any time;
+                                             #    it rebuilds media/research*.bin — commit them too)
 node tools/lock.js release "<who>"
 ```
 
@@ -74,6 +83,10 @@ that repo's `archive/MANUAL.md`), then cite it. After a session that added a URL
   ]
 }
 ```
+
+Every change file also says what it does to the research data: `"research": "i3 s9a"` (the
+investigation, source or visit ids it moves; research.json must show them moved by the time the gate
+runs) or `"research": "none: <why>"`. `change.js` refuses a file without it.
 
 Field paths: `note` `occ` `occ_c` `mn` `name` `years` `headline` `bio[i]` `hl[i]` (add `_fr` for
 French) · `src[i].l|u|q` · `sources[i].label|label_fr|url` · `docs[i].cap|tr` · `pl[i].k|t|c|y|y2|d|w|w_fr`
@@ -178,7 +191,10 @@ traps). Record the live commit at the top of `OPEN-ITEMS.md`.
 |---|---|---|
 | `index.html` | the site: encrypted payload + app | yes |
 | `media/` | what the cards don't show, encrypted (`tools/payload.js`): one file of bios, notes, sources and places, and one per bio picture; committed with `index.html` (encrypt moves files no longer used to `_to_delete/`) | yes |
-| `tools/` `checks/` `tests/` `githooks/` | the tools above; `tests/run.js` (site) and `tests/ledger.js` (this loop) | yes |
+| `media/research.bin`, `media/research-cards.bin` | the Research view's data and the cards' badges, sealed by `tools/research.js` under the payload key; stable names | yes |
+| `map/<hash>.json` | the map's base layers (public geography, no family data), fetched on the first Map open; `tools/mapfile.js` | yes |
+| `tools/` `checks/` `tests/` `githooks/` | the tools above; `tests/run.js` (site), `tests/ledger.js` (this loop), `tests/research.js` (the research tools, the hook's research check, crypt.js's keep rule), `tests/browser.js` (load on open, in Chromium) | yes |
+| `research.json`, `.research-stamp`, `ledger/research-deny.txt` | the research state (the one source of the Research view), what `research.js build` last wrote, and names never to publish | no |
 | `data.json`, `.password`, `.data-stamp`, `.gate-stamp` | working copy, password, provenance stamps | no |
 | `ledger/` | `register.jsonl` (settled questions), `changes.jsonl` (every applied change), `pending/` (change files), `history/` (payload history cache), `LOCK` | no |
 | `OPEN-ITEMS.md` | the live commit and what is genuinely open — short | no |
@@ -198,8 +214,10 @@ traps). Record the live commit at the top of `OPEN-ITEMS.md`.
 | `tools/crypt.js` | decrypt / encrypt the payload |
 | `tools/payload.js` | the payload format (v3: the cards in the page, the rest in `media/`), used by every tool that reads or writes it |
 | `tools/doctor.js` | local state |
+| `tools/research.js` | the Research view's data: `status`, `show`, `validate`, `build`, `check`, `link`, and the update commands |
+| `tools/mapfile.js` | the map's base layers: `check`, `write <layers.json>` (a new hashed file; keep the old one a deploy) |
 | `checks/run.js` | prose linter (report only; the gate fails on new HIGH findings) |
 | `checks/manifest.js` | regenerate `sources/urls.tsv` for the archive |
-| `tests/run.js`, `tests/ledger.js` | site regression suite; tests for this loop |
+| `tests/run.js`, `tests/ledger.js`, `tests/research.js`, `tests/browser.js` | site regression suite; tests for this loop; tests for the research tools; browser checks (Playwright) |
 
 `checks/patch.js` and `checks/dossier.js` are retired in favour of `change.js` and `card.js`.

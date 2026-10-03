@@ -167,13 +167,37 @@ function readEnc(html) {
     console.log("re-encrypted DATA into index.html (page " + Buffer.byteLength(out) + " bytes; " + sealed.media.size +
       " files in media/: " + mw.written + " written, " + mw.kept + " unchanged). Run the gate, then commit index.html and media/ together.");
     /* files the payload no longer uses (the last edit's extras, a picture that changed) leave the site:
-     * moved to _to_delete/, never deleted. git sees them as removed; that goes in the same commit. */
+     * moved to _to_delete/, never deleted. git sees them as removed; that goes in the same commit.
+     * But not the ones a page that browsers may still hold uses: the live page (origin/main, what the
+     * gate compares with) and the last commit (HEAD, which may be ahead of it, not pushed yet). For up to
+     * ten minutes after a deploy, browsers still hold the page they had, and on 1 Oct 2026 removing its
+     * bios file left those visitors with "This didn't load". Those files stay one deploy longer and leave
+     * with the next one. If either page cannot be read, NOTHING is moved: moving blind is what broke
+     * 1 Oct, and a file left behind costs nothing (review, 3 Oct 2026). */
     const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
-    const moved = P.parkOrphans(ROOT, new Set(sealed.media.keys()), path.join("_to_delete", "media-" + stamp));
-    if (moved.length) console.log("note: " + moved.length + " file(s) the payload no longer uses moved from media/ to " +
-      "_to_delete/media-" + stamp + "/ — commit their removal with index.html.");
-    const left = P.orphanMedia(ROOT, new Set(sealed.media.keys()));
-    if (left.length) console.log("note: " + left.length + " unused file(s) could not be moved out of media/: " + left.slice(0, 3).join(", "));
+    const keep = new Set(sealed.media.keys());
+    const unread = [];
+    for (const ref of ["HEAD", "origin/main"]) {
+      try {
+        const { execFileSync } = require("child_process");
+        const refHtml = execFileSync("git", ["show", ref + ":index.html"], { cwd: ROOT, encoding: "utf8", maxBuffer: 256 * 1024 * 1024,
+          env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" }, stdio: ["ignore", "pipe", "pipe"] });
+        const renc = P.readEnc(refHtml);
+        if (renc.x) keep.add(renc.x);
+        P.refsIn(P.openEnc(renc, pw, P.mediaFromGit(ROOT, ref), { stage: "refs" })).forEach(id => keep.add(id));
+      } catch (e) { unread.push(ref + " (" + String(e.message || e).split("\n")[0] + ")"); }
+    }
+    if (unread.length) {
+      console.log("WARNING: could not read the page at " + unread.join(" and ") + ", so NO file was moved out of media/.\n" +
+        "  Files the new payload does not use stay there for now. That is safe; moving one a live page still uses is not.\n" +
+        "  Fix the git problem above (is this a clone with origin/main fetched?) and run encrypt again to tidy them.");
+    } else {
+      const moved = P.parkOrphans(ROOT, keep, path.join("_to_delete", "media-" + stamp));
+      if (moved.length) console.log("note: " + moved.length + " file(s) the payload no longer uses moved from media/ to " +
+        "_to_delete/media-" + stamp + "/ — commit their removal with index.html.");
+      const left = P.orphanMedia(ROOT, keep);
+      if (left.length) console.log("note: " + left.length + " unused file(s) could not be moved out of media/: " + left.slice(0, 3).join(", "));
+    }
     console.log(newSalt
       ? "note: NEW SALT — every family member must re-enter the password."
       : "note: salt unchanged — family devices stay unlocked.");

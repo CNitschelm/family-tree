@@ -14,3 +14,4 @@ jobs:
       - run: node tests/run.js
         env:
           FT_PASSWORD: ${{ secrets.FT_PASSWORD }}
+      - run: node tests/research.js

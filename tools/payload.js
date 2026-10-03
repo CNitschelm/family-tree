@@ -126,7 +126,9 @@ function openPicture(key, file) {
    ciphertext under this payload's key */
 function openMediaFile(enc, pw, file) {
   const { header, bytes } = openBlob(keyFor(pw, enc.salt, enc.iter), file);
-  return header === "x" ? "x:" + bytes.length : header + bytes.toString("base64");
+  if (header === "x") return "x:" + bytes.length;
+  if (/^r:\d+$/.test(header) || header === "q") return header.split(":")[0] + ":" + bytes.length;   /* the Research view's files */
+  return header + bytes.toString("base64");
 }
 
 /* v3: the cards, and everything else in tree order with each object's key order */
@@ -269,11 +271,15 @@ function writeMedia(root, media) {
   }
   return { written, kept };
 }
+/* media/ files with a stable name that are not the payload's: the Research view's two files
+   (tools/research.js, 3 Oct 2026). They are sealed under the same key, so §14 still proves they
+   are ciphertext, but no payload ever references them, so they are never orphans. */
+const STABLE_MEDIA = new Set(["research.bin", "research-cards.bin"]);
 /* files in media/ the payload no longer uses (a picture changed, or the extras after any edit) */
 function orphanMedia(root, ids) {
   let names = [];
   try { names = fs.readdirSync(path.join(root, MEDIA_DIR)); } catch (_) { return []; }
-  return names.filter(n => n.endsWith(".bin") && !ids.has(n.slice(0, -4)));
+  return names.filter(n => n.endsWith(".bin") && !STABLE_MEDIA.has(n) && !ids.has(n.slice(0, -4)));
 }
 /* move them out of the site into <root>/<dest>/ (never deleted: removing them is the owner's call);
    returns the names moved. git then sees them as removed, and they go with the same commit. */
@@ -288,6 +294,6 @@ function parkOrphans(root, ids, dest) {
   return moved;
 }
 
-module.exports = { MEDIA_DIR, REF_RE, CARD_KEYS, UNION_KEYS, readEnc, keyFor, openEnc, sealData, writeMedia, orphanMedia,
+module.exports = { MEDIA_DIR, REF_RE, CARD_KEYS, UNION_KEYS, STABLE_MEDIA, readEnc, keyFor, openEnc, sealData, writeMedia, orphanMedia,
   parkOrphans, openMediaFile, mediaFromDir, mediaFromGit, refsIn, eachPicture, imageSize, splitCards, mergeCards,
-  gcmOpen, gcmSeal };
+  gcmOpen, gcmSeal, sealBlob, openBlob };

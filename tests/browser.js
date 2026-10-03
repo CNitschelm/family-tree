@@ -1,0 +1,680 @@
+#!/usr/bin/env node
+/*
+ * Browser checks for the Research view and the Map's load-on-open (3 Oct 2026).
+ *
+ *   node tests/browser.js            needs Playwright and its Chromium (npm i -g playwright); skips without them
+ *
+ * Builds a throwaway site in a temp folder from THIS index.html: an invented family (no real people),
+ * invented research, sealed with a throwaway password exactly as tools/payload.js and tools/research.js
+ * seal the real ones, plus the real map file. Serves it like GitHub Pages (gzip, ETags, 304s), and
+ * proves in Chromium what Cory asked for on 2 Oct 2026: a visit that never opens Map or Research
+ * requests nothing for them; the first opening fetches each file once; the badges, the views, a
+ * link straight to an investigation, the phone's Back button and French all work, with no page errors.
+ * Run it after any change to the page's shell; the PC session runs it before deploying the tab.
+ *
+ *   node tests/browser.js --real <folder>
+ *
+ * The same, with the REAL data.json and research.json re-sealed under a throwaway password in a temp
+ * folder (deleted afterwards): opens every investigation on a wide screen and on a phone, in English and
+ * French, fails on any page error, and saves screenshots to <folder> for a person to read. Never the
+ * family's password, and never anything written inside the repo. <folder> must be outside it (it shows
+ * real names): use a private folder such as "Claude outputs".
+ */
+"use strict";
+const fs = require("fs"), path = require("path"), os = require("os"), http = require("http"), zlib = require("zlib"), crypto = require("crypto");
+let chromium;
+try { ({ chromium } = require("playwright")); } catch (_) { console.log("  --  Playwright is not installed here (npm i -g playwright): browser checks skipped"); process.exit(0); }
+const ROOT = path.join(__dirname, "..");
+const P = require(path.join(ROOT, "tools", "payload.js"));
+const RJ = require(path.join(ROOT, "tools", "research.js"));
+const PW = "throwaway-test-password";
+const SALT = Buffer.from("fixture-salt-16b").toString("base64"), ITER = 1000;
+const OUT = fs.mkdtempSync(path.join(os.tmpdir(), "ftbrowser-"));
+const REAL = process.argv.includes("--real") ? path.resolve(process.argv[process.argv.indexOf("--real") + 1] || "") : null;
+if (REAL && (!process.argv[process.argv.indexOf("--real") + 1] || REAL.startsWith(path.resolve(ROOT) + path.sep) || REAL === path.resolve(ROOT))) {
+  console.error("--real needs a folder for the screenshots, outside the repo (they show real names)"); process.exit(2);
+}
+const SHOTS = REAL || process.env.SHOTS || null;
+if (SHOTS) fs.mkdirSync(SHOTS, { recursive: true });
+
+/* ---------- the invented family and research ---------- */
+let n = 0;
+const id = () => "c" + String(++n).padStart(3, "0");
+const gaz = {
+  alpha: { n: "Alphaville", n_fr: "Alphaville", c: "Haut-Rhin, France", c_fr: "Haut-Rhin, France", lat: 48.04, lon: 7.13, k: "town" },
+  beta: { n: "Betaburg", n_fr: "Betaburg", c: "Bas-Rhin, France", c_fr: "Bas-Rhin, France", lat: 48.58, lon: 7.75, k: "town" },
+  gamma: { n: "Gamma City", n_fr: "Gamma City", c: "Ohio, United States", c_fr: "Ohio, États-Unis", lat: 41.5, lon: -81.69, k: "city" },
+  delta: { n: "Deltadam", n_fr: "Deltadam", c: "Lowland coast, Netherlands", c_fr: "Côte basse, Pays-Bas", lat: 52.37, lon: 4.9, k: "city" }
+};
+function person(name, years, g, extra) {
+  const p = Object.assign({ id: id(), name, years, g, note: name + " was a test person.", note_fr: name + " était une personne de test.", src: [{ l: "Test register, act 1" }],
+    pl: [{ k: "alpha", t: "birth", c: "doc", y: +(String(years).match(/\d{4}/) || [1600])[0] }] }, extra || {});
+  return p;
+}
+const kids = (...c) => c;
+/* the trunk: five generations; then one small family per branch, each head carrying its anchor */
+const BR = [["fr", "fr"], ["east", "us-east"], ["west", "us-west"], ["ohio", "us-ohio"], ["doubs", "fr-doubs"], ["colmar", "colmar"], ["paris", "fr-paris"], ["nl", "nl"], ["schw", "schw"]];
+const g5 = person("Octavus Testmann", "1627–1694", "m", { profile: { headline: "Beekeeper", headline_fr: "Apiculteur", bio: ["Octavus kept bees in Alphaville.", "He had two wives."], bio_fr: ["Octavus élevait des abeilles à Alphaville.", "Il eut deux épouses."] } });
+g5.unions = [{ s: "Ottilie Probe", sy: "1650", c: BR.map(([key, bid], i) => {
+  const h = person("Branch" + (i + 1) + " Testmann", (1670 + i) + "–" + (1730 + i), i % 2 ? "f" : "m", { anchor: key, branch: bid,
+    pl: [{ k: i % 2 ? "beta" : "gamma", t: "birth", c: "doc", y: 1670 + i }, { k: "delta", t: "residence", c: "inf", y: 1700 + i, w: "Inferred from a test.", w_fr: "Déduit d’un test." }] });
+  h.unions = [{ s: "Spouse" + (i + 1) + " Probe", sy: String(1695 + i), c: [person("Child" + (i + 1) + " Testmann", String(1700 + i) + "–" + (1760 + i), "m"), person("Daughter" + (i + 1) + " Testmann", "b. " + (1950 + i), "f")] }];
+  return h;
+}) }];
+const g4 = person("Septimus Testmann", "1598–1661", "m", { unions: [{ s: "Tertia Probe", sy: "1622", c: [g5] }] });
+const g3 = person("Sextus Testmann", "1566–1629", "m", { unions: [{ s: "Wendeline Probe", sy: "1593", c: [g4] }] });
+const g2 = person("Quintus Testmann", "c. 1531–1597", "m", { unions: [{ s: "", c: [g3] }] });
+const root = person("Probus Testmann", "c. 1495", "m", { anchor: "trunk", branch: "legacy", tag: "author", unions: [{ s: "", c: [g2] }],
+  profile: { headline: "The oldest", headline_fr: "Le plus ancien", bio: ["Probus is the oldest test person."], bio_fr: ["Probus est la plus ancienne personne de test."] } });
+root.gaz = gaz;
+/* ids in tree order, as the real tree has them (the person, then each union's children) */
+{ let k = 0; (function walk(p) { p.id = "c" + String(++k).padStart(3, "0"); (p.unions || []).forEach(u => (u.c || []).forEach(walk)); })(root); }
+const idOf = {}; (function walk(p) { idOf[p.name] = p.id; (p.unions || []).forEach(u => (u.c || []).forEach(walk)); })(root);
+
+/* the research: three topics, five investigations, every status and every question state, one visit list.
+   All of it is made up — a mill, a millstone, a bakery, a sailor, a shop sign — and none of it follows the
+   family's own research (review, 3 Oct 2026): this file is public, and Pages serves it. */
+const R = {
+  schema: 1, updated: "2026-10-03",
+  themes: [
+    { id: "t1", name: "The mill years", name_fr: "Les années du moulin", blurb: "Who ran the Alphaville mill, and when.", blurb_fr: "Qui tenait le moulin d’Alphaville, et quand.", icon: "M12 3v18M3 12h18" },
+    { id: "t2", name: "Across the water", name_fr: "De l’autre côté de l’eau", blurb: "Relatives who may have sailed away.", blurb_fr: "Des parents peut-être partis en bateau.", icon: "M3 17c3 2 6 2 9 0s6-2 9 0" },
+    { id: "t3", name: "Small puzzles", name_fr: "Petites énigmes", blurb: "Odd details on cards already drawn.", blurb_fr: "Des détails curieux sur des fiches déjà en place.", icon: "M12 2a10 10 0 1 0 0 20a10 10 0 1 0 0-20z" }
+  ],
+  visits: { v1: { name: "Alphaville mill museum", name_fr: "Musée du moulin d’Alphaville", short: "Mill museum", short_fr: "Musée du moulin",
+    access: "Open on Saturday mornings. Nothing can be borrowed.", access_fr: "Ouvert le samedi matin. Rien ne peut être emprunté.", who: "A neighbour", who_fr: "Une voisine", st: "visit", since: "2026-09-20",
+    next: "The neighbour can go on the first Saturday of the month.", next_fr: "La voisine peut y aller le premier samedi du mois.",
+    log: [["2026-09-18", "The museum said the ledgers are on open shelves.", "Le musée a dit que les registres sont en libre accès."], ["2026-09-29", "The neighbour offered to take photographs.", "La voisine a proposé de prendre des photos."]] } },
+  investigations: [
+    { id: "i1", theme: "t1", title: "Who first ran the mill?", title_fr: "Qui a tenu le moulin en premier ?", line: "Alphaville · the 1500s", line_fr: "Alphaville · le XVIe siècle", branch: "legacy", imp: 2, updated: "2026-10-02",
+      next: "Read the mill’s first ledger at the museum.", next_fr: "Lire le premier registre du moulin au musée.",
+      summary: "Probus is the oldest person on the tree. A family story says he ran the mill.", summary_fr: "Probus est la personne la plus ancienne de l’arbre. Une histoire de famille dit qu’il tenait le moulin.",
+      people: [{ card: "c001", n: "Probus Testmann", y: "c. 1495" }, { card: "c002", n: "Quintus Testmann", y: "c. 1531–1597" }],
+      qs: [
+        { q: "Does the first ledger name Probus?", q_fr: "Le premier registre nomme-t-il Probus ?", note: "The ledgers start in the middle of the century.", note_fr: "Les registres commencent au milieu du siècle.", state: "open",
+          src: [
+            { id: "s1", t: "The first mill ledger", t_fr: "Le premier registre du moulin", where: "Mill museum · shelf A", where_fr: "Musée du moulin · étagère A", how: "In person", how_fr: "Sur place", st: "visit", who: "A neighbour", who_fr: "Une voisine", since: "2026-09-20", visit: "v1", next: "Photograph the first twenty pages.", next_fr: "Photographier les vingt premières pages.", why: "It is the only record of who ran the mill.", why_fr: "C’est le seul document qui dit qui tenait le moulin." },
+            { id: "s2", t: "A booklet on the mill (1911)", t_fr: "Une brochure sur le moulin (1911)", where: "Town library · online", where_fr: "Bibliothèque municipale · en ligne", how: "Online", how_fr: "En ligne", st: "found", since: "2026-09-15", log: [["2026-09-15", "Read. It names the mill, not who ran it.", "Lu. Elle nomme le moulin, pas qui le tenait."]] }
+          ] },
+        { q: "Did Quintus take over the mill?", q_fr: "Quintus a-t-il repris le moulin ?", note: "A sketch of the mill shows two men.", note_fr: "Un croquis du moulin montre deux hommes.", state: "lead",
+          src: [{ id: "s3", t: "The sketch’s caption", t_fr: "La légende du croquis", where: "Town library · online", where_fr: "Bibliothèque municipale · en ligne", how: "Online", how_fr: "En ligne", st: "todo", who: "Us, online", who_fr: "Nous, en ligne", since: "2026-10-02", next: "Find a larger copy of the sketch.", next_fr: "Trouver une copie plus grande du croquis." }] }
+      ] },
+    { id: "i2", theme: "t1", title: "The millstone’s carved year", title_fr: "L’année gravée sur la meule", line: "Alphaville", line_fr: "Alphaville", branch: "legacy", imp: 1, updated: "2026-09-30",
+      next: "Cory’s call: ask the museum for a closer look?", next_fr: "À Cory de décider : demander au musée de regarder de plus près ?",
+      summary: "A millstone in the museum garden carries a year nobody has read clearly.", summary_fr: "Une meule du jardin du musée porte une année que personne n’a lue clairement.",
+      people: [{ card: "c001", n: "Probus Testmann", y: "c. 1495" }],
+      qs: [{ q: "What year is carved on the stone?", q_fr: "Quelle année est gravée sur la meule ?", note: "", note_fr: "", state: "open",
+        src: [
+          { id: "s4", t: "The millstone itself", t_fr: "La meule elle-même", where: "Mill museum · garden", where_fr: "Musée du moulin · jardin", how: "In person", how_fr: "Sur place", st: "visit", who: "A neighbour", who_fr: "Une voisine", since: "2026-09-20", visit: "v1", next: "Photograph it in low sunlight.", next_fr: "La photographier en lumière rasante." },
+          { id: "s5", t: "A rubbing of the stone", t_fr: "Un frottis de la meule", where: "Mill museum · by permission", where_fr: "Musée du moulin · sur autorisation", how: "By request", how_fr: "Sur demande", st: "cory", who: "Cory", who_fr: "Cory", since: "2026-09-24", next: "Cory’s call.", next_fr: "À Cory de décider." },
+          { id: "s6", t: "The museum guide’s notes", t_fr: "Les notes du guide du musée", where: "Mill museum · office", where_fr: "Musée du moulin · bureau", how: "By request", how_fr: "Sur demande", st: "wait", who: "The museum", who_fr: "Le musée", since: "2026-09-30", log: [["2026-09-30", "The guide will look through his notes.", "Le guide va parcourir ses notes."]] },
+          { id: "s7", t: "Old postcards of the mill", t_fr: "Vieilles cartes postales du moulin", where: "Postcard sellers", where_fr: "Vendeurs de cartes postales", how: "Online", how_fr: "En ligne", st: "none", since: "2026-09-19" }
+        ] }] },
+    { id: "i3", theme: "t2", title: "The Deltadam bakers", title_fr: "Les boulangers de Deltadam", line: "Betaburg → Deltadam", line_fr: "Betaburg → Deltadam", branch: "nl", imp: 1, updated: "2026-10-03",
+      next: "Look for the founder’s burial.", next_fr: "Chercher l’inhumation du fondateur.",
+      summary: "A bakery in Deltadam kept the family name for three generations.", summary_fr: "Une boulangerie de Deltadam a gardé le nom de la famille pendant trois générations.",
+      people: [{ card: "c009", n: "Branch3 Testmann", y: "1672–1732" }],
+      qs: [
+        { q: "Did one of ours open the bakery?", q_fr: "L’un des nôtres a-t-il ouvert la boulangerie ?", note: "Yes, by 1702.", note_fr: "Oui, dès 1702.", state: "answered",
+          src: [{ id: "s8", t: "A bakers’ guild roll", t_fr: "Un rôle de la guilde des boulangers", where: "City archives · online", where_fr: "Archives municipales · en ligne", how: "Online", how_fr: "En ligne", st: "found", since: "2026-10-01" }] },
+        { q: "Should the bakers join the tree?", q_fr: "Faut-il ajouter les boulangers à l’arbre ?", note: "Yes.", note_fr: "Oui.", state: "answered",
+          src: [{ id: "s9", t: "Cory’s decision", t_fr: "La décision de Cory", where: "Asked on 1 October", where_fr: "Demandé le 1er octobre", how: "Decision", how_fr: "Décision", st: "done", since: "2026-10-01" }] },
+        { q: "When did the founder die?", q_fr: "Quand le fondateur est-il mort ?", note: "No date yet.", note_fr: "Pas encore de date.", state: "open", people: [{ card: "c009", n: "Branch3 Testmann", y: "1672–1732" }],
+          src: [{ id: "s10", t: "A burial list", t_fr: "Une liste d’inhumations", where: "City archives · online", where_fr: "Archives municipales · en ligne", how: "Online", how_fr: "En ligne", st: "ready", who: "Us, online", who_fr: "Nous, en ligne", since: "2026-10-02", next: "Search the list.", next_fr: "Parcourir la liste." }] }
+      ] },
+    { id: "i4", theme: "t2", title: "A cousin who went to sea?", title_fr: "Un cousin parti en mer ?", line: "Unknown", line_fr: "Inconnu", branch: "", imp: 0, updated: "2026-10-02",
+      next: "Set aside for now.", next_fr: "Mis de côté pour l’instant.", summary: "A letter mentions a cousin who went to sea. Nothing else is known.", summary_fr: "Une lettre parle d’un cousin parti en mer. On n’en sait pas plus.", people: [],
+      qs: [{ q: "Is there a crew list to check?", q_fr: "Existe-t-il un rôle d’équipage à consulter ?", note: "", note_fr: "", state: "open",
+        src: [{ id: "s11", t: "A paid record search", t_fr: "Une recherche payante", where: "A records service", where_fr: "Un service de recherche", how: "Paid", how_fr: "Payant", st: "hold", who: "Cory", who_fr: "Cory" }] }] },
+    { id: "i5", theme: "t3", title: "The Gamma City shop sign", title_fr: "L’enseigne de Gamma City", line: "Alphaville → Gamma City", line_fr: "Alphaville → Gamma City", branch: "ohio", imp: 3, updated: "2026-10-03",
+      next: "Check both directories for the shop’s first year.", next_fr: "Chercher la première année de la boutique dans les deux annuaires.",
+      summary: "A photograph shows the family name over a shop door. The year is cut off.", summary_fr: "Une photo montre le nom de la famille au-dessus d’une boutique. L’année est coupée.", people: [{ card: "c010", n: "Branch4 Testmann", y: "1673–1733" }],
+      qs: [{ q: "Which year did the shop open?", q_fr: "En quelle année la boutique a-t-elle ouvert ?", note: "The photograph narrows it to one decade.", note_fr: "La photo la situe dans une décennie.", state: "partly",
+        src: [
+          { id: "s12", t: "A trade directory, 1851", t_fr: "Un annuaire du commerce, 1851", where: "Library · online", where_fr: "Bibliothèque · en ligne", how: "Online", how_fr: "En ligne", st: "ready", who: "Us, online", who_fr: "Nous, en ligne", since: "2026-09-10" },
+          { id: "s13", t: "A newspaper advert", t_fr: "Une annonce de journal", where: "Newspaper archive · online", where_fr: "Archives de presse · en ligne", how: "Online", how_fr: "En ligne", st: "ready", who: "Us, online", who_fr: "Nous, en ligne", since: "2026-09-10" }
+        ] }] }
+  ]
+};
+(function fix(o) { if (Array.isArray(o)) o.forEach(fix); else if (o && typeof o === "object") { if (o.n && o.card && idOf[o.n]) o.card = idOf[o.n]; Object.values(o).forEach(fix); } })(R.investigations);
+const cards = []; (function walk(p) { cards.push({ id: p.id, name: p.name, years: p.years }); (p.unions || []).forEach(u => (u.c || []).forEach(walk)); })(root);
+const v = RJ.validate(R, { cards, quiet: true });
+if (v.errors.length) { console.error(v.errors.join("\n")); process.exit(1); }
+
+
+/* --real: the family's own data and research, under the throwaway password, never the real one */
+const DATA0 = REAL ? JSON.parse(fs.readFileSync(path.join(ROOT, "data.json"), "utf8")) : root;
+const R0 = REAL ? RJ.load() : R;
+if (REAL) { const v2 = RJ.validate(R0, { quiet: true }); if (v2.errors.length) { console.error("research.json does not validate:\n" + v2.errors.join("\n")); process.exit(1); } }
+const sealed = P.sealData(DATA0, PW, { salt: SALT, iter: ITER });
+const page0 = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+fs.mkdirSync(path.join(OUT, "media"), { recursive: true });
+fs.mkdirSync(path.join(OUT, "map"), { recursive: true });
+fs.writeFileSync(path.join(OUT, "index.html"), page0.replace(/const ENC = \{[^\n]*\};/, () => sealed.line));
+for (const [k, f] of sealed.media) fs.writeFileSync(path.join(OUT, "media", k + ".bin"), f);
+const mapName = page0.match(/const MAPFILE = "([^"]+)";/)[1];
+fs.copyFileSync(path.join(ROOT, mapName), path.join(OUT, mapName));
+const rs = RJ.sealed(R0, PW, P.readEnc(sealed.line));
+fs.writeFileSync(path.join(OUT, "media", "research.bin"), rs.data);
+fs.writeFileSync(path.join(OUT, "media", "research-cards.bin"), rs.cards);
+
+/* ---------- a server like GitHub Pages: gzip, ETags and 304s, and a log of what was asked for ---------- */
+const types = { ".html": "text/html; charset=utf-8", ".json": "application/json", ".bin": "application/octet-stream" };
+const reqLog = [];
+/* for the loading checks: a file that is missing for now (a 404 that may be cached, as Pages serves them),
+   and a file that is slow to arrive */
+const FAIL = new Set(), DELAY = new Map();
+const server = http.createServer((req, res) => {
+  const u = decodeURIComponent(req.url.split("?")[0]);
+  if (FAIL.has(u)) { reqLog.push({ u, s: 404 }); res.writeHead(404, { "Content-Type": "text/plain", "Cache-Control": "max-age=600" }); return res.end("missing"); }
+  const send = () => {
+    const f = path.join(OUT, u === "/" ? "index.html" : u.replace(/^\//, ""));
+    if (!f.startsWith(OUT) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { reqLog.push({ u, s: 404 }); res.writeHead(404); return res.end(); }
+    const body = fs.readFileSync(f), etag = '"' + crypto.createHash("sha1").update(body).digest("hex").slice(0, 16) + '"';
+    if (req.headers["if-none-match"] === etag) { reqLog.push({ u, s: 304 }); res.writeHead(304, { ETag: etag, "Cache-Control": "max-age=600" }); return res.end(); }
+    reqLog.push({ u, s: 200 });
+    res.writeHead(200, { "Content-Type": types[path.extname(f)] || "application/octet-stream", "Content-Encoding": "gzip", ETag: etag, "Cache-Control": "max-age=600" });
+    res.end(zlib.gzipSync(body));
+  };
+  if (DELAY.has(u)) setTimeout(send, DELAY.get(u)); else send();
+});
+
+let pass = 0, fail = 0;
+const ok = (c, m) => { if (c) { pass++; console.log("  ok  " + m); } else { fail++; console.error("  FAIL " + m); } };
+let BASE = "";
+const log = async () => reqLog.slice();
+const reset = async () => { reqLog.length = 0; };
+const got = (L, re) => L.filter(x => re.test(x.u));
+const shot = (page, name, opts) => SHOTS ? page.screenshot(Object.assign({ path: path.join(SHOTS, name) }, opts || {})) : Promise.resolve();
+const MAPURL = "/" + mapName;
+/* the state that matters after a view change: which view, and what the address says */
+const where = page => page.evaluate(() => ({ res: document.body.classList.contains("resmode"), map: document.body.classList.contains("mapmode"), hash: location.hash }));
+/* relative luminance of a computed CSS colour */
+const lum = c => { const m = (c.match(/[\d.]+/g) || []).slice(0, 3).map(Number).map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return m.length === 3 ? 0.2126 * m[0] + 0.7152 * m[1] + 0.0722 * m[2] : NaN; };
+
+async function unlock(page, opts) {
+  await page.waitForSelector("#lockpw", { state: "visible" });
+  await page.fill("#lockpw", PW);
+  await page.click("#lockbtn");
+  await page.waitForFunction(() => document.getElementById("lock").style.display === "none");
+  /* the welcome card shows on a first visit: close it (unless the test is about it) */
+  await page.waitForTimeout(400);
+  if (opts && opts.keepIntro) return;
+  if (await page.evaluate(() => document.getElementById("intro").style.display === "flex")) {
+    await page.click("#introgo");
+    await page.waitForTimeout(300);
+  }
+}
+
+async function run() {
+  const browser = await chromium.launch();
+  const errors = [];
+  /* every page error fails the run; so does every console error, except the 404 a test asks for on purpose */
+  const watch = (page, label, expected404) => {
+    page.on("pageerror", e => { errors.push(label + ": " + e.message); console.log("   PAGEERROR " + e.message + " | " + (e.stack || "").split("\n").slice(1, 3).join(" | ")); });
+    page.on("console", m => { if (m.type() === "error" && !(expected404 && /status of 404/.test(m.text()))) errors.push(label + " console: " + m.text()); });
+  };
+  /* ---------------- desktop ---------------- */
+  {
+    console.log("\n== desktop, cold start");
+    await reset();
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await ctx.newPage();
+    watch(page, "desktop");
+    await page.goto(BASE);
+    await page.waitForSelector("#lockpw", { state: "visible" });
+    let L = await log();
+    ok(!got(L, /^\/map\//).length, "the lock screen asks for no map file");
+    ok(!got(L, /research/).length, "the lock screen asks for no research file");
+    await unlock(page);
+    await page.waitForTimeout(1500);
+    L = await log();
+    ok(!got(L, /^\/map\//).length, "a visit that stays on the tree never asks for the map file");
+    ok(!got(L, /\/media\/research\.bin/).length, "a visit that stays on the tree never asks for the research file");
+    ok(got(L, /research-cards\.bin/).length === 1, "the badges' small file is fetched once");
+    const badges = await page.$$eval(".node .rqb", els => els.map(e => e.textContent));
+    ok(badges.some(b => /^3 open research questions$/.test(b.replace(/\s+/g, " ").trim())), "a badge carries its count and words for screen readers (" + badges.join(" | ") + ")");
+    await shot(page, "d1-tree-badges.png");
+    /* Research, first open */
+    await page.click("#vt-res");
+    await page.waitForSelector(".rdet", { timeout: 5000 });
+    L = await log();
+    ok(got(L, /\/media\/research\.bin/).length === 1, "opening Research fetches its file once");
+    ok(!got(L, /^\/map\//).length, "opening Research does not fetch the map file");
+    ok((await page.getAttribute("#vt-res", "aria-pressed")) === "true", "the Research button shows it is pressed");
+    ok(/^#research\/i\d+$/.test(await page.evaluate(() => location.hash)), "the address names the investigation (" + await page.evaluate(() => location.hash) + ")");
+    const order = await page.$$eval(".rth", ths => ths.map(t => t.querySelector(".rthn").textContent + ": " + [...t.querySelectorAll(".rinv .rit b")].map(b => b.textContent).join(" / ")));
+    console.log("     " + order.join("\n     "));
+    ok(await page.isHidden("#filtbtn"), "Filters is hidden in Research");
+    ok(await page.isHidden("#restart"), "Start over is hidden in Research");
+    await shot(page, "d2-research.png");
+    /* topic 1: i1 (ready to do, a big step) before i2 (needs Cory's OK) */
+    const t1 = await page.$$eval("#rt-t1 .rinv", els => els.map(e => e.dataset.id));
+    ok(t1.join() === "i1,i2", "topic 1 sorts ready-to-do before needs-Cory (" + t1.join() + ")");
+    /* open topic 3 and pick its investigation */
+    await page.click('[data-ra="theme"][data-id="t3"]');
+    await page.click('[data-ra="inv"][data-id="i5"]');
+    await page.waitForSelector('.rdet .rdt');
+    ok((await page.textContent(".rdet .rdt")) === "The Gamma City shop sign", "picking an investigation shows it");
+    ok(/Priority 1 of 1/.test(await page.textContent(".rdet .rmeta")), "the detail says its priority");
+    ok(/Ohio/.test(await page.textContent(".rdet .rline")), "the branch label shows (Ohio)");
+    ok((await page.evaluate(() => location.hash)) === "#research/i5", "the address follows the pick");
+    ok((await page.textContent(".rdet .rq .rchip")) === "Partly answered", "a partly answered question says so");
+    /* expand a source */
+    await page.click('[data-ra="src"][data-id="s12"]');
+    ok(await page.isVisible("#rs-s12 .rsrcd"), "a source opens in place on wide screens");
+    await shot(page, "d3-detail.png");
+    /* Escape with nothing on top: the view stays as it is */
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+    let w = await where(page);
+    ok(w.res && w.hash === "#research/i5" && (await page.textContent(".rdet .rdt")) === "The Gamma City shop sign", "Escape on the wide view leaves Research as it was");
+    /* By status */
+    await page.click('[data-ra="lens"][data-v="status"]');
+    await page.waitForSelector(".rgroups");
+    const groups = await page.$$eval(".rgrp .rgh .rchip", e => e.map(x => x.textContent));
+    ok(groups[0] === "Needs Cory" && groups.includes("Done"), "By status groups in order (" + groups.join(", ") + ")");
+    await shot(page, "d4-status.png");
+    await page.click('[data-ra="filter"][data-v="visit"]');
+    ok((await page.$$(".rgrp")).length === 1, "a status chip filters to one group");
+    await page.click('.rgsub [data-ra="visit"]');
+    await page.waitForSelector(".rvisit h1");
+    ok((await page.textContent(".rvisit h1")) === "Alphaville mill museum", "the visit list opens");
+    ok((await page.evaluate(() => location.hash)) === "#research/visit/v1", "the address names the visit list");
+    ok((await page.$$(".rvlist li")).length === 2, "it lists the two things to photograph there");
+    await shot(page, "d5-visit.png");
+    await page.click('[data-ra="back"]');
+    await page.waitForSelector(".rgroups");
+    ok((await page.getAttribute('[data-ra="lens"][data-v="status"]', "aria-pressed")) === "true" && (await page.$$(".rgrp")).length === 1,
+      "its Back button returns to By status, filter kept");
+    await page.click('.rgsub [data-ra="visit"]');
+    await page.waitForSelector(".rvisit h1");
+    await page.keyboard.press("Escape");
+    await page.waitForSelector(".rgroups", { timeout: 3000 }).catch(() => {});
+    ok(await page.isVisible(".rgroups"), "Escape closes the visit list too");
+    /* French */
+    await page.click("#lang");
+    await page.waitForTimeout(200);
+    ok(/Enquêtes en cours/.test(await page.textContent(".rhead h1", { timeout: 3000 })), "French: the title");
+    ok(/Recherche/.test(await page.textContent("#vt-res")), "French: the tab");
+    await page.click('[data-ra="lens"][data-v="topic"]');
+    await page.waitForSelector(".rdet");
+    ok(/Mise à jour le/.test(await page.textContent(".rdet .rmeta")), "French: the detail");
+    await shot(page, "d6-french.png");
+    await page.click("#lang");
+    await page.waitForTimeout(200);
+    /* the Map, first open */
+    await page.click("#vt-res");
+    await page.waitForSelector(".rdet");
+    await reset();
+    await page.click("#vt-map");
+    await page.waitForTimeout(1500);
+    L = await log();
+    ok(got(L, /^\/map\//).length === 1, "the first Map open fetches the map file once");
+    const pins = await page.$$eval("#mappins .pin", e => e.length);
+    ok(pins > 0, "the map shows people (" + pins + " markers)");
+    ok(await page.evaluate(() => document.getElementById("mapempty").style.display !== "flex"), "the loading note is gone");
+    await shot(page, "d7-map.png");
+    ok(!/^#research/.test(await page.evaluate(() => location.hash)), "leaving Research clears the address");
+    /* back to Research: no refetch of research.bin within the visit */
+    await reset();
+    await page.click("#vt-res");
+    await page.waitForSelector(".rdet");
+    L = await log();
+    ok(!got(L, /\/media\/research\.bin/).length, "Research is kept for the visit (no second fetch)");
+    /* the bio's open questions */
+    await page.click("#vt-tree");
+    await page.waitForTimeout(300);
+    const bio = await page.$('.node:has(.rqb) [data-bio]');
+    ok(!!bio, "a card with a badge has its Bio button");
+    if (bio) {
+      await bio.click();
+      await page.waitForSelector("#profile .phead");
+      await page.waitForTimeout(300);
+      ok(await page.isVisible("#profile .prq"), "the bio lists the person's open questions");
+      ok((await page.$$("#profile .prqi")).length === 2, "one entry per investigation about them");
+      await shot(page, "d8-bio.png");
+      await page.click("#profile .prqgo");
+      await page.waitForSelector(".rdet");
+      ok(/^#research\/i1$/.test(await page.evaluate(() => location.hash)), "Open in Research goes to the investigation");
+    }
+    /* a person chip goes to the tree, and stays there */
+    await page.click('[data-ra="person"]');
+    await page.waitForTimeout(900);
+    w = await where(page);
+    ok(!w.res && !/^#research/.test(w.hash), "a person chip goes to the tree and stays there");
+    /* search from Research: the person is shown on the tree (review, 3 Oct 2026: it used to light up the hidden tree) */
+    await page.click("#vt-res");
+    await page.waitForSelector(".rdet");
+    await page.fill("#search", "Branch4");
+    await page.waitForSelector("#suggest .it", { timeout: 3000 });
+    await page.click("#suggest .it");
+    await page.waitForTimeout(900);
+    w = await where(page);
+    ok(!w.res && !w.map && !/^#research/.test(w.hash) && (await page.getAttribute("#vt-tree", "aria-pressed")) === "true", "a search pick in Research shows the tree");
+    ok(await page.evaluate(() => [...document.querySelectorAll(".node")].some(n => /Branch4 Testmann/.test(n.textContent) && n.getBoundingClientRect().width > 0)), "with the person on it");
+    /* leaving a visit list for the tree (review, 3 Oct 2026: it bounced straight back into Research) */
+    await page.evaluate(() => { location.hash = "#research/visit/v1"; });
+    await page.waitForSelector(".rvisit h1");
+    await page.waitForTimeout(400);
+    await page.click("#vt-tree");
+    await page.waitForTimeout(1000);
+    w = await where(page);
+    ok(!w.res && !/^#research/.test(w.hash), "leaving a visit list for the tree stays on the tree (" + JSON.stringify(w) + ")");
+    /* back in Research, it opens where it was left: the visit list */
+    await page.click("#vt-res");
+    await page.waitForSelector(".rvisit h1", { timeout: 5000 }).catch(() => {});
+    ok(await page.isVisible(".rvisit h1"), "Research reopens where it was left");
+    /* dark mode, through the page's own switch */
+    await page.evaluate(() => { location.hash = "#research/i1"; });
+    await page.waitForSelector(".rdet .rdt");
+    const was = await page.evaluate(() => document.documentElement.classList.contains("dark"));
+    await page.click("#theme");
+    await page.waitForTimeout(250);
+    if (was) { await page.click("#theme"); await page.waitForTimeout(250); }
+    const look = await page.evaluate(() => ({ dark: document.documentElement.classList.contains("dark"),
+      bg: getComputedStyle(document.getElementById("resview")).backgroundColor, ink: getComputedStyle(document.querySelector(".rdet .rdt")).color }));
+    const lb = lum(look.bg), li = lum(look.ink);
+    ok(look.dark && lb < 0.1 && (li + 0.05) / (lb + 0.05) >= 7, "dark mode: a dark page with light text (" + look.bg + " / " + look.ink + ")");
+    await shot(page, "d9-dark.png");
+    await ctx.close();
+  }
+  /* ---------------- the Map's file: a failed fetch is retried, and a slow one still draws ---------------- */
+  {
+    console.log("\n== map file: retry and late arrival");
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await ctx.newPage();
+    watch(page, "map", true);
+    await page.goto(BASE);
+    await unlock(page);
+    await reset();
+    FAIL.add(MAPURL);
+    await page.click("#vt-map");
+    await page.waitForTimeout(1200);
+    ok(/didn’t load/.test(await page.textContent("#mapempty")) && await page.isVisible("#mapempty"), "a map file that is missing says so");
+    FAIL.delete(MAPURL);
+    await page.click("#vt-tree");
+    await page.click("#vt-map");
+    await page.waitForTimeout(1500);
+    const L = await log();
+    ok(got(L, /^\/map\//).map(x => x.s).join() === "404,200", "opening the Map again asks the server again (" + got(L, /^\/map\//).map(x => x.s).join() + "), not the stored error");
+    ok((await page.$$eval("#mappins .pin", e => e.length)) > 0 && !(await page.isVisible("#mapempty")), "and the map draws");
+    await ctx.close();
+  }
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await ctx.newPage();
+    watch(page, "map late");
+    await page.goto(BASE);
+    await unlock(page);
+    DELAY.set(MAPURL, 1500);
+    await page.click("#vt-map");
+    await page.waitForTimeout(200);
+    await page.click("#vt-tree");
+    await page.waitForTimeout(2600);
+    DELAY.delete(MAPURL);
+    await page.click("#vt-map");
+    await page.waitForTimeout(600);
+    ok((await page.$$eval("#mappins .pin", e => e.length)) > 0 && !(await page.isVisible("#mapempty")),
+      "a map file that lands after the Map was left is drawn on the next opening");
+    await ctx.close();
+  }
+  /* ---------------- a layer kept open across views: the Map's journey, Research, the Map again, then Back ----------------
+     (review, 3 Oct 2026: Back closed the journey and reopened Research, from the address Research had left behind) */
+  for (const phone of [false, true]) {
+    console.log("\n== " + (phone ? "phone" : "desktop") + ": a journey kept open while Research is visited, then Back");
+    const ctx = await browser.newContext(phone ? { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 } : { viewport: { width: 1280, height: 800 } });
+    const page = await ctx.newPage();
+    watch(page, phone ? "journey phone" : "journey desktop");
+    const press = sel => phone ? page.tap(sel) : page.click(sel);
+    await page.goto(BASE);
+    await unlock(page);
+    await press(phone ? '#dock [data-view="map"]' : "#vt-map");
+    await page.waitForTimeout(1500);
+    await page.fill("#search", "Branch4");
+    await page.waitForSelector("#suggest .it", { timeout: 3000 });
+    await page.click("#suggest .it");
+    await page.waitForTimeout(1500);
+    ok(await page.evaluate(() => !!document.querySelector("#mapsheet.on")), "a search pick on the map opens that person's journey");
+    await press(phone ? '#dock [data-view="research"]' : "#vt-res");
+    /* long enough on Research's first screen for the guard to stand down (it checks every 250 ms): that step is
+       what leaves the #research address on the entry below */
+    await page.waitForSelector(phone ? ".rph .rinv" : ".rdet");
+    await page.waitForTimeout(700);
+    if (phone) { await page.tap('.rinv[data-id="i2"]'); await page.waitForSelector(".rdet .rdt"); }
+    else { await page.click('[data-ra="lens"][data-v="status"]'); await page.waitForSelector(".rgroups"); await page.click('.rgsub [data-ra="visit"]'); await page.waitForSelector(".rvisit h1"); }
+    await page.waitForTimeout(600);
+    await press(phone ? '#dock [data-view="map"]' : "#vt-map");
+    await page.waitForTimeout(800);
+    await page.goBack();
+    await page.waitForTimeout(1500);
+    const w = await page.evaluate(() => ({ res: document.body.classList.contains("resmode"), map: document.body.classList.contains("mapmode"), hash: location.hash,
+      sheet: !!document.querySelector("#mapsheet.on") }));
+    ok(w.map && !w.res && !/^#research/.test(w.hash) && !w.sheet, "Back closes the journey and stays on the map (" + JSON.stringify(w) + ")");
+    ok(page.url().startsWith(BASE), "and on the site");
+    await ctx.close();
+  }
+  /* ---------------- links straight to Research, opened cold ---------------- */
+  {
+    console.log("\n== deep links");
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await ctx.newPage();
+    watch(page, "deep");
+    await page.goto(BASE + "#research/i3");
+    await unlock(page, { keepIntro: true });
+    /* a first visit: the welcome card is over Research, and its button says it goes back there */
+    ok(await page.evaluate(() => document.getElementById("intro").style.display === "flex"), "a first visit shows the welcome card");
+    ok((await page.textContent("#introgo")) === "Back to Research", "its button says Back to Research (" + await page.textContent("#introgo") + ")");
+    await page.click("#introgo");
+    await page.waitForSelector(".rdet", { timeout: 5000 });
+    ok((await page.textContent(".rdet .rdt")) === "The Deltadam bakers", "a link to #research/i3 opens that investigation");
+    ok(/Netherlands/.test(await page.textContent(".rdet .rline")), "its branch shows (Netherlands)");
+    await page.goto(BASE + "#research/visit/v1");   /* the same page, a new address */
+    await page.waitForSelector(".rvisit h1", { timeout: 8000 });
+    ok((await page.textContent(".rvisit h1")) === "Alphaville mill museum", "a new address in the open page opens that visit list");
+    await ctx.close();
+  }
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await ctx.newPage();
+    watch(page, "deep cold");
+    await page.goto(BASE + "#research/visit/v1");
+    await unlock(page, { keepIntro: true });
+    await page.waitForSelector(".rvisit h1", { state: "attached", timeout: 8000 }).catch(() => {});
+    ok((await page.textContent(".rvisit h1").catch(() => "")) === "Alphaville mill museum", "a link to a visit list, opened cold, opens it behind the welcome card");
+    /* the welcome card's own search lands on the tree, out of Research */
+    await page.fill("#introsearch", "Branch4");
+    await page.waitForSelector("#introsug .isit", { timeout: 3000 });
+    await page.click("#introsug .isit");
+    await page.waitForTimeout(900);
+    const w = await where(page);
+    ok(!w.res && !/^#research/.test(w.hash), "a person picked on the welcome card is shown on the tree");
+    await ctx.close();
+  }
+  /* ---------------- a file the tools would never write: the page still keeps to the values it knows ---------------- */
+  {
+    console.log("\n== an odd research file");
+    const odd = JSON.parse(JSON.stringify(R0));
+    const inv = odd.investigations.find(x => x.id === "i5") || odd.investigations[0];
+    inv.qs[0].src[0].st = 'ready" onmouseover="window.__odd=1';
+    inv.qs[0].state = 'open" onclick="window.__odd=2';
+    inv.imp = "<b>9</b>";
+    const key = P.keyFor(PW, SALT, ITER);
+    const oj = Buffer.from(JSON.stringify(odd), "utf8");
+    const cj = Buffer.from(JSON.stringify({ updated: odd.updated, cards: { c001: [1, "i1"], c002: ['<img src=x onerror="window.__odd=3">', "i1"] },
+      invs: { i1: ["Odd", "Odd", 'solo" onclick="window.__odd=4'] } }), "utf8");
+    const files = ["research.bin", "research-cards.bin"].map(f => path.join(OUT, "media", f));
+    const kept = files.map(f => fs.readFileSync(f));
+    fs.writeFileSync(files[0], P.sealBlob(key, "r:" + oj.length, zlib.deflateRawSync(oj), Buffer.from("odd research")).file);
+    fs.writeFileSync(files[1], P.sealBlob(key, "q", cj, Buffer.from("odd cards")).file);
+    try {
+      const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+      const page = await ctx.newPage();
+      watch(page, "odd");
+      await page.goto(BASE + "#research/" + inv.id);
+      await unlock(page);
+      await page.waitForSelector(".rdet .rdt", { timeout: 8000 });
+      await page.hover(".rdet .rq .rchip").catch(() => {});
+      await page.click(".rdet .rq .rchip").catch(() => {});
+      await page.hover(".rdet .rsrc .rchip").catch(() => {});
+      const st = await page.evaluate(() => ({ odd: window.__odd, attrs: document.querySelectorAll("#resin [onmouseover], #resin [onclick], .node [onerror], .node img[src='x']").length,
+        badges: [...document.querySelectorAll(".node .rqb")].map(b => b.textContent.replace(/\s+/g, " ").trim()) }));
+      ok(st.odd === undefined && st.attrs === 0, "statuses, states and counts the page does not know become nothing, never markup (" + JSON.stringify(st) + ")");
+      ok(st.badges.length === 1 && /^1 open research question$/.test(st.badges[0]), "a badge count that is not a number shows no badge; a real one still shows (" + st.badges.join(" | ") + ")");
+      /* the bio of the card with the real count: its investigation's tier is not one the page knows */
+      await page.click("#vt-tree");
+      await page.waitForTimeout(300);
+      await page.click('.node:has(.rqb) [data-bio]');
+      await page.waitForSelector("#profile .prq", { timeout: 5000 });
+      const bio = await page.evaluate(() => ({ chips: document.querySelectorAll("#profile .prqt .rchip").length, attrs: document.querySelectorAll("#profile .prq [onclick]").length,
+        title: (document.querySelector("#profile .prqt b") || {}).textContent, odd: window.__odd }));
+      ok(bio.title === "Odd" && bio.chips === 0 && bio.attrs === 0 && bio.odd === undefined, "the bio lists it without a tier it does not know (" + JSON.stringify(bio) + ")");
+      await ctx.close();
+    } finally { files.forEach((f, i) => fs.writeFileSync(f, kept[i])); }
+  }
+  /* ---------------- phone ---------------- */
+  {
+    console.log("\n== phone");
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+    const page = await ctx.newPage();
+    watch(page, "phone");
+    await page.goto(BASE);
+    await unlock(page);
+    await page.waitForTimeout(800);
+    const dock = await page.$$eval("#dock > button", bs => bs.filter(b => b.offsetWidth).map(b => b.offsetWidth));
+    ok(dock.length === 4, "the dock holds Tree, Map, Research and Filters (" + dock.join(", ") + " px)");
+    const dockW = await page.$eval("#dock", d => d.scrollWidth <= d.clientWidth + 1);
+    ok(dockW, "the dock does not overflow at 390 px");
+    await shot(page, "p1-tree.png");
+    await page.tap('#dock [data-view="research"]');
+    await page.waitForSelector(".rph .rinv", { timeout: 5000 });
+    ok(await page.isHidden("#dockfilt"), "Filters leaves the dock in Research");
+    await shot(page, "p2-list.png");
+    const noScrollX = await page.evaluate(() => document.getElementById("resview").scrollWidth <= document.getElementById("resview").clientWidth + 1);
+    ok(noScrollX, "no sideways scroll on the phone list");
+    await page.tap('.rinv[data-id="i2"]');
+    await page.waitForSelector(".rdet .rdt");
+    ok((await page.textContent(".rdet .rdt")) === "The millstone’s carved year", "tapping an investigation opens it");
+    await shot(page, "p3-inv.png");
+    await page.tap('[data-ra="src"][data-id="s4"]');
+    await page.waitForSelector(".rsheet h1");
+    ok((await page.textContent(".rsheet h1")) === "The millstone itself", "tapping a source opens its sheet");
+    await shot(page, "p4-source.png");
+    await page.tap('[data-ra="visit"]');
+    await page.waitForSelector(".rvisit h1");
+    await shot(page, "p5-visit.png");
+    /* the phone's Back button walks back one screen at a time and never leaves the site */
+    await page.goBack();
+    await page.waitForTimeout(500);
+    ok(await page.isVisible(".rsheet h1"), "Back from the visit list returns to the source");
+    await page.goBack();
+    await page.waitForTimeout(500);
+    ok(await page.isVisible(".rdet .rdt"), "Back again returns to the investigation");
+    await page.goBack();
+    await page.waitForTimeout(500);
+    ok(await page.isVisible(".rph .rinv"), "and again to the list");
+    ok(page.url().startsWith(BASE), "still on the site");
+    /* leaving Research from inside it (review, 3 Oct 2026: about 250 ms later it was back in Research) */
+    await page.tap('.rinv[data-id="i2"]');
+    await page.waitForSelector(".rdet .rdt");
+    await page.waitForTimeout(400);
+    await page.tap('#dock [data-view="tree"]');
+    await page.waitForTimeout(1000);
+    let w = await where(page);
+    ok(!w.res && !/^#research/.test(w.hash), "from an investigation, Tree stays on the tree (" + JSON.stringify(w) + ")");
+    await page.tap('#dock [data-view="research"]');
+    await page.waitForSelector(".rdet .rdt");
+    await page.waitForTimeout(400);
+    await page.tap('#dock [data-view="map"]');
+    await page.waitForTimeout(1000);
+    w = await where(page);
+    ok(w.map && !w.res && !/^#research/.test(w.hash), "from an investigation, Map stays on the map (" + JSON.stringify(w) + ")");
+    await page.tap('#dock [data-view="research"]');
+    await page.waitForSelector(".rph");
+    if (await page.isVisible('[data-ra="back"]')) { await page.tap('[data-ra="back"]'); await page.waitForTimeout(300); }
+    await page.tap('.rinv[data-id="i1"]');
+    await page.waitForSelector('.rdet [data-ra="person"]');
+    await page.waitForTimeout(400);
+    await page.tap('.rdet [data-ra="person"]');
+    await page.waitForTimeout(1000);
+    w = await where(page);
+    ok(!w.res && !/^#research/.test(w.hash), "a person chip stays on the tree (" + JSON.stringify(w) + ")");
+    /* the older layers keep their Back: a bio opened on the tree closes on Back (the guard change of 3 Oct) */
+    const bioChip = await page.$('.node [data-bio]');
+    ok(!!bioChip, "a card on the phone has its Bio button");
+    if (bioChip) {
+      await bioChip.evaluate(el => el.click());   /* the keyboard path: the tree reads taps from pointer events */
+      await page.waitForSelector("#profile .phead", { timeout: 5000 });
+      await page.waitForTimeout(400);
+      await page.goBack();
+      await page.waitForTimeout(500);
+      ok(await page.evaluate(() => document.getElementById("profile").style.display !== "flex"), "Back still closes a bio");
+      ok(page.url().startsWith(BASE), "and stays on the site");
+    }
+    await page.tap('#dock [data-view="research"]');
+    await page.waitForTimeout(300);
+    /* French on the phone, the visit list */
+    await page.evaluate(() => { location.hash = "#research/visit/v1"; });
+    await page.waitForSelector(".rvisit h1");
+    await page.evaluate(() => document.getElementById("lang").click());
+    await page.waitForTimeout(300);
+    ok(/Musée du moulin d’Alphaville/.test(await page.textContent(".rvisit h1")), "French: the visit list");
+    await shot(page, "p6-visit-fr.png");
+    await ctx.close();
+  }
+  console.log("\npage errors: " + (errors.length ? "\n  " + errors.join("\n  ") : "none"));
+  ok(!errors.length, "no page errors");
+  await browser.close();
+}
+
+/* --real: every investigation, wide and phone, English and French, with screenshots to read */
+async function runReal() {
+  const browser = await chromium.launch();
+  const errors = [];
+  const ids = R0.investigations.map(iv => iv.id);
+  for (const [label, opts] of [["wide", { viewport: { width: 1440, height: 900 } }], ["phone", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 }]]) {
+    const ctx = await browser.newContext(opts);
+    const page = await ctx.newPage();
+    page.on("pageerror", e => errors.push(label + ": " + e.message));
+    await page.goto(BASE);
+    await unlock(page);
+    await page.waitForTimeout(1500);
+    const badges = await page.$$eval(".node .rqb", e => e.length);
+    console.log("     " + label + ": the tree shows " + badges + " research badge(s) on the cards drawn at start");
+    await shot(page, label + "-0-tree.png");
+    for (const lang of ["en", "fr"]) {
+      if (lang === "fr") await page.evaluate(() => document.getElementById("lang").click());
+      let shown = 0;
+      for (const id of ids) {
+        await page.evaluate(i => { location.hash = "#research/" + i; }, id);
+        await page.waitForSelector(".rdet .rdt", { timeout: 8000 }).catch(() => {});
+        const t = await page.$eval(".rdet .rdt", e => e.textContent).catch(() => "");
+        if (t) shown++;
+        await shot(page, label + "-" + lang + "-" + id + ".png");
+      }
+      ok(shown === ids.length, label + " " + lang + ": every investigation opens (" + shown + " of " + ids.length + ")");
+      await page.evaluate(() => { location.hash = "#research"; });
+      await page.waitForTimeout(300);
+      await shot(page, label + "-" + lang + "-list.png");
+      for (const v of Object.keys(R0.visits || {})) {
+        await page.evaluate(x => { location.hash = "#research/visit/" + x; }, v);
+        await page.waitForSelector(".rvisit h1", { timeout: 8000 }).catch(() => {});
+        await shot(page, label + "-" + lang + "-visit-" + v + ".png");
+      }
+    }
+    await ctx.close();
+  }
+  console.log("\npage errors: " + (errors.length ? "\n  " + errors.join("\n  ") : "none"));
+  ok(!errors.length, "no page errors with the real data");
+  console.log("screenshots: " + SHOTS);
+  await browser.close();
+}
+
+server.listen(0, "127.0.0.1", () => {
+  BASE = "http://127.0.0.1:" + server.address().port + "/";
+  (REAL ? runReal() : run()).catch(e => { console.error(e); fail++; }).finally(() => {
+    server.close(); fs.rmSync(OUT, { recursive: true, force: true });
+    console.log("\n" + pass + " passed, " + fail + " failed");
+    process.exit(fail ? 1 : 0);
+  });
+});

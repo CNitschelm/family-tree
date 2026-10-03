@@ -9,6 +9,28 @@
 > 15 Sep 2026) and its mirror in `notes/` (gitignored — never published). A session with no project
 > association cannot reach the store; `notes/` works either way. When something changes, update both.
 
+## Research — read it first, keep it current, never wait to be asked (Cory, 2 Oct 2026)
+The site's **Research** view shows every open investigation: topic → investigation → key questions →
+sources → what has happened. Its data is `research.json` (private, repo root, like `data.json`); the page
+reads a sealed copy, `media/research.bin`, and the badges on the tree's cards read `media/research-cards.bin`.
+Cory: *"I should NEVER need to instruct an agent to update it. Agents should also reference it when investigating."*
+- **Before investigating**, read it: `node tools/research.js status`, then `show <id>`. It says what is open,
+  who has each source, what is next, and what has already been tried. Do not redo what it records.
+- **In the same session**, whenever research state changes (a source read, a reply received, a request or
+  email sent, a visit planned, a decision made, a card changed), update it with `node tools/research.js
+  log | set | answer | state | inv | add-source …`. Each command validates, saves and rebuilds both files.
+  `--date` sets the day a thing happened; the gate checks a change set's research ids against the real
+  time each command records (`_touched`, private), so record a change in the session that makes it.
+- **Before finishing**, deploy it: commit `media/research.bin` and `media/research-cards.bin` in GitHub
+  Desktop ("Update research data"). A research-only update needs nothing else; the commit hook checks
+  `.research-stamp`. Every change file says `"research": "<ids it moves>"` or `"none: <why>"`, and
+  `checks/gate.js` refuses a payload when research.json does not show what those change sets moved.
+- **Everyone with the site password sees it.** Living people get a birth year only; no emails, phone
+  numbers or street addresses; no health, money or private family matters; nothing about a recent death
+  beyond what the family made public; no notes on how to handle a person; neutral wording about anyone's
+  beliefs. `research.js validate` checks what a machine can, including the names in the private
+  `ledger/research-deny.txt` (people researched but never to be published); you read every string you write.
+
 ## Standing priorities (Cory, 31 Jul 2026 — applies to every task here)
 1. **Thoroughness and accuracy first.** Never trade correctness for a shortcut.
 2. **Then token efficiency.**
@@ -19,7 +41,7 @@
 Cory's interest is **depth of coverage and history**, not breadth. Do not add new people to the tree — including newly discovered relatives, collateral lines, and non-Nitschelm surnames — without confirming with him first. Enriching existing people (bios, documents, photos, sources, corrections) never needs permission.
 
 ## Where things live
-See `OPERATING.md`, "Where things live". In short: `index.html` is the site; `data.json`, `.password`,
+See `OPERATING.md`, "Where things live". In short: `index.html` is the site; `data.json`, `research.json`, `.password`,
 `ledger/` and every research `.md` are private and never committed.
 
 ## Privacy invariant (non-negotiable) — read this before every commit

@@ -40,6 +40,10 @@ jobs:
           fi
           echo "committed payload iv: $expected"
           echo "committed bytes:      $(wc -c < index.html)"
+          # the page's own bytes, not only its payload: a commit that changes the page and not the data
+          # (3 Oct 2026, the Research view) keeps the iv, so the iv alone would match the OLD page at once
+          want=$(sha256sum index.html | cut -d' ' -f1)
+          live_page="${RUNNER_TEMP:-/tmp}/live-index.html"
 
           # Pages usually publishes in well under a minute, but a busy runner queue can
           # take several. Poll generously: a check that goes red on a slow-but-healthy
@@ -48,28 +52,29 @@ jobs:
           attempt=0
           while [ $SECONDS -lt $deadline ]; do
             attempt=$(( attempt + 1 ))
-            body=$(curl -fsSL --max-time 90 -H 'Cache-Control: no-cache' \
-                     "${SITE}?cb=${GITHUB_SHA}-${attempt}" 2>/dev/null) || body=""
-            if [ -n "$body" ]; then
-              live=$(printf '%s' "$body" | grep -o 'iv:"[^"]*"' | head -1 | sed 's/iv:"//;s/"//')
-              echo "attempt ${attempt} (${SECONDS}s): live iv = ${live:-<none>}"
-              if [ "$live" = "$expected" ]; then
-                echo "MATCH after ${SECONDS}s — the live site is serving this commit's payload."
-                echo "live bytes: $(printf '%s' "$body" | wc -c)"
-                # the bio pictures beside the page (tools/payload.js): every file this commit has in
-                # media/ must be served too, or a bio shows empty frames. Prints file ids only.
-                n=0; bad=0
-                for f in media/*.bin; do
+            if curl -fsSL --max-time 90 -H 'Cache-Control: no-cache' \
+                 "${SITE}?cb=${GITHUB_SHA}-${attempt}" -o "$live_page" 2>/dev/null; then
+              live=$(grep -o 'iv:"[^"]*"' "$live_page" | head -1 | sed 's/iv:"//;s/"//')
+              same="no"; [ "$(sha256sum "$live_page" | cut -d' ' -f1)" = "$want" ] && same="yes"
+              echo "attempt ${attempt} (${SECONDS}s): live iv = ${live:-<none>}, page is this commit's: ${same}"
+              if [ "$live" = "$expected" ] && [ "$same" = "yes" ]; then
+                # the files beside the page: the bios and pictures (tools/payload.js), the Research view's
+                # two files (tools/research.js) and the map's layers (tools/mapfile.js). Every one this commit
+                # has must be served too, or a bio, the Research view or the map shows nothing. They can trail
+                # the page by a little, so this is retried with the page until the deadline. Prints names only.
+                n=0; bad=0; missing=""
+                for f in media/*.bin map/*.json; do
                   [ -e "$f" ] || continue
                   n=$(( n + 1 ))
-                  curl -fsIL --max-time 60 "${SITE}${f}" >/dev/null 2>&1 || { bad=$(( bad + 1 )); echo "not served: $f"; }
+                  curl -fsIL --max-time 60 "${SITE}${f}?cb=${GITHUB_SHA}-${attempt}" >/dev/null 2>&1 || { bad=$(( bad + 1 )); missing="${missing} ${f}"; }
                 done
-                if [ "$bad" -gt 0 ]; then
-                  echo "::error::${bad} of ${n} bio picture file(s) in media/ are not served."
-                  exit 1
+                if [ "$bad" -eq 0 ]; then
+                  echo "MATCH after ${SECONDS}s: the live site serves this commit's page and payload."
+                  echo "live bytes: $(wc -c < "$live_page")"
+                  echo "media/ and map/: all ${n} file(s) served"
+                  exit 0
                 fi
-                echo "media/: all ${n} bio picture file(s) served"
-                exit 0
+                echo "attempt ${attempt}: the page is live, but ${bad} of ${n} file(s) are not served yet:${missing}"
               fi
             else
               echo "attempt ${attempt} (${SECONDS}s): site not reachable yet"
@@ -81,7 +86,7 @@ jobs:
           # deploy looked wrong the cause was assumed to be payload size and 62 images
           # were recompressed for nothing — the runner was the problem, and a re-run
           # fixed it in forty seconds.
-          echo "::error::Live site still not serving this commit's payload after ${SECONDS}s."
+          echo "::error::After ${SECONDS}s the live site still does not serve this commit's page, payload and files (the last attempt above says which)."
           cat <<'EOF'
           INCONCLUSIVE vs BROKEN — do not guess.
 
