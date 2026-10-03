@@ -214,6 +214,57 @@ async function run() {
     page.on("pageerror", e => { errors.push(label + ": " + e.message); console.log("   PAGEERROR " + e.message + " | " + (e.stack || "").split("\n").slice(1, 3).join(" | ")); });
     page.on("console", m => { if (m.type() === "error" && !(expected404 && /status of 404/.test(m.text()))) errors.push(label + " console: " + m.text()); });
   };
+  /* ---------------- Hide dead lines (Cory, 3 Oct 2026, register R-0444) ----------------
+     Every branch head of the invented family has a dead son (1700s) and a living daughter (b. 195x). */
+  {
+    console.log("\n== desktop, hide dead lines");
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await ctx.newPage();
+    watch(page, "dead lines");
+    await page.goto(BASE);
+    await unlock(page);
+    await page.waitForTimeout(800);
+    const shown = nm => page.evaluate(nm => [...document.querySelectorAll(".node")].some(e => { const x = e.querySelector(".nm"); return x && x.textContent === nm && e.getBoundingClientRect().width > 0; }), nm);
+    const pillOf = nm => page.evaluate(nm => { const e = [...document.querySelectorAll(".node")].find(e => { const x = e.querySelector(".nm"); return x && x.textContent === nm; }); const p = e && e.querySelector("[data-pill]"); return p ? p.textContent : null; }, nm);
+    const pill = nm => page.click(`.node:has(.nm:text-is("${nm}")) [data-pill]`);
+    await page.click("#filtbtn");
+    await page.waitForSelector("#deadsw", { state: "visible" });
+    ok((await page.getAttribute("#deadsw", "role")) === "switch" && (await page.getAttribute("#deadsw", "aria-checked")) === "true",
+      "Hide dead lines is a switch in Filters, on when the tree opens");
+    ok(await page.isHidden("#restart"), "…and with it on, the tree is as it opens (no Start over)");
+    await shot(page, "dl1-filters.png");
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+    ok(await page.isHidden("#filters"), "Escape closes the Filters panel");
+    let t = await pillOf("Branch1 Testmann");
+    ok(t === "+1", "a card on a live line offers its living child first (" + t + ")");
+    await pill("Branch1 Testmann");
+    await page.waitForTimeout(500);
+    t = await pillOf("Branch1 Testmann");
+    ok(await shown("Daughter1 Testmann") && !(await shown("Child1 Testmann")) && /^\+1 /.test(t || ""),
+      "one click shows the living daughter, and the pill offers the dead line (" + t + ")");
+    await pill("Branch1 Testmann");
+    await page.waitForTimeout(500);
+    ok(await shown("Child1 Testmann"), "a second click opens the dead line directly");
+    await page.click("#filtbtn");
+    await page.click("#deadsw");
+    await page.waitForTimeout(600);
+    t = await pillOf("Branch2 Testmann");
+    ok((await page.getAttribute("#deadsw", "aria-checked")) === "false" && t === "+2", "switched off, a card offers all its children (" + t + ")");
+    ok(await page.isVisible("#restart"), "switched off, Start over appears");
+    await page.click("#restart");
+    await page.waitForTimeout(600);
+    ok((await page.getAttribute("#deadsw", "aria-checked")) === "true", "Start over turns the switch back on");
+    await page.fill("#search", "Child3");
+    await page.waitForSelector("#suggest .it", { timeout: 3000 });
+    await page.click("#suggest .it");
+    await page.waitForTimeout(900);
+    ok(await shown("Child3 Testmann"), "search still shows a person on a dead line, with the switch on");
+    await page.click("#lang");
+    await page.waitForTimeout(400);
+    ok((await page.textContent("#dead-l")) === "Masquer les lignées éteintes", "the switch is in French too");
+    await ctx.close();
+  }
   /* ---------------- desktop ---------------- */
   {
     console.log("\n== desktop, cold start");

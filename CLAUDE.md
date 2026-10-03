@@ -42,14 +42,25 @@ Cory wants **the true extent of the line**: every Nitschelm, in any spelling, de
 the root ancestor, card `c001` (c. 1500). Register entry R-0437 holds his words. It replaces "do not add people
 without asking" (R-0381) and the 1 Aug daughters rule (R-0386).
 - **Add freely, without asking:** anyone born to a man of the line — sons and daughters, children who died young
-  included — once the link is **proven from a document we hold**: an act read in the original, an official record
+  included (stillborn children excepted) — once the link is **proven from a document we hold**: an act read in the original, an official record
   or index entry naming the parent, a census line, a family notice signed by the children, or an act number from a
   register transcription. R-0437 is the owner entry `change.js` asks for: `"register": "R-0437"` on each
   `addCard`, with `"at"` placing the card among its brothers and sisters in birth order.
 - **Daughters get cards; their children are not drawn.** A daughter's marriage is a union on her card.
-- **The cards that already break the daughters rule stay until Cory decides** (3 Oct 2026: 38 cards under
-  12 daughters, the Schweitzer/Sartre line among them; OPEN-ITEMS, "Waiting on Cory"). Do not remove them
-  without his word.
+- **The daughters' lines already drawn are decided line by line** (R-0439): one yes/no card per line on Cory's
+  decisions page (notes/decisions_page.md). Until a line is answered, its cards stay; never remove one without his
+  answer. The Schweitzer–Sartre line (c114–c122) stays as a fixed exception, those nine cards only (R-0440).
+- **No cards for stillborn children** (R-0441); a parent's note or bio may mention one.
+- **At most two marriages on a card** (R-0442), so cards keep their size. When more are known, the card keeps the
+  marriage whose children are drawn, then the latest; the earlier ones are told in the bio only. A child whose
+  parents did not marry hangs on a union with no spouse name and no note (c182 under c181, c294 under c004): no
+  marriage sign, and it does not count as a marriage.
+- **The tree hides dead lines by default** (R-0444). A card is on a live line when the person is living (dates
+  "b. YYYY", or none) or has a living descendant on the tree; the "Hide dead lines" switch in Filters (on when the
+  tree opens, back on with Start over) leaves every other card out of the opening view. A branch picked by its
+  tile still shows in full, a card's pill opens its live children first and then the rest ("+N more"), and search
+  shows anyone. In index.html: `n.live`, `hideDead`, `firstKids`; tests/run.js "Filters" and tests/browser.js
+  check it.
 - **Still ask first:** anyone outside the male line (a spouse's family, a daughter's children), and any link that
   rests only on a compiled tree or on inference. Those are research leads (the Research view's "Every Nitschelm
   of the line"), not cards.

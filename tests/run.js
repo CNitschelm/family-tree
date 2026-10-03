@@ -547,9 +547,13 @@ ok(root.desc === allNodes.length - 1, "root.desc === everyone else (" + root.des
 
 /* ---------- 7. Filters (regression: 'east shows too many cards') ---------- */
 section("Filters");
+/* "Hide dead lines" (Cory, 3 Oct 2026, register R-0444) is on when the tree opens; the checks below that
+ * describe the filters themselves run in that state, and the switch has its own checks after them. */
+const setHide = v => vm.runInNewContext("hideDead = " + (v ? "true" : "false"), ctx);
 initView();
 const legacyN = visCount();
 ok(activeFilters.size === 1 && activeFilters.has("legacy"), "default = legacy only");
+ok(get("hideDead") === true, "default = dead lines hidden (Cory, 3 Oct 2026: \"Default on meaning filtered out\")");
 ok(legacyN > 5 && legacyN < 20, "legacy shows the trunk (" + legacyN + ")");
 
 activeFilters.delete("legacy"); activeFilters.add("east"); setOpenFromFilters();
@@ -585,6 +589,45 @@ setOpenFromFilters();
 ok(visCount() === 1, "all filters off = root only");
 initView();
 ok(visCount() === legacyN, "reset restores default view");
+
+/* Dead lines. A card is on a LIVE line when the person is living (dates "b. YYYY", or none at all) or has a
+ * living descendant on the tree; recomputed here from that definition, not read from the page. Cory, 3 Oct
+ * 2026: "Any individual that is not a trace to a living person is filtered out" — and "Someone can still
+ * search directly or open a line directly": a branch picked by its tile shows in full (checked above, with
+ * the switch on), a card's pill opens the rest, and search (goTo) never consults the switch. */
+{
+  const livingP = p => /^b\.\s*\d/.test(p.years || "") || !/\d/.test(p.years || "");
+  const liveOf = new Map();
+  (function w(n) { n.children.forEach(w); liveOf.set(n, livingP(n.p) || n.children.some(c => liveOf.get(c))); })(root);
+  const nLive = allNodes.filter(n => liveOf.get(n)).length;
+  ok(allNodes.every(n => n.live === liveOf.get(n)) && root.live,
+    "every card knows whether its line reaches a living person (" + nLive + " on live lines, " + (allNodes.length - nLive) + " on dead lines)");
+  const shownOf = () => { const s = new Set(); (function w(n) { s.add(n); visChildren(n).forEach(w); })(root); return s; };
+  initView();
+  const on = shownOf();
+  ok([...on].every(n => n.live), "the opening view shows no card on a dead line (" + on.size + " cards)");
+  const firstKids = get("firstKids");
+  const deepest = [...on].filter(n => n.open).sort((a, b) => b.gen - a.gen)[0];
+  ok(deepest && firstKids(deepest).length !== 1,
+    "…and runs down the trunk to where the living lines part (generation " + (deepest ? deepest.gen + 1 : "?") + ")");
+  setHide(false); setOpenFromFilters();
+  const off = shownOf();
+  ok([...off].filter(n => n.live).every(n => on.has(n)) && [...off].some(n => !n.live),
+    "switched off, it shows the brothers and sisters on dead lines along the trunk as well (" + off.size + " cards)");
+  const mixed = allNodes.find(n => n.live && n.children.some(c => c.live) && n.children.some(c => !c.live));
+  ok(mixed && firstKids(mixed).length === mixed.children.length, "switched off, one click opens every child");
+  setHide(true);
+  ok(mixed && firstKids(mixed).length === mixed.children.filter(c => c.live).length && firstKids(mixed).every(c => c.live),
+    "switched on, one click opens the live children first; the pill then offers the rest");
+  const deadOne = allNodes.find(n => !n.live && n.children.length);
+  ok(deadOne && firstKids(deadOne).length === deadOne.children.length, "a dead line, once opened, opens in full");
+  const schw = BRANCH_HEADS.schw;
+  activeFilters.clear(); activeFilters.add("schw"); setOpenFromFilters();
+  ok(schw && visCount() === subtreeSize(schw) + depth(schw) && [...shownOf()].some(n => !n.live),
+    "a branch picked by its tile is shown in full, dead lines and all (the Schweitzer tile: " + visCount() + " cards)");
+  setHide(false); initView();
+  ok(get("hideDead") === true && visCount() === legacyN, "Start over turns the switch back on");
+}
 
 /* Every branch must be selectable and visibly so. Regression from 20 Sep 2026: three branches
  * added in 2026 had tree buttons with no selected-state rule (a click toggled the filter and lit
