@@ -279,6 +279,40 @@ section("Research view (load on open)");
   ok(/data-view="research"/.test(html) && /id="resview"/.test(html), "the Research tab and view are in the markup");
 }
 
+/* ---------- 2f. Cory's Decide buttons (3 Oct 2026, register R-0445) ----------
+ * An item waiting on one of his yes/no cards carries `dec`; the address of his private decisions page is the
+ * research file's `decide`. Only a device opened once with #owner shows them, and the page carries no address. */
+section("Decide buttons");
+{
+  ok(/function rDecHref\(id\)\{\s*(\/\*[^*]*\*\/\s*)?if\(!OWNER \|\| !RES \|\| /.test(js), "a Decide link exists only on a device marked with #owner, once the research file is here");
+  ok(/localStorage\.setItem\(SITE\.store \+ "owner", "1"\)/.test(js) && /localStorage\.removeItem\(SITE\.store \+ "owner"\)/.test(js), "#owner and #owner-off keep the mark under this build's own storage prefix");
+  ok(/target="_blank" rel="noopener"/.test(js.slice(js.indexOf("function rDecide("), js.indexOf("function rDecide(") + 600)), "a Decide link opens in a new tab with no handle back to the site");
+  ok(!/claude\.ai\/artifact\/[A-Za-z0-9]{6,}/.test(html), "the page carries no decisions page address (it comes from the sealed research file)");
+  const need = ["res_decisions", "res_decide", "res_dec_chip", "res_dec_title", "res_dec_all_title"];
+  ok(need.every(k => (js.match(new RegExp("\\b" + k + ':"[^"]+"', "g")) || []).length === 2), "Decide strings exist in English and French");
+}
+
+/* ---------- 2g. The "w/ …" label on a line down to a child (Cory, 3 Oct 2026) ----------
+ * With two spouses of the same first names, the first name alone named both lines alike. */
+section("Union labels");
+{
+  const fn = js.match(/function unionLabel\(p, ui\)\{[\s\S]*?\n\}/);
+  ok(!!fn, "the page has unionLabel");
+  if (fn) {
+    const L = vm.runInNewContext(fn[0] + "\nunionLabel");
+    const two = { unions: [{ s: "Wilhelmina Rosa Quillfeather" }, { s: "Wilhelmina Rosa Brambleworth" }, { s: "" }] };
+    ok(L(two, 0) === "Wilhelmina Quillfeather" && L(two, 1) === "Wilhelmina Brambleworth", "two wives of the same first names: first and last names (" + L(two, 0) + " / " + L(two, 1) + ")");
+    const diff = { unions: [{ s: "Odile Quillfeather" }, { s: "Brunhild Quillfeather" }] };
+    ok(L(diff, 0) === "Odile" && L(diff, 1) === "Brunhild", "different first names: the first name alone, as before");
+    const alike = { unions: [{ s: "Wilhelmina Rosa Probe" }, { s: "Wilhelmina Probe" }] };
+    ok(L(alike, 0) === "Wilhelmina Rosa Probe" && L(alike, 1) === "Wilhelmina Probe", "first and last names alike too: the whole name");
+    const same = { unions: [{ s: "Odile Probe", sy: "1700–1750" }, { s: "Odile Probe", sy: "1720–1790" }] };
+    ok(L(same, 0) === "Odile Probe (1700–1750)" && L(same, 1) === "Odile Probe (1720–1790)", "the same name twice: with the spouse's years");
+    ok(L(two, 2) === "", "a union with no spouse named: no label");
+  }
+  ok(/t\.textContent = "w\/ " \+ unionLabel\(a\.p, b\.unionIdx\);/.test(js), "the line's label comes from unionLabel");
+}
+
 /* ---------- 3. Decrypt DATA ---------- */
 section("Decrypt DATA");
 let PW = (process.env.FT_PASSWORD || "").trim();
@@ -654,6 +688,23 @@ ok(visCount() === legacyN, "reset restores default view");
   ok(Object.keys(BRANCH_HEADS).join() === BRANCHES.filter(b => !b.trunk).map(b => b.key).join(),
     "branch heads are derived from BRANCHES, in its order");
   ok(!/\.b-(leg|fr|east|west|ohio|doubs|colmar|paris|schw)\b/.test(html), "no per-branch CSS classes remain (one generic rule)");
+}
+
+/* ---------- 7b. Lines through a daughter (Cory, 3 Oct 2026) ----------
+ * Below a daughter of the line every card is marked through her, all the way down: dashed connectors, a tag on
+ * the card, a link up to her in the bio. Card ids only here: CI logs are public. */
+section("Lines through a daughter");
+{
+  const wrong = allNodes.filter(n => n.parent && n.viaF !== (n.parent.viaF || (n.parent.p.g === "f" ? n.parent : null)));
+  ok(!wrong.length, "every card below a daughter of the line is marked through her, all the way down, and no other card is (" + wrong.length + " wrong)");
+  ok(root.viaF === null, "the root is not marked");
+  const sw = allNodes.filter(n => /^c1(1[4-9]|2[0-2])$/.test(n.p.id));
+  ok(sw.length === 9 && sw.every(n => n.viaF && n.viaF.p.id === "c113"), "the Schweitzer line's nine cards (c114–c122) are marked through c113 (" + sw.filter(n => n.viaF && n.viaF.p.id === "c113").length + " of " + sw.length + ")");
+  ok(allNodes.filter(n => n.viaF).every(n => n.viaF.p.g === "f" && !n.viaF.viaF), "each mark names the daughter where the line left the male line");
+  ok(/path\.setAttribute\("class", b\.viaF \? "edge vf" : "edge"\)/.test(js) && /\.edge\.vf\{stroke-dasharray:/.test(html), "their connectors are dashed");
+  ok(/\$\{viaTag\(n\)\}<\/div>/.test(js), "each such card carries the tag");
+  ok(["legend_vf", "via_f", "via_f_t", "via_f_lb"].every(k => I18N.en[k] && I18N.fr[k] && !/nitschelm/i.test(I18N.en[k] + I18N.fr[k])),
+    "its strings exist in English and French, without the family name (the demo is built from this page)");
 }
 
 /* ---------- 8. Search (regressions: accents, duplicates) ----------

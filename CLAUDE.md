@@ -30,6 +30,11 @@ Cory: *"I should NEVER need to instruct an agent to update it. Agents should als
   beyond what the family made public; no notes on how to handle a person; neutral wording about anyone's
   beliefs. `research.js validate` checks what a machine can, including the names in the private
   `ledger/research-deny.txt` (people researched but never to be published); you read every string you write.
+- **Cory's Decide buttons (R-0445).** An investigation, source or visit list that waits on one of his open yes/no
+  cards carries `dec`, the card's id (`research.js set <id> dec=<card>`, `inv <inv> dec=<card>`); the address of his
+  private decisions page is the file's `decide` (`research.js decide <url>`). The Research view shows a Decide button
+  for each, and a "Your decisions" link, only on a device opened once with `#owner` (`#owner-off` undoes it).
+  **Whoever finishes a card clears its `dec`** (`dec=`), the decision runner included.
 
 ## Standing priorities (Cory, 31 Jul 2026 — applies to every task here)
 1. **Thoroughness and accuracy first.** Never trade correctness for a shortcut.
@@ -61,6 +66,9 @@ without asking" (R-0381) and the 1 Aug daughters rule (R-0386).
   tile still shows in full, a card's pill opens its live children first and then the rest ("+N more"), and search
   shows anyone. In index.html: `n.live`, `hideDead`, `firstKids`; tests/run.js "Filters" and tests/browser.js
   check it.
+- **Lines through a daughter are marked all the way down** (R-0446): below a daughter of the line every connector is
+  dashed and every card says "through <her first name>" (index.html `viaF`, `viaTag`). Nothing to do per line: a line
+  that stays is marked, one that goes takes its marks with it.
 - **Still ask first:** anyone outside the male line (a spouse's family, a daughter's children), and any link that
   rests only on a compiled tree or on inference. Those are research leads (the Research view's "Every Nitschelm
   of the line"), not cards.

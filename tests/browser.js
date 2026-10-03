@@ -137,6 +137,11 @@ const R = {
   ]
 };
 (function fix(o) { if (Array.isArray(o)) o.forEach(fix); else if (o && typeof o === "object") { if (o.n && o.card && idOf[o.n]) o.card = idOf[o.n]; Object.values(o).forEach(fix); } })(R.investigations);
+/* Cory's Decide buttons (register R-0445): a made-up page address and made-up card ids */
+R.decide = "https://claude.ai/artifact/TestDecisionsPage1";
+R.investigations.find(x => x.id === "i2").qs[0].src.find(s => s.id === "s5").dec = "x1";
+R.visits.v1.dec = "x2";
+R.investigations.find(x => x.id === "i4").dec = "x3";
 const cards = []; (function walk(p) { cards.push({ id: p.id, name: p.name, years: p.years }); (p.unions || []).forEach(u => (u.c || []).forEach(walk)); })(root);
 const v = RJ.validate(R, { cards, quiet: true });
 if (v.errors.length) { console.error(v.errors.join("\n")); process.exit(1); }
@@ -582,6 +587,75 @@ async function run() {
       ok(bio.title === "Odd" && bio.chips === 0 && bio.attrs === 0 && bio.odd === undefined, "the bio lists it without a tier it does not know (" + JSON.stringify(bio) + ")");
       await ctx.close();
     } finally { files.forEach((f, i) => fs.writeFileSync(f, kept[i])); }
+  }
+  /* ---------------- Cory's Decide buttons (register R-0445): only on a device opened with #owner ---------------- */
+  if (!REAL) {
+    console.log("\n== Decide buttons");
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await ctx.newPage();
+    watch(page, "decide");
+    const PAGEURL = R.decide;
+    const decs = () => page.evaluate(() => [...document.querySelectorAll("#resin a.rdec")].map(a => ({ href: a.getAttribute("href"), target: a.target, rel: a.rel, text: a.textContent.trim() })));
+    await page.goto(BASE + "#research/i2");
+    await unlock(page);
+    await page.waitForSelector(".rdet .rdt", { timeout: 8000 });
+    let d = await decs();
+    ok(d.length === 0 && !(await page.$("#resin .rdecchip")), "without #owner: no Decide button and no chip (" + d.length + ")");
+    await page.evaluate(() => { location.hash = "#owner"; });
+    await page.waitForTimeout(600);
+    ok(await page.evaluate(() => localStorage.getItem("ft-owner") === "1"), "#owner marks this device");
+    const h1 = await page.evaluate(() => location.hash);
+    ok(h1 === "#research/i2", "and the address goes back to where Research was (" + h1 + ")");
+    d = await decs();
+    const hrefs = d.map(x => x.href);
+    ok(hrefs.includes(PAGEURL), "the header links to the decisions page (" + hrefs.join(", ") + ")");
+    ok(hrefs.includes(PAGEURL + "#x1"), "a source waiting on a decision links straight to its card");
+    ok(d.length > 0 && d.every(x => x.target === "_blank" && /noopener/.test(x.rel)), "in a new tab, with no handle back to the site");
+    ok(!!(await page.$("#rs-s5 .rdecchip")) && !(await page.$("#rs-s4 .rdecchip")), "the chip marks that source's row, and only it");
+    ok(!!(await page.$('.rinv[data-id="i2"] .rdecchip')) && !(await page.$('.rinv[data-id="i1"] .rdecchip')), "and its investigation in the list, and only it");
+    await shot(page, "d1-decide.png");
+    await page.evaluate(() => { location.hash = "#research/i4"; });
+    await page.waitForFunction(() => { const h = document.querySelector(".rdet .rdt"); return h && /sea/.test(h.textContent); }, null, { timeout: 5000 });
+    ok((await decs()).some(x => x.href === PAGEURL + "#x3"), "an investigation waiting on a decision has its own button");
+    await page.evaluate(() => { location.hash = "#research/visit/v1"; });
+    await page.waitForSelector(".rvisit h1", { timeout: 5000 });
+    ok((await decs()).some(x => x.href === PAGEURL + "#x2"), "so does a visit list");
+    await page.evaluate(() => document.getElementById("lang").click());
+    await page.waitForTimeout(300);
+    ok((await decs()).some(x => x.text === "Décider"), "French: Décider");
+    await page.evaluate(() => document.getElementById("lang").click());
+    await page.waitForTimeout(300);
+    await page.evaluate(() => { location.hash = "#owner-off"; });
+    await page.waitForTimeout(600);
+    ok(await page.evaluate(() => localStorage.getItem("ft-owner") === null), "#owner-off unmarks the device");
+    d = await decs();
+    ok(d.length === 0 && (await page.evaluate(() => location.hash)) === "#research/visit/v1", "and the buttons go, the view staying where it was (" + d.length + ")");
+    await ctx.close();
+  }
+  /* ---------------- lines through a daughter (Cory, 3 Oct 2026): dashed all the way down, and a tag ---------------- */
+  if (!REAL) {
+    console.log("\n== lines through a daughter");
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await ctx.newPage();
+    watch(page, "daughters");
+    await page.goto(BASE);
+    await unlock(page);
+    await page.waitForTimeout(800);
+    await page.click('.node:has(.nm:text-is("Branch2 Testmann")) [data-pill]');
+    await page.waitForTimeout(800);
+    const st = await page.evaluate(() => {
+      const card = nm => [...document.querySelectorAll(".node")].find(e => { const x = e.querySelector(".nm"); return x && x.textContent === nm; });
+      const kid = card("Daughter2 Testmann") || card("Child2 Testmann"), head = card("Branch2 Testmann");
+      const tag = kid && kid.querySelector(".vft");
+      return { dashed: document.querySelectorAll("#world .edge.vf").length, tag: tag ? tag.textContent : null, title: tag ? tag.title : null,
+        headTag: head ? !!head.querySelector(".vft") : null, legend: !!document.querySelector('[data-i18n="legend_vf"]') };
+    });
+    ok(st.dashed >= 1, "the line down from a daughter is dashed (" + st.dashed + ")");
+    ok(st.tag === "through Branch2" && /Branch2 Testmann/.test(st.title || ""), "her child's card says through her, with her full name on hover (" + st.tag + ")");
+    ok(st.headTag === false, "she herself is not marked: she is a daughter of the line");
+    ok(st.legend, "Filters explains the dashed line");
+    await shot(page, "v1-daughter-line.png");
+    await ctx.close();
   }
   /* ---------------- phone ---------------- */
   {

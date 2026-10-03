@@ -17,7 +17,7 @@
  *   node tools/research.js link [--write]               fill in people's card ids from data.json
  *
  *   node tools/research.js set <source|visit> key=value …        st, who, who_fr, since, next, next_fr,
- *                                                                why, why_fr, where, where_fr, how, how_fr, by, visit
+ *                                                                why, why_fr, where, where_fr, how, how_fr, by, visit, dec
  *   node tools/research.js log <source|visit> "<English>" "<French>" [--date YYYY-MM-DD]
  *   node tools/research.js answer <investigation> <question no.> "<note>" "<note in French>"
  *   node tools/research.js state <investigation> <question no.> open|lead|partly|answered
@@ -25,6 +25,13 @@
  *   node tools/research.js add-source <investigation> <question no.> '<json>'
  *   node tools/research.js add-question <investigation> '<json>'
  *   node tools/research.js add-inv '<json>'
+ *   node tools/research.js decide <https://claude.ai/artifact/…>  the address of Cory's private decisions page ("" removes it)
+ *
+ * Cory's Decide buttons (3 Oct 2026, register R-0445): an investigation, source or visit list that waits on one of
+ * his yes/no cards carries `dec`, that card's id on his private decisions page (set <id> dec=<card>, or inv <inv>
+ * dec=<card>; dec= clears it, and whoever finishes the card clears it). The page shows a Decide button for it, and
+ * a "Your decisions" link, only on a device opened once with #owner; the decisions page itself is guarded by his
+ * claude.ai login, so the buttons only save him a search.
  *
  * Every command that changes research.json stamps the date on what it touched (`updated` on the
  * investigation and on the file, and the date of a log line; pass --date for the day it happened, if not
@@ -150,7 +157,7 @@ function denyList() {
 /* every text a family member can read, with where it sits (for the privacy rules): EVERY string in the
    family's copy (publicCopy), whatever its key, so a field added by hand or through add-source is checked
    too (review, 3 Oct 2026). Only the keys whose form validate() pins down are passed over. */
-const FORMAL = new Set(["id", "theme", "visit", "branch", "st", "state", "by", "card", "since", "updated", "icon"]);
+const FORMAL = new Set(["id", "theme", "visit", "branch", "st", "state", "by", "card", "since", "updated", "icon", "dec", "decide"]);
 function eachText(R, fn) {
   (function walk(x, where, key) {
     if (typeof x === "string") { if (x && !FORMAL.has(key)) fn(where, x); return; }
@@ -201,6 +208,7 @@ function validate(R, opts = {}) {
   if (!R || typeof R !== "object") return { errors: ["research.json is not an object"], warnings };
   if (R.schema !== 1) E("schema must be 1");
   if (!isDate(R.updated || "")) E("updated must be a date (YYYY-MM-DD)");
+  if (R.decide !== undefined && !/^https:\/\/claude\.ai\/artifact\/[A-Za-z0-9_-]+$/.test(String(R.decide))) E("decide must be the address of Cory's private decisions page (https://claude.ai/artifact/…)");
   const ids = new Map();
   const claim = (id, what) => { if (!/^[a-z][a-z0-9-]*$/i.test(id || "")) E(what + " has a bad id: " + JSON.stringify(id)); else if (ids.has(id)) E("id " + id + " is used twice (" + ids.get(id) + " and " + what + ")"); else ids.set(id, what); };
   const needFr = (o, k, where) => { if (typeof o[k] === "string" && o[k].trim() && !(typeof o[k + "_fr"] === "string" && o[k + "_fr"].trim())) E(where + ": " + k + " has no French (" + k + "_fr)"); };
@@ -223,6 +231,8 @@ function validate(R, opts = {}) {
     if (t.icon !== undefined && !/^[MmLlHhVvCcSsQqTtAaZz0-9 .,-]*$/.test(String(t.icon))) E(t.id + ": icon must be an SVG path (M, L, C, A, Z … and numbers)");
   });
   const touchedOk = (o, where) => { if (o && o._touched !== undefined && (typeof o._touched !== "string" || isNaN(Date.parse(o._touched)))) E(where + "._touched must be a time (the tools write it)"); };
+  let decs = 0;
+  const decOk = (o, where) => { if (!o || o.dec === undefined) return; decs++; if (!/^[a-z]{1,4}[0-9]{1,3}$/.test(String(o.dec))) E(where + ": dec must be one decision card id, such as m1 or bz1"); };
   if (!themes.size) E("no themes");
   const visits = R.visits || {};
   Object.entries(visits).forEach(([id, v]) => {
@@ -231,6 +241,7 @@ function validate(R, opts = {}) {
     ["name", "short", "access", "who", "next"].forEach(k => needFr(v, k, id));
     if (v.st && !STATUSES.includes(v.st)) E(id + ": unknown status " + v.st);
     touchedOk(v, id);
+    decOk(v, id);
     dateOk(v.since, id + ".since", false);
     logOk(v.log, id);
   });
@@ -258,6 +269,7 @@ function validate(R, opts = {}) {
     dateOk(iv.updated, w + ".updated", true);
     if (![0, 1, 2, 3].includes(iv.imp)) E(w + ": imp must be 0, 1, 2 or 3 (3 could settle it, 2 a big step, 1 a small step, 0 on hold)");
     touchedOk(iv, w);
+    decOk(iv, w);
     peopleOk(iv.people, w);
     if (!Array.isArray(iv.qs) || !iv.qs.length) return E(w + ": needs at least one question");
     let open = 0;
@@ -275,6 +287,7 @@ function validate(R, opts = {}) {
         if (!STATUSES.includes(s.st)) E(ws + ": unknown status " + JSON.stringify(s.st));
         if (s.by && !TIERS.includes(s.by)) E(ws + ": by must be one of " + TIERS.join(", "));
         touchedOk(s, ws);
+        decOk(s, ws);
         if (s.visit && !visits[s.visit]) E(ws + ": visit " + s.visit + " does not exist");
         if (s.st === "visit" && !s.visit) W(ws + ": needs a visit, but names no visit list");
         dateOk(s.since, ws + ".since", !CLOSED.has(s.st) && s.st !== "todo" && s.st !== "hold");
@@ -289,6 +302,7 @@ function validate(R, opts = {}) {
     if (open && !iv.imp) E(w + ": has open sources, so imp must be 1–3");
   });
   if (!(R.investigations || []).length) E("no investigations");
+  if (decs && !R.decide) W(decs + " item(s) carry dec, but there is no decide address, so no Decide button shows (node tools/research.js decide <url>)");
   /* privacy: the machine-checkable part of the list; a person still reads every string before publishing */
   const deny = denyList().map(w => new RegExp("(^|[^\\p{L}])" + w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "($|[^\\p{L}])", "iu"));
   eachText(R, (where, v) => {
@@ -438,6 +452,10 @@ function status(R) {
   const cory = [];
   (R.investigations || []).forEach(iv => iv.qs.forEach(q => q.src.forEach(s => { if (tierOf(s) === "assist") cory.push("  " + s.id + "  " + s.t + "  (" + iv.id + ")" + (s.next ? "\n        " + s.next : "")); })));
   if (cory.length) lines.push("\nNeeds Cory's OK, source by source:\n" + cory.join("\n"));
+  const decs = [];
+  (R.investigations || []).forEach(iv => { if (iv.dec) decs.push(iv.id + " → " + iv.dec); iv.qs.forEach(q => q.src.forEach(s => { if (s.dec) decs.push(s.id + " → " + s.dec); })); });
+  Object.entries(R.visits || {}).forEach(([id, v]) => { if (v.dec) decs.push(id + " → " + v.dec); });
+  if (decs.length) lines.push("\nDecide buttons, item → Cory's decision card" + (R.decide ? "" : " (NO decide address: they do not show)") + ":\n  " + decs.join(", "));
   return lines.join("\n");
 }
 
@@ -510,7 +528,7 @@ function main(argv) {
     case "set": {
       const id = args.shift(), f = find(R, id); if (!f || f.kind === "inv") throw new Error("set takes a source or a visit id; for an investigation use: inv");
       const kv = parseKV(args), o = f.kind === "src" ? f.s : f.v;
-      const allowed = ["st", "who", "who_fr", "since", "next", "next_fr", "why", "why_fr", "where", "where_fr", "how", "how_fr", "by", "visit", "t", "t_fr"];
+      const allowed = ["st", "who", "who_fr", "since", "next", "next_fr", "why", "why_fr", "where", "where_fr", "how", "how_fr", "by", "visit", "t", "t_fr", "dec"];
       for (const [k, v] of Object.entries(kv)) { if (!allowed.includes(k)) throw new Error("set: " + k + " is not something set changes (" + allowed.join(", ") + ")"); if (v === "") delete o[k]; else o[k] = v; }
       if (kv.st && !kv.since) o.since = day;
       if (f.kind === "src") touch(f.iv); else if (!R.updated || R.updated < day) R.updated = day;
@@ -540,9 +558,10 @@ function main(argv) {
     case "inv": {
       const id = args.shift(), f = find(R, id); if (!f || f.kind !== "inv") throw new Error("inv takes an investigation id");
       const kv = parseKV(args);
-      const allowed = ["title", "title_fr", "line", "line_fr", "next", "next_fr", "summary", "summary_fr", "imp", "branch", "onTree", "theme"];
+      const allowed = ["title", "title_fr", "line", "line_fr", "next", "next_fr", "summary", "summary_fr", "imp", "branch", "onTree", "theme", "dec"];
       for (const [k, v] of Object.entries(kv)) {
         if (!allowed.includes(k)) throw new Error("inv: " + k + " is not something inv changes (" + allowed.join(", ") + ")");
+        if (k === "dec" && v === "") { delete f.iv.dec; continue; }
         f.iv[k] = k === "imp" ? +v : k === "onTree" ? v !== "false" : v;
       }
       touch(f.iv); mark(f.iv);
@@ -573,10 +592,17 @@ function main(argv) {
       if (!R.updated || R.updated < day) R.updated = day;
       return commit("added investigation " + iv.id);
     }
+    case "decide": {   /* the address of Cory's private decisions page, which the Decide buttons open */
+      const url = args.shift();
+      if (url === undefined) throw new Error('usage: decide <https://claude.ai/artifact/…> (or "" to remove it)');
+      if (url === "") delete R.decide; else R.decide = url;
+      if (!R.updated || R.updated < day) R.updated = day;
+      return commit(url ? "set the decisions page address" : "removed the decisions page address");
+    }
     default:
       console.error("usage: node tools/research.js status | show <id> | validate | build | check | link [--write] |\n" +
         "       set <id> k=v … | log <id> \"<en>\" \"<fr>\" | answer <inv> <no.> \"<en>\" \"<fr>\" | state <inv> <no.> <state> |\n" +
-        "       inv <inv> k=v … | add-source <inv> <no.> '<json>' | add-question <inv> '<json>' | add-inv '<json>'   [--date YYYY-MM-DD]");
+        "       inv <inv> k=v … | add-source <inv> <no.> '<json>' | add-question <inv> '<json>' | add-inv '<json>' | decide <url>   [--date YYYY-MM-DD]");
       process.exit(2);
   }
 }

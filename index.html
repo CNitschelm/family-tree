@@ -173,6 +173,9 @@ html.dark .idots i.on{background:var(--you)}
 .edge{fill:none;stroke:var(--rule);stroke-width:1.6}
 .edge.lit{stroke:var(--you);stroke-width:2.4}
 .edge.dim{opacity:.15}
+/* lines through a daughter (Cory, 3 Oct 2026): dashed all the way down */
+.edge.vf{stroke-dasharray:6 4}
+.node .vft{margin-left:6px;font-style:italic}
 .ulabel{font-size:10px;fill:var(--ink-soft);font-family:'Archivo',sans-serif}
 .node{position:absolute;cursor:pointer}
 .node .box{
@@ -530,6 +533,7 @@ button:focus-visible,#filters .tile:focus-visible{outline:2px solid var(--sel);o
 html.dark #filters .tile[aria-pressed="true"] .cb{color:var(--panel)}   /* the check glyph takes the dark panel colour, not white */
 #filters .tile .tl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .flegend{display:flex;align-items:center;gap:10px;font-size:13px;line-height:1.35;color:var(--ink-soft)}
+.dashsample{width:30px;height:0;flex:none;border-top:2px dashed var(--ink-soft)}
 .edgesample{width:30px;height:20px;flex:none;box-sizing:border-box;background:var(--panel);border:1px solid var(--rule);border-left:3px solid var(--us-east);border-radius:4px}
 .fsep{height:1px;flex:none;background:var(--div)}
 .segs{height:40px;box-sizing:border-box;display:flex;gap:3px;padding:3px;border-radius:12px;background:var(--segbg)}
@@ -870,6 +874,12 @@ html.dark .qs-open{--qfg:#B7C0C3;--qbd:#5D686C}html.dark .qs-lead{--qfg:#7FDCDA;
   .resin .rthb:hover,.resin .rinv:not(.sel):hover,.resin .rsrcb:hover,.resin .rgi:hover,.resin .rperson:hover,.resin .rback:hover,.resin .rbtn:hover{background:var(--tint)}
   .resin .rfchip:not([aria-pressed="true"]):hover{border-color:var(--ink-soft)}
 }
+/* Cory's Decide buttons (3 Oct 2026, register R-0445): only on a device opened once with #owner */
+.rdecs{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.resin .rdec{border-color:var(--sel);background:var(--sel);color:var(--paper);text-decoration:none}
+.rsrcdec{padding:0 14px 12px}
+.rdecchip{--cbg:color-mix(in srgb,var(--sel) 14%,var(--panel));--cfg:var(--sel)}
+@media(hover:hover){ .resin .rdec:hover{background:color-mix(in srgb,var(--sel) 86%,var(--ink))} }
 /* phones: one column, below the search pill and above the dock */
 .resin.rph{padding:calc(76px + var(--st)) calc(16px + var(--sr)) calc(104px + var(--sb)) calc(16px + var(--sl));gap:16px}
 .rph .rhead{flex-direction:column;align-items:stretch;gap:14px}
@@ -979,6 +989,7 @@ html.dark .qs-open{--qfg:#B7C0C3;--qbd:#5D686C}html.dark .qs-lead{--qfg:#7FDCDA;
     <div class="tiles" role="group" aria-labelledby="br-h"></div>
   </div>
   <div class="flegend treeonly"><span class="edgesample" aria-hidden="true"></span><span data-i18n="legend_edge">The colored edge on each card shows its branch.</span></div>
+  <div class="flegend treeonly"><span class="dashsample" aria-hidden="true"></span><span data-i18n="legend_vf">A dashed line: the family goes on through a daughter.</span></div>
   <div class="fsep treeonly"></div>
   <div class="fsw treeonly"><div class="grow"><div class="swl" id="dead-l" data-i18n="dead_hide">Hide dead lines</div><div class="swn" id="dead-n" data-i18n="dead_note">Leaves out people with no living descendant. Search, a branch you pick, or a card’s + button still shows them.</div></div><button type="button" id="deadsw" role="switch" aria-checked="true" aria-labelledby="dead-l" aria-describedby="dead-n"><span class="trk"><span class="knob"></span></span></button></div>
   <div class="fsep maponly"></div>
@@ -1128,6 +1139,10 @@ const I18N = {
       map_loading:"Loading the places…", map_err:"The places didn’t load. Try again in a moment.", profile_father:"Father", profile_mother:"Mother", profile_nobio:"No life story has been written for this person yet — what is known is on their card and in the records below.", profile_quotes:"In the family’s own words",
       menu:"Menu", close:"Close", done:"Done", view_label:"View", filters:"Filters", branches:"Branches", show_all:"Show all", clear:"Clear",
       legend_edge:"The colored edge on each card shows its branch.",
+      legend_vf:"A dashed line: the family goes on through a daughter.",
+      via_f:"through %s",
+      via_f_t:"This line goes on through %s, a daughter of the family",
+      via_f_lb:"Through",
       dead_hide:"Hide dead lines", dead_note:"Leaves out people with no living descendant. Search, a branch you pick, or a card’s + button still shows them.",
       language:"Language", appearance:"Appearance", th_auto:"Auto", th_light:"Light", th_dark:"Dark",
       dark_mode:"Dark mode", light_mode:"Light mode", lang_switch:"Passer en français", tour_take:"Take the tour",
@@ -1213,6 +1228,11 @@ const I18N = {
       res_log:"What has happened",
       res_open_visit:"Visit list: %s",
       res_visit_list:"Visit list",
+      res_decisions:"Your decisions",
+      res_decide:"Decide",
+      res_dec_chip:"Your decision",
+      res_dec_title:"Opens this question on your private decisions page",
+      res_dec_all_title:"Opens your private decisions page",
       res_visit_kicker:"Archive visit",
       res_who_line:"Arranged by %s",
       res_photo_note:"Photograph everything in each box that fits the list, and anything you’re unsure about. Nothing needs to be read on site.",
@@ -1287,6 +1307,10 @@ const I18N = {
       map_loading:"Chargement des lieux…", map_err:"Les lieux ne se sont pas chargés. Réessayez dans un instant.", profile_father:"Père", profile_mother:"Mère", profile_nobio:"Aucune notice n’a encore été rédigée pour cette personne — ce que l’on sait figure sur sa carte et dans les documents ci-dessous.", profile_quotes:"Dans les mots de la famille",
       menu:"Menu", close:"Fermer", done:"Terminé", view_label:"Affichage", filters:"Filtres", branches:"Branches", show_all:"Tout afficher", clear:"Effacer",
       legend_edge:"Le liseré de couleur de chaque fiche indique sa branche.",
+      legend_vf:"Un trait en pointillé : la famille continue par une fille.",
+      via_f:"par %s",
+      via_f_t:"Cette lignée continue par %s, une fille de la famille",
+      via_f_lb:"Par",
       dead_hide:"Masquer les lignées éteintes", dead_note:"Écarte les personnes sans descendant vivant. La recherche, une branche choisie ou le bouton + d’une fiche les montrent toujours.",
       language:"Langue", appearance:"Apparence", th_auto:"Auto", th_dark:"Sombre",
       th_light:"Clair", light_mode:"Mode clair", /* ft-allow-names: "clair" is the French word for light (the appearance switch), not a person */
@@ -1373,6 +1397,11 @@ const I18N = {
       res_log:"Ce qui s’est passé",
       res_open_visit:"Liste de visite : %s",
       res_visit_list:"Liste de visite",
+      res_decisions:"Vos décisions",
+      res_decide:"Décider",
+      res_dec_chip:"Votre décision",
+      res_dec_title:"Ouvre cette question sur votre page privée de décisions",
+      res_dec_all_title:"Ouvre votre page privée de décisions",
       res_visit_kicker:"Visite aux archives",
       res_who_line:"Organisée par %s",
       res_photo_note:"Photographiez tout ce qui, dans chaque carton, correspond à la liste, et tout ce dont vous n’êtes pas sûrs. Rien n’est à lire sur place.",
@@ -1466,6 +1495,20 @@ async function deriveKey(pw){
    the bio pictures are not in them: each is an encrypted file of its own in media/, fetched in the
    background once the tree is on screen (see the end of boot). The page went from 11 MB to 1.4 MB. */
 let DATAKEY = null;   /* the unlock key, kept for the pictures that arrive later */
+/* Cory's own devices (3 Oct 2026, register R-0445): the Research view shows his Decide buttons only on a device
+   opened once with #owner (#owner-off undoes it). That only keeps the view tidy for everyone else: the buttons
+   open his private decisions page, and his claude.ai login is what guards it. */
+let OWNER = false, ownerRedraw = null;
+function ownerFromHash(){
+  const m = /^#owner(-off)?$/.exec(location.hash || ""); if(!m) return false;
+  try{ if(m[1]) localStorage.removeItem(SITE.store + "owner"); else localStorage.setItem(SITE.store + "owner", "1"); }catch(_){}
+  OWNER = !m[1];
+  try{ history.replaceState(history.state, "", location.pathname + location.search); }catch(_){}
+  return true;
+}
+try{ OWNER = localStorage.getItem(SITE.store + "owner") === "1"; }catch(_){}
+ownerFromHash();
+window.addEventListener("hashchange", ()=>{ if(ownerFromHash() && ownerRedraw) ownerRedraw(); });
 async function decryptData(key){
   let pt = new Uint8Array(await crypto.subtle.decrypt({name:"AES-GCM", iv:b64b(ENC.iv)}, key, b64b(ENC.ct)));
   if(ENC.z) pt = await inflateRaw(pt, ENC.n);
@@ -2036,6 +2079,10 @@ const root = build(DATA, "legacy", null, 0);
 const livingP = p => /^b\.\s*\d/.test(p.years || "") || !/\d/.test(p.years || "");
 (function live(n){ n.children.forEach(live); n.live = livingP(n.p) || n.children.some(c=>c.live);
   n.liveDesc = n.children.reduce((a,c)=>a + (c.live ? 1 + c.liveDesc : 0), 0); })(root);
+/* lines through a daughter (Cory, 3 Oct 2026): every card below a daughter of the line is "through" her, all the
+   way down (viaF = her node), so the connectors are dashed and each card names her; a daughter's daughter keeps
+   the first one, where the line left the male line */
+(function via(n, d){ n.viaF = d; n.children.forEach(c => via(c, d || (n.p.g === "f" ? n : null))); })(root, null);
 
 /* expand a node and cascade through single-child runs until a fork or leaf (with dead lines hidden,
    through runs of a single LIVE child, so the opening view goes on down to where the living lines part) */
@@ -2151,6 +2198,23 @@ function fmtYears(y){
 }
 const BC = Object.fromEntries(BRANCHES.map(b=>[b.id, "var(" + b.color + ")"]));   /* payload branch id → edge colour */
 
+/* the spouse named on a line down to a child, when the parent had more than one: the first name, unless
+   another spouse shares it (Cory, 3 Oct 2026: two wives with the same first names gave two lines with the same
+   label); then the first and last names, then the whole name, and the same name twice gets the spouse's years */
+function unionLabel(p, ui){
+  const us = p.unions || [], me = us[ui], named = us.filter(u => u.s);
+  if(!me || !me.s) return "";
+  const words = x => String(x).trim().split(/\s+/);
+  const ways = [x => words(x)[0], x => { const w = words(x); return w.length > 1 ? w[0] + " " + w[w.length - 1] : w[0]; }, x => String(x).trim()];
+  for(const f of ways){ const v = f(me.s); if(named.filter(u => f(u.s) === v).length === 1) return v; }
+  return String(me.s).trim() + (me.sy ? " (" + me.sy + ")" : "");
+}
+/* the small "through <her first name>" on a card in a daughter's line; her full name on hover */
+function viaTag(n){
+  const d = n.viaF; if(!d) return "";
+  const full = d.p.name + (fmtYears(d.p.years) ? " (" + fmtYears(d.p.years) + ")" : "");
+  return `<span class="vft" title="${esc(T("via_f_t").replace("%s", full))}">${esc(T("via_f").replace("%s", String(d.p.name).trim().split(/\s+/)[0]))}</span>`;
+}
 function render(){
   layout();
   world.innerHTML = "";
@@ -2160,14 +2224,14 @@ function render(){
     const midY = y1 + (y2-y1)/2;
     const path = document.createElementNS("http://www.w3.org/2000/svg","path");
     path.setAttribute("d",`M${x1},${y1} V${midY} H${x2} V${y2}`);
-    path.setAttribute("class","edge");
+    path.setAttribute("class", b.viaF ? "edge vf" : "edge");
     path.dataset.a=a.id; path.dataset.b=b.id;
     world.appendChild(path);
     if(b.unionSpouse && (a.p.unions||[]).filter(u=>u.s).length>1){
       const t = document.createElementNS("http://www.w3.org/2000/svg","text");
       t.setAttribute("x", x2+8); t.setAttribute("y", y2-9); /* clear of the selection outline+glow */
       t.setAttribute("class","ulabel");
-      t.textContent = "w/ " + b.unionSpouse.split(" ")[0];
+      t.textContent = "w/ " + unionLabel(a.p, b.unionIdx);
       world.appendChild(t);
     }
   });
@@ -2195,7 +2259,7 @@ function render(){
     const bioChip = p.profile ? `<button type="button" class="pill biochip" data-bio="1" aria-label="${T("profile_btn")} — ${esc(p.name)}">👤 ${T("profile_btn")}</button>` : "";
     const prow = (bioChip || pill) ? `<div class="prow">${bioChip}${pill}</div>` : "";
     const ni = `<span class="ni">i</span>`; /* visibility decided after layout (notes OR truncation) */
-    d.innerHTML = `<div class="box" style="--bc:${BC[n.branch]}"><div class="hd"><img class="av${p.g==="f"?" g-f":p.g==="m"?" g-m":""}${p.profile?" hasbio":""}${p.img?" hasimg":""}" src="${p.img||AV}" alt="" loading="lazy"><div class="hdt"><div class="nm">${esc(p.name)}</div><div class="yrs">${esc(fmtYears(p.years))}${bornAt(p)}${ni}${badge}${resLangReady ? rqBadgeHTML(p) : ""}</div></div></div>${sp}${prow}</div>`;
+    d.innerHTML = `<div class="box" style="--bc:${BC[n.branch]}"><div class="hd"><img class="av${p.g==="f"?" g-f":p.g==="m"?" g-m":""}${p.profile?" hasbio":""}${p.img?" hasimg":""}" src="${p.img||AV}" alt="" loading="lazy"><div class="hdt"><div class="nm">${esc(p.name)}</div><div class="yrs">${esc(fmtYears(p.years))}${bornAt(p)}${ni}${badge}${resLangReady ? rqBadgeHTML(p) : ""}${viaTag(n)}</div></div></div>${sp}${prow}</div>`;
     cards.appendChild(d);
     n.el = d;
   });
@@ -2646,10 +2710,11 @@ function openProfile(n){
     const parIsF = par && par.p.g === "f";
     const labPar = parIsF ? T("profile_mother") : T("profile_father");
     const labSp  = parIsF ? T("profile_father") : T("profile_mother");
-    if(par || spouse){
+    if(par || spouse || n.viaF){
       h += `<div class="pparents">` +
         (par ? `<button class="plink" data-goto="${par.id}"><span class="lb">${labPar}</span> ${esc(par.p.name)}${fmtYears(par.p.years) ? ` <i>${esc(fmtYears(par.p.years))}</i>` : ""} ↑</button>` : "") +
         (spouse ? `<span class="pplain"><span class="lb">${labSp}</span> ${esc(spouse)}</span>` : "") +
+        (n.viaF && n.viaF !== par ? `<button class="plink" data-goto="${n.viaF.id}" title="${esc(T("via_f_t").replace("%s", n.viaF.p.name))}"><span class="lb">${T("via_f_lb")}</span> ${esc(n.viaF.p.name)}${fmtYears(n.viaF.p.years) ? ` <i>${esc(fmtYears(n.viaF.p.years))}</i>` : ""} ↑</button>` : "") +
         `</div>`;
     }
   }
@@ -4758,7 +4823,9 @@ const R_IC = {
   left:  '<path d="M15 6l-6 6 6 6"/>',
   arch:  '<path d="M3 9l9-5 9 5"/><path d="M5 9v9M9.5 9v9M14.5 9v9M19 9v9"/><path d="M3 20h18"/>',
   cam:   '<path d="M4 8h3l2-2.5h6L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/>',
-  tree:  '<rect x="9" y="3" width="6" height="5" rx="1.2"/><rect x="3" y="16" width="6" height="5" rx="1.2"/><rect x="15" y="16" width="6" height="5" rx="1.2"/><path d="M12 8v4M6 16v-1.5A2.5 2.5 0 0 1 8.5 12h7a2.5 2.5 0 0 1 2.5 2.5V16"/>'
+  tree:  '<rect x="9" y="3" width="6" height="5" rx="1.2"/><rect x="3" y="16" width="6" height="5" rx="1.2"/><rect x="15" y="16" width="6" height="5" rx="1.2"/><path d="M12 8v4M6 16v-1.5A2.5 2.5 0 0 1 8.5 12h7a2.5 2.5 0 0 1 2.5 2.5V16"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  ext:   '<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>'
 };
 function rBar(counts, total, cls){
   if(!total) return `<span class="rbar ${cls || ""}" aria-hidden="true"></span>`;
@@ -4766,6 +4833,22 @@ function rBar(counts, total, cls){
     `<span class="sg-${k}" style="width:${(100 * counts[k] / total).toFixed(2)}%"></span>`).join("") + `</span>`;
 }
 const rChecked = (n, t) => rT("res_checked", n, t);
+/* Cory's Decide buttons (3 Oct 2026, register R-0445): an investigation, source or visit list that waits on one of
+   his yes/no cards carries `dec`, the card's id on his private decisions page, whose address is the file's `decide`.
+   Only his devices show them (OWNER); a click opens that card in a new tab, where his Yes or No starts Claude. */
+const R_DEC_PAGE = /^https:\/\/claude\.ai\/artifact\/[A-Za-z0-9_-]+$/, R_DEC_ID = /^[a-z]{1,4}[0-9]{1,3}$/;
+function rDecHref(id){   /* no id: the page itself */
+  if(!OWNER || !RES || !R_DEC_PAGE.test(String(RES.R.decide || ""))) return "";
+  if(!id) return RES.R.decide;
+  return R_DEC_ID.test(String(id)) ? RES.R.decide + "#" + id : "";
+}
+function rDecide(id, label, title){
+  const u = rDecHref(id);
+  if(!u) return "";
+  return `<a class="rbtn rdec" href="${esc(u)}" target="_blank" rel="noopener" title="${esc(T(title || "res_dec_title"))}">${rIc(R_IC.check)}<span>${esc(label || T("res_decide"))}</span>${rIc(R_IC.ext)}</a>`;
+}
+const rDecChip = o => (o && o.dec && rDecHref(o.dec)) ? rChip("rdecchip", T("res_dec_chip")) : "";
+const rInvDecs = iv => !!(iv.dec && rDecHref(iv.dec)) || iv.qs.some(q => q.src.some(x => !!(x.dec && rDecHref(x.dec))));
 /* "Also open: 1 source needs others." — the counts in the other tiers */
 function rAlso(iv){
   const parts = R_TIERS.filter(k => k !== iv.tier && iv.tc[k] > 0).map(k => rT(iv.tc[k] === 1 ? "rt_" + k + "_1" : "rt_" + k + "_n", iv.tc[k]));
@@ -4813,7 +4896,7 @@ function rSrcFacts(s){
 function rHead(){
   const upd = RES.R.updated ? rT("res_kicker").replace("%d", rDate(RES.R.updated)) : T("view_research");
   return `<div class="rhead"><div class="rht"><div class="rkick">${esc(upd)}</div><h1 id="res-h" tabindex="-1">${T("res_title")}</h1>` +
-    `<p class="rlede">${T("res_lede")}</p></div>` +
+    `<p class="rlede">${T("res_lede")}</p>${rDecHref() ? `<div class="rdecs">${rDecide("", T("res_decisions"), "res_dec_all_title")}</div>` : ""}</div>` +
     `<div class="segs rlens" role="group" aria-label="${esc(T("res_arrange"))}">` +
     ["topic", "status"].map(l => `<button type="button" data-ra="lens" data-v="${l}" aria-pressed="${RS.lens === l}">${T("res_by_" + l)}</button>`).join("") +
     `</div></div>`;
@@ -4837,7 +4920,7 @@ function rInvRow(iv, compact){
   const imp = rImp(iv);
   return `<button type="button" class="rinv${iv.id === RS.inv && !resPhone() ? " sel" : ""}" data-ra="inv" data-id="${esc(iv.id)}"${iv.id === RS.inv && !resPhone() ? ' aria-current="true"' : ""}>` +
     `<span class="rit"><b>${esc(rL(iv, "title"))}</b>${resPhone() ? rIc(R_IC.right) : ""}</span>` +
-    `<span class="rim">${rTierChip(iv.tier)}${imp ? `<span class="rimp">${esc(imp)}</span>` : ""}</span>` +
+    `<span class="rim">${rTierChip(iv.tier)}${imp ? `<span class="rimp">${esc(imp)}</span>` : ""}${rInvDecs(iv) ? rChip("rdecchip", T("res_dec_chip")) : ""}</span>` +
     (compact ? "" : `<span class="rnx"><b>${T("res_next_short")}</b> ${esc(rL(iv, "next"))}</span>`) +
     `<span class="rprog">${rBar(iv.sc, iv.total)}<span>${esc(rT("res_checked_s", iv.closed, iv.total))}</span></span></button>`;
 }
@@ -4869,13 +4952,14 @@ function rDetail(iv, phone){
     `<div class="rline">${rBranch(iv)}${iv.line ? `<span>${esc(rL(iv, "line"))}</span>` : ""}</div>` +
     `<p class="rsum">${esc(rL(iv, "summary"))}</p>`;
   if(iv.next) h += `<div class="rnextbox"><div class="rlbl">${T("res_next")}${imp ? ` · <span>${esc(imp)}</span>` : ""}</div><div class="rnt">${esc(rL(iv, "next"))}</div>${also ? `<div class="ralso">${esc(also)}</div>` : ""}</div>`;
+  if(iv.dec && rDecHref(iv.dec)) h += `<div class="rdecs">${rDecide(iv.dec)}</div>`;
   h += rPeople(iv);
   h += `<div class="rsec"><div class="rsech"><h3 class="rlbl">${T("res_progress")}</h3><span>${esc(rChecked(iv.closed, iv.total))}</span></div>${rBar(iv.sc, iv.total, "big")}` +
     `<div class="rlegend">` + R_SEG.filter(k => iv.sc[k]).map(k => `<span><i class="sg-${k}"></i>${iv.sc[k]} ${esc(T(iv.sc[k] === 1 ? "rs1_" + k : "rsn_" + k))}</span>`).join("") + `</div></div>`;
   h += `<h3 class="rlbl rqh">${T("res_questions")}</h3>`;
   iv.qs.forEach((q, qi) => {
     const k = rQKey(iv, qi);
-    const open = phone ? true : (k in RS.qc ? RS.qc[k] : qi === firstOpen || q.src.some(s => RS.sx[s.id]));
+    const open = phone ? true : (k in RS.qc ? RS.qc[k] : qi === firstOpen || q.src.some(s => RS.sx[s.id] || (s.dec && rDecHref(s.dec))));
     const cnt = {}; q.src.forEach(s => { cnt[s.st] = (cnt[s.st] || 0) + 1; });
     const sum = R_SEG.filter(x => cnt[x]).map(x => cnt[x] + " " + T(cnt[x] === 1 ? "rs1_" + x : "rsn_" + x)).join(", ");
     h += `<section class="rq${open ? " open" : ""}"><div class="rqt"><span class="rqn">${qi + 1}</span>${rChip("qs-" + q.state, T("rq_" + q.state))}` +
@@ -4890,8 +4974,9 @@ function rDetail(iv, phone){
 function rSrcRow(s, phone){
   const open = !phone && !!RS.sx[s.id];
   return `<div class="rsrc${open ? " open" : ""}" id="rs-${esc(s.id)}"><button type="button" class="rsrcb" data-ra="src" data-id="${esc(s.id)}"${phone ? "" : ` aria-expanded="${open}"`}>` +
-    `<span class="rsm"><b>${esc(rL(s, "t"))}</b><span class="rsx">${rStChip(s.st)}<span>${rWhoSince(s)}</span></span></span>` +
+    `<span class="rsm"><b>${esc(rL(s, "t"))}</b><span class="rsx">${rStChip(s.st)}${rDecChip(s)}<span>${rWhoSince(s)}</span></span></span>` +
     `<span class="rchev">${rIc(phone ? R_IC.right : R_IC.chev)}</span></button>` +
+    (s.dec && rDecHref(s.dec) ? `<div class="rdecs rsrcdec">${rDecide(s.dec)}</div>` : "") +
     (open ? `<div class="rsrcd">${rSrcFacts(s)}</div>` : "") + `</div>`;
 }
 function rDesk(){
@@ -4913,7 +4998,7 @@ function rGroups(){
     const item = s => { const iv = RES.byId[s.inv], ws = rWhoSince(s);
       return `<button type="button" class="rgi" data-ra="go" data-id="${esc(s.id)}"><b>${esc(rL(s, "t"))}</b>` +
         `<span>${esc(rL(iv, "title"))}${ws ? " · " + ws : ""}</span>` +
-        (k === "done" ? `<span class="rgs">${rStChip(s.st)}</span>` : "") + `</button>`; };
+        (k === "done" ? `<span class="rgs">${rStChip(s.st)}</span>` : "") + (rDecChip(s) ? `<span class="rgs">${rDecChip(s)}</span>` : "") + `</button>`; };
     if(k === "visit"){
       Object.keys(RES.visits).forEach(vk => {
         const vs = rows.filter(s => s.visit === vk);
@@ -4952,6 +5037,7 @@ function rPhSrc(){
   const iv = RES.byId[s.inv], q = iv.qs[s.qi];
   return rBack(rL(iv, "title")) + `<article class="rsheet" aria-labelledby="rs-h"><div class="rkick">${esc(rL(q, "q"))}</div>` +
     `<h1 id="rs-h" tabindex="-1">${esc(rL(s, "t"))}</h1><div class="rmeta">${rStChip(s.st)}<span class="rupd">${rWhoSince(s)}</span></div>` +
+    (s.dec && rDecHref(s.dec) ? `<div class="rdecs">${rDecide(s.dec)}</div>` : "") +
     rSrcFacts(s) + `</article>`;
 }
 function rVisit(){
@@ -4970,6 +5056,7 @@ function rVisit(){
   });
   h += `</ol>`;
   if(v.next) h += `<div class="rnextbox"><div class="rlbl">${T("res_next")}</div><div class="rnt">${esc(rL(v, "next"))}</div></div>`;
+  if(v.dec && rDecHref(v.dec)) h += `<div class="rdecs">${rDecide(v.dec)}</div>`;
   if(v.log && v.log.length) h += `<h2 class="rlbl">${T("res_log")}</h2>` + rLog(v.log);
   return h + `</article>`;
 }
@@ -5117,6 +5204,7 @@ window.addEventListener("hashchange", ()=>{
   if(PHONEQ.addEventListener) PHONEQ.addEventListener("change", re); else if(PHONEQ.addListener) PHONEQ.addListener(re);
 }
 function syncResLang(){ if(isRes()) renderRes(); }
+ownerRedraw = () => { if(isRes()) renderRes(); };
 
 /* ---- the badges on the tree's cards, and the bio's "Open questions" ---- */
 let RQ = null;   /* card id → [open questions, investigation ids…]; and the titles of those investigations */

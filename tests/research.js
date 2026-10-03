@@ -6,7 +6,8 @@
  *   node tests/research.js
  *
  *   tools/research.js    its tier rule is the page's; validation, and the privacy rules on every string the
- *                        family can read; the gate's check that a change set's research items really were
+ *                        family can read; Cory's Decide buttons (dec and decide: 3 Oct 2026, register R-0445);
+ *                        the gate's check that a change set's research items really were
  *                        updated (claimsFor); matching people to cards (link); the sealed files carry the
  *                        family's copy and nothing more, byte for byte the same when nothing they show changed
  *   githooks/commit-msg  §0c: the two research files are committed only as research.js built them, and never
@@ -155,6 +156,44 @@ section('a change set\'s research items must really have been updated');
     ok(RJ.claimsFor(H, [cs('s2')]).length === 1 && RJ.claimsFor(H, [cs('i1')]).length === 0, 'by hand: the investigation\'s date moves the investigation, not its sources'); }
   /* the family never sees _touched, and it never changes the sealed bytes */
   ok(!JSON.stringify(RJ.publicCopy(R)).includes('_touched'), '_touched stays out of the family\'s copy');
+}
+
+// ------------------------------------------------------------------ Cory's Decide buttons (3 Oct 2026, register R-0445)
+section('Cory\'s Decide buttons: dec and decide');
+{
+  const PAGE = 'https://claude.ai/artifact/TestDecisionsPage1';
+  const D = () => { const R = research(); R.decide = PAGE; R.visits.v1.dec = 'm1'; R.investigations[0].dec = 'd6'; R.investigations[0].qs[0].src[1].dec = 'bz1'; return R; };
+  ok(errs(D()).length === 0, 'a decisions page address, and card ids on an investigation, a source and a visit list, are valid (' + errs(D()).join('; ') + ')');
+  const bad = (what, f, re) => { const R = D(); f(R); const e = errs(R); ok(e.some(x => re.test(x)), what + (e.length ? '' : ' (no error)')); };
+  bad('an address that is not a claude.ai page is refused', R => { R.decide = 'https://example.invalid/page'; }, /decide must be/);
+  bad('two card ids in one dec are refused', R => { R.investigations[0].qs[0].src[1].dec = 'bz1 lv1'; }, /s2: dec must be one decision card id/);
+  bad('markup in a visit list\'s dec is refused', R => { R.visits.v1.dec = '<b>'; }, /v1: dec must be/);
+  bad('and in an investigation\'s', R => { R.investigations[0].dec = 'D6'; }, /i1: dec must be/);
+  { const R = D(); delete R.decide; const v = RJ.validate(R, { cards: null, quiet: true });
+    ok(!v.errors.length && v.warnings.some(w => /no decide address/.test(w)), 'card ids but no address: a warning (no button can show), not an error'); }
+  ok(!errs(D()).some(e => /web address/.test(e)), 'the address is not read as prose (it is pinned to a claude.ai page instead)');
+  const pc = RJ.publicCopy(D());
+  ok(pc.decide === PAGE && pc.visits.v1.dec === 'm1' && pc.investigations[0].dec === 'd6', 'both reach the family\'s copy, which the page reads');
+  /* the commands */
+  const run = (...a) => spawnSync(process.execPath, [path.join(T, 'tools', 'research.js'), ...a], { cwd: T, env, encoding: 'utf8' });
+  const load = () => JSON.parse(fs.readFileSync(path.join(T, 'research.json'), 'utf8'));
+  fs.writeFileSync(path.join(T, 'research.json'), JSON.stringify(research(), null, 1));
+  let r = run('decide', PAGE);
+  ok(r.status === 0 && load().decide === PAGE, 'decide <address> sets it' + (r.status ? ' (' + r.stderr.trim().split('\n')[0] + ')' : ''));
+  r = run('decide', 'http://claude.ai/artifact/x');
+  ok(r.status !== 0 && /decide must be/.test(r.stderr) && load().decide === PAGE, 'a wrong address is refused and nothing is written');
+  r = run('set', 's2', 'dec=bz1');
+  ok(r.status === 0 && load().investigations[0].qs[0].src[1].dec === 'bz1', 'set <source> dec=<card>');
+  r = run('set', 'v1', 'dec=m1');
+  ok(r.status === 0 && load().visits.v1.dec === 'm1', 'set <visit list> dec=<card>');
+  r = run('inv', 'i1', 'dec=d6');
+  ok(r.status === 0 && load().investigations[0].dec === 'd6', 'inv <investigation> dec=<card>');
+  r = run('set', 's2', 'dec=');
+  ok(r.status === 0 && !('dec' in load().investigations[0].qs[0].src[1]), 'dec= clears it on a source');
+  r = run('inv', 'i1', 'dec=');
+  ok(r.status === 0 && !('dec' in load().investigations[0]), 'and on an investigation');
+  r = run('decide', '');
+  ok(r.status === 0 && !('decide' in load()), 'decide "" removes the address');
 }
 
 // ------------------------------------------------------------------ link
