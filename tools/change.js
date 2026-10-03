@@ -30,7 +30,9 @@
  *       "kind": "grade", "evidence": [{ "src": "https://…", "quote": "…", "opened": "…" }] },
  *     { "card": "c042", "field": "bio_fr[0]", "find": "…", "replace": "…", "kind": "translation" },
  *     { "card": "c042", "op": "add", "list": "src", "item": { "l": "…", "u": "https://…" }, "kind": "source" },
- *     { "card": "c042", "op": "remove", "list": "pl", "at": "t=residence,k=chenoa", "kind": "fact", "evidence": [ … ] }
+ *     { "card": "c042", "op": "remove", "list": "pl", "at": "t=residence,k=chenoa", "kind": "fact", "evidence": [ … ] },
+ *     { "op": "addCard", "parent": "c042", "union": 0, "at": 1, "item": { "name": "…", "years": "…", … },
+ *       "kind": "structure", "register": "R-…" }      a new card needs an owner entry; "at" = its place among the siblings
  *   ]
  * }
  * and, since 3 Oct 2026, what it does to the Research view's data (CLAUDE.md, "Research"):
@@ -234,7 +236,8 @@ const retired = L.loadChanges().flatMap(c => c.retired || []);
   if (!KINDS.has(e.kind)) return err(i, `"kind" must be one of ${[...KINDS].join(', ')}`);
   const op = e.op || (e.find !== undefined ? 'edit' : e.from !== undefined || e.to !== undefined ? 'set' : null);
   if (!op) return err(i, 'say what to do: find/replace, from/to, or op add | remove | addCard | removeCard');
-  // ---- whole cards: never without Cory (CLAUDE.md: DO NOT ADD PEOPLE WITHOUT ASKING)
+  // ---- whole cards: only on a decision of Cory's in the register (CLAUDE.md, "Scope rule": since
+  //      3 Oct 2026 his standing yes covers the root's male line; anyone else still needs his word)
   if (op === 'addCard' || op === 'removeCard') {
     const r = regById.get(e.register);
     if (!r || r.status !== 'owner') return err(i, `${op} needs "register" citing Cory's decision (an entry with status "owner")`);
@@ -245,7 +248,12 @@ const retired = L.loadChanges().flatMap(c => c.retired || []);
       if (!u) return err(i, `parent ${e.parent} has no union ${e.union || 0}`);
       const node = { id: L.nextId(working, retired), ...e.item };
       if (!node.name) return err(i, 'the new card needs a name');
-      (u.c = u.c || []).push(node);
+      // "at": the new card's place among the union's children (the tree draws them in this order;
+      // default last). Siblings found later belong in birth order, not after everyone already drawn.
+      const kids = (u.c = u.c || []);
+      const at = e.at === undefined ? kids.length : Number(e.at);
+      if (!Number.isInteger(at) || at < 0 || at > kids.length) return err(i, `"at" must be a position from 0 to ${kids.length} among the children of ${e.parent}'s union ${e.union || 0}`);
+      kids.splice(at, 0, node);
       applied.push({ ...e, op, card: node.id, before: null, after: node });
     } else {
       const c = L.findCard(working, e.card || '');

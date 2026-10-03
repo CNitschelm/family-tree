@@ -104,7 +104,7 @@ the current value exactly — an edit never overwrites text it has not seen.
 | `wording` — rephrasing | nothing | refused if a year or number changes; a changed name or place is flagged |
 | `translation` — the French of a pair | nothing | refused if a year or number changes |
 | `owner` — Cory's decision | a register entry of his | nobody else can reopen his decisions |
-| `structure` — adding a list item, a duplicate removed | — | a new or removed **card** needs Cory's recorded decision |
+| `structure` — adding a list item, a duplicate removed | — | a new or removed **card** needs Cory's recorded decision (for the male line, his standing yes: R-0437) |
 
 And for every kind:
 - **English and French must carry the same years** afterwards (or the edit says `"fr": "exempt: why"`).
@@ -176,8 +176,9 @@ stale copies.
   body, no trailers. The `commit-msg` hook enforces it, and refuses an `index.html` the gate has not
   passed. `mcp__GitHub__push_files` bypasses hooks: never use it for `index.html`.
 - The story of every deploy goes in `CHANGE-LOG-COMMITS.md` (private), in the same session.
-- Never add a person without asking. Never pass `--newsalt` (it locks out family devices) or
-  `--force` to `crypt.js`.
+- Add people only as the scope rule allows (CLAUDE.md: the root's male line, proven from a document
+  we hold, cites R-0437; anyone else needs Cory's word). Never pass `--newsalt` (it locks out family
+  devices) or `--force` to `crypt.js`.
 
 ## Deploy and verify
 

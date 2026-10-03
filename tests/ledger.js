@@ -191,6 +191,13 @@ ok(r.code === 1 && /ledger does not explain the difference/.test(r.out), 'an edi
 fs.writeFileSync(path.join(T, 'data.json'), stale);
 r = change({ why: 'test', edits: [{ card: 'c001', op: 'addCard', parent: 'c001', union: 0, item: { name: 'Tertia Quillfeather', years: '1885–1960' }, kind: 'structure' }] });
 ok(r.code === 1 && /Cory's decision/.test(r.out), 'a card cannot be added without Cory\'s recorded decision');
+{
+  const add = (at) => ({ why: 'test', research: 'none: a test of where a new card is placed', edits: [{ card: 'c001', op: 'addCard', parent: 'c001', union: 0, at, item: { name: 'Tertia Quillfeather', years: '1878–1960' }, kind: 'structure', register: 'R-0001' }] });
+  r = change(add(5), ['--dry']);
+  ok(r.code === 1 && /"at" must be a position from 0 to 1/.test(r.out), 'a new card cannot be placed beyond the end of its parents\' children');
+  r = change(add(0), ['--dry']);
+  ok(r.code === 0 && /would apply cleanly/.test(r.out), 'with Cory\'s recorded decision a new card can be placed before an older sibling (birth order)');
+}
 
 console.log('== the gate\'s chain rule');
 const L = require(path.join(T, 'tools', 'ledger.js'));

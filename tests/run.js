@@ -561,7 +561,24 @@ ok(visCount() === expectEast,
 /* every branch in BRANCHES, the trunk included — derived, so a new branch is covered the day it is added */
 BRANCHES.forEach(b => activeFilters.add(b.key));
 setOpenFromFilters();
-ok(visCount() === allNodes.length, "legacy + all branches = whole tree (" + BRANCHES.length + " filters)");
+/* Since 3 Oct 2026 (scope rule: the whole male line) a line can carry brothers and sisters who are
+ * on no branch: a branch view shows its direct line narrowly, and the parent's pill shows "the rest of
+ * this generation". So with every filter on, every LINE and every BRANCH must be shown in full, and
+ * whatever is left out must hang off a shown card, one pill click away — nothing unreachable. */
+{
+  const shown = new Set(); (function w(n) { shown.add(n); visChildren(n).forEach(w); })(root);
+  const heads = Object.values(BRANCH_HEADS).filter(Boolean);
+  const trunkHead = allNodes.find(n => n.p.anchor === "trunk");
+  const lines = new Set(); heads.concat(trunkHead ? [trunkHead] : []).forEach(h => { let a = h; while (a) { lines.add(a); a = a.parent; } });
+  const inBranch = n => { let a = n; while (a) { if (heads.includes(a)) return true; a = a.parent; } return false; };
+  const missing = allNodes.filter(n => !shown.has(n) && (lines.has(n) || inBranch(n)));
+  const offRoots = allNodes.filter(n => !shown.has(n) && n.parent && shown.has(n.parent));
+  const offTotal = offRoots.reduce((a, n) => a + subtreeSize(n), 0);
+  ok(!missing.length && shown.size === visCount() && shown.size + offTotal === allNodes.length,
+    "legacy + all branches = every line and every branch in full (" + BRANCHES.length + " filters, " + shown.size +
+    " cards); the other " + offTotal + " are brothers and sisters off the lines, a pill click away" +
+    (missing.length ? " — MISSING: " + missing.map(n => n.p.id).join(", ") : ""));
+}
 
 BRANCHES.forEach(b => activeFilters.delete(b.key));
 setOpenFromFilters();

@@ -37,8 +37,24 @@ Cory: *"I should NEVER need to instruct an agent to update it. Agents should als
 3. **Time is last.** A task that takes hours is fine if it saves tokens or improves accuracy.
 4. **Use subagents whenever they serve those priorities** — fan out for research, document capture, and verification. Prefer one well-briefed agent over many shallow ones; give each the full technique notes so it doesn't rediscover them.
 
-## Scope rule — DO NOT ADD PEOPLE WITHOUT ASKING
-Cory's interest is **depth of coverage and history**, not breadth. Do not add new people to the tree — including newly discovered relatives, collateral lines, and non-Nitschelm surnames — without confirming with him first. Enriching existing people (bios, documents, photos, sources, corrections) never needs permission.
+## Scope rule — the root's whole male line (Cory, 3 Oct 2026)
+Cory wants **the true extent of the line**: every Nitschelm, in any spelling, descended in the male line from
+the root ancestor, card `c001` (c. 1500). Register entry R-0437 holds his words. It replaces "do not add people
+without asking" (R-0381) and the 1 Aug daughters rule (R-0386).
+- **Add freely, without asking:** anyone born to a man of the line — sons and daughters, children who died young
+  included — once the link is **proven from a document we hold**: an act read in the original, an official record
+  or index entry naming the parent, a census line, a family notice signed by the children, or an act number from a
+  register transcription. R-0437 is the owner entry `change.js` asks for: `"register": "R-0437"` on each
+  `addCard`, with `"at"` placing the card among its brothers and sisters in birth order.
+- **Daughters get cards; their children are not drawn.** A daughter's marriage is a union on her card.
+- **The cards that already break the daughters rule stay until Cory decides** (3 Oct 2026: 38 cards under
+  12 daughters, the Schweitzer/Sartre line among them; OPEN-ITEMS, "Waiting on Cory"). Do not remove them
+  without his word.
+- **Still ask first:** anyone outside the male line (a spouse's family, a daughter's children), and any link that
+  rests only on a compiled tree or on inference. Those are research leads (the Research view's "Every Nitschelm
+  of the line"), not cards.
+- Spouses stay unions, never cards. Living people: birth year only. Enriching existing people (bios, documents,
+  photos, sources, corrections) never needs permission.
 
 ## Where things live
 See `OPERATING.md`, "Where things live". In short: `index.html` is the site; `data.json`, `research.json`, `.password`,
