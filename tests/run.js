@@ -290,6 +290,10 @@ section("Decide buttons");
   ok(!/claude\.ai\/artifact\/[A-Za-z0-9]{6,}/.test(html), "the page carries no decisions page address (it comes from the sealed research file)");
   const need = ["res_decisions", "res_decide", "res_dec_chip", "res_dec_title", "res_dec_all_title"];
   ok(need.every(k => (js.match(new RegExp("\\b" + k + ':"[^"]+"', "g")) || []).length === 2), "Decide strings exist in English and French");
+  /* Begin research (4 Oct 2026, register R-0448): a card whose id is go and a number is work Claude can do alone, online */
+  ok(/R_GO_ID = \/\^go\[0-9\]\{1,3\}\$\//.test(js), "a research card (go and a number) is told apart from a decision card");
+  const needGo = ["res_go", "res_go_chip", "res_go_title"];
+  ok(needGo.every(k => (js.match(new RegExp("\\b" + k + ':"[^"]+"', "g")) || []).length === 2), "Begin research strings exist in English and French");
 }
 
 /* ---------- 2g. The "w/ …" label on a line down to a child (Cory, 3 Oct 2026) ----------

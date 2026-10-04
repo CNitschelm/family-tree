@@ -35,6 +35,13 @@ Cory: *"I should NEVER need to instruct an agent to update it. Agents should als
   private decisions page is the file's `decide` (`research.js decide <url>`). The Research view shows a Decide button
   for each, and a "Your decisions" link, only on a device opened once with `#owner` (`#owner-off` undoes it).
   **Whoever finishes a card clears its `dec`** (`dec=`), the decision runner included.
+- **Begin research (Cory, 4 Oct 2026, R-0448): "decisions should include buttons to Begin Research if the task is just for
+  claude to look online".** Work Claude can do alone, online (the Research view's "Ready to do" tier) gets a research
+  card on the same page, id `go` and a number (`go1`…), with one button, Begin research. Its sources carry `dec=go<n>`;
+  on the tab their button says Begin research and their chip Your go-ahead. One tap starts the decision runner, which
+  reads the records, records every result here, adds a proven Nitschelm of the line under R-0437, brings anything else
+  that would change the tree back as a new card, and, when online steps are left, opens the next research card.
+  A session that makes a source Claude-alone-online should give it a research card in the same session.
 
 ## Standing priorities (Cory, 31 Jul 2026 — applies to every task here)
 1. **Thoroughness and accuracy first.** Never trade correctness for a shortcut.

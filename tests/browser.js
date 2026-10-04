@@ -142,6 +142,8 @@ R.decide = "https://claude.ai/artifact/TestDecisionsPage1";
 R.investigations.find(x => x.id === "i2").qs[0].src.find(s => s.id === "s5").dec = "x1";
 R.visits.v1.dec = "x2";
 R.investigations.find(x => x.id === "i4").dec = "x3";
+/* a research card (register R-0448): the two sources we can read alone, online, both wait on it */
+R.investigations.find(x => x.id === "i5").qs[0].src.forEach(s => { s.dec = "go1"; });
 const cards = []; (function walk(p) { cards.push({ id: p.id, name: p.name, years: p.years }); (p.unions || []).forEach(u => (u.c || []).forEach(walk)); })(root);
 const v = RJ.validate(R, { cards, quiet: true });
 if (v.errors.length) { console.error(v.errors.join("\n")); process.exit(1); }
@@ -617,6 +619,21 @@ async function run() {
     await page.evaluate(() => { location.hash = "#research/i4"; });
     await page.waitForFunction(() => { const h = document.querySelector(".rdet .rdt"); return h && /sea/.test(h.textContent); }, null, { timeout: 5000 });
     ok((await decs()).some(x => x.href === PAGEURL + "#x3"), "an investigation waiting on a decision has its own button");
+    /* Begin research (R-0448): a research card is not a decision */
+    await page.evaluate(() => { location.hash = "#research/i5"; });
+    await page.waitForFunction(() => { const h = document.querySelector(".rdet .rdt"); return h && /shop/.test(h.textContent); }, null, { timeout: 5000 });
+    const gos = (await decs()).filter(x => x.href === PAGEURL + "#go1");
+    ok(gos.length === 2 && gos.every(x => x.text === "Begin research"), "each source Claude can read alone, online, has a Begin research button to its research card (" + gos.map(x => x.text).join(", ") + ")");
+    const goChips = await page.evaluate(() => ({ src: ((document.querySelector("#rs-s12 .rdecchip") || {}).textContent || ""), inv: [...document.querySelectorAll('.rinv[data-id="i5"] .rdecchip')].map(e => e.textContent).join("|") }));
+    ok(goChips.src === "Your go-ahead" && goChips.inv === "Your go-ahead", "its chip says Your go-ahead, on the source and on the investigation (" + goChips.src + " / " + goChips.inv + ")");
+    await page.evaluate(() => document.getElementById("rs-s12").scrollIntoView({ block: "center" }));
+    await page.waitForTimeout(300);
+    await shot(page, "d2-begin-research.png");
+    await page.evaluate(() => document.getElementById("lang").click());
+    await page.waitForTimeout(300);
+    ok((await decs()).some(x => x.href === PAGEURL + "#go1" && x.text === "Lancer la recherche"), "French: Lancer la recherche");
+    await page.evaluate(() => document.getElementById("lang").click());
+    await page.waitForTimeout(300);
     await page.evaluate(() => { location.hash = "#research/visit/v1"; });
     await page.waitForSelector(".rvisit h1", { timeout: 5000 });
     ok((await decs()).some(x => x.href === PAGEURL + "#x2"), "so does a visit list");

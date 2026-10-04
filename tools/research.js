@@ -27,6 +27,8 @@
  *   node tools/research.js add-inv '<json>'
  *   node tools/research.js decide <https://claude.ai/artifact/…>  the address of Cory's private decisions page ("" removes it)
  *
+ * Begin research (4 Oct 2026, register R-0448): a card whose id is go and a number (go1…) is a research card, work
+ * Claude can do alone, online; the page labels its button Begin research. The same dec carries it.
  * Cory's Decide buttons (3 Oct 2026, register R-0445): an investigation, source or visit list that waits on one of
  * his yes/no cards carries `dec`, that card's id on his private decisions page (set <id> dec=<card>, or inv <inv>
  * dec=<card>; dec= clears it, and whoever finishes the card clears it). The page shows a Decide button for it, and
@@ -455,7 +457,7 @@ function status(R) {
   const decs = [];
   (R.investigations || []).forEach(iv => { if (iv.dec) decs.push(iv.id + " → " + iv.dec); iv.qs.forEach(q => q.src.forEach(s => { if (s.dec) decs.push(s.id + " → " + s.dec); })); });
   Object.entries(R.visits || {}).forEach(([id, v]) => { if (v.dec) decs.push(id + " → " + v.dec); });
-  if (decs.length) lines.push("\nDecide buttons, item → Cory's decision card" + (R.decide ? "" : " (NO decide address: they do not show)") + ":\n  " + decs.join(", "));
+  if (decs.length) lines.push("\nDecide buttons, item → Cory's card (a go… card is a Begin research button: Claude alone, online, R-0448)" + (R.decide ? "" : " (NO decide address: they do not show)") + ":\n  " + decs.join(", "));
   return lines.join("\n");
 }
 
