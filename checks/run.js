@@ -9,7 +9,19 @@ const AGE = require('./age.js');
 const { data, people, gaz } = L.load();
 const findings = [];
 let FID = 0;
+/* C6h is a reading queue. A pair a person has read (ledger/c6h-reviewed.tsv, private: card id, field, the
+   hash of the two texts as read, verdict) is left out while its texts stay exactly as read; change either
+   text and it comes back. (Decision card tr1, 4 Oct 2026.) */
+const c6hKey = (id, field, en, fr) => id + '|' + field + '|' + require('crypto').createHash('sha1').update((en || '') + '\n' + (fr || '')).digest('hex').slice(0, 12);
+const C6H_READ = (() => {
+  try {
+    return new Set(fs.readFileSync(require('path').join(__dirname, '..', 'ledger', 'c6h-reviewed.tsv'), 'utf8').split('\n')
+      .filter(l => l.trim() && !l.startsWith('#')).map(l => l.split('\t').slice(0, 3).join('|')));
+  } catch (_) { return new Set(); }
+})();
+let c6hRead = 0;
 function F(check, sev, p, path, msg, detail) {
+  if (check === 'C6h' && p && detail && C6H_READ.has(c6hKey(p.node.id, path, detail.en, detail.fr))) { c6hRead++; return; }
   findings.push({ id: ++FID, check, sev, card: p ? p.id : '(tree)', idx: p ? p.idx : null, path, msg, detail });
 }
 
@@ -855,3 +867,4 @@ findings.forEach(f => {
 console.log('TOTAL', findings.length, JSON.stringify(bySev));
 console.log('by check', JSON.stringify(byCheck));
 console.log('cards with findings', Object.keys(byCard).length, '/', people.length);
+if (c6hRead) console.log('C6h: ' + c6hRead + ' item(s) on pairs already read (ledger/c6h-reviewed.tsv) left out');
