@@ -173,7 +173,7 @@ section("Floating controls");
   const PICT = /\p{Extended_Pictographic}/u;
   const OLD_GLYPHS = /[⛶↺▴▾]/;
   const body = html.slice(html.indexOf("<body>"), html.indexOf("<script>"));
-  const chrome = body.slice(body.indexOf('<div id="topbar">'), body.indexOf('<div id="intro">')) +
+  const chrome = body.slice(body.search(/<(?:div|header) id="topbar">/), body.indexOf('<div id="intro">')) +
     (body.match(/<div id="zoomctl"[\s\S]*?<\/div>/) || [""])[0] + (body.match(/<div id="mapctl"[\s\S]*?<\/div>/) || [""])[0];
   ok(chrome.length > 2000 && !PICT.test(chrome) && !OLD_GLYPHS.test(chrome), "no emoji or glyph icons in the controls' markup");
   let i18nOk = null;
@@ -182,11 +182,28 @@ section("Floating controls");
     i18nOk = Object.keys(I).every(l => Object.values(I[l]).every(v => !PICT.test(String(v))));
   } catch (_) {}
   ok(i18nOk === true, "no emoji in any I18N string");
-  ok(!/hdrtoggle|header\.hmin|<header/.test(html), "the header-collapse toggle and the old header are gone");
+  ok(!/hdrtoggle|header\.hmin|<header(?! id="topbar">)/.test(html), "the header-collapse toggle and the old header are gone");
   const ibs = [...chrome.matchAll(/<button\b[^>]*class="[^"]*\bib\b[^"]*"[^>]*>/g)].map(m => m[0]);
   ok(ibs.length >= 4 && ibs.every(t => /aria-label=|data-i18n-label=/.test(t)), "every icon-only button is labelled (" + ibs.length + ")");
   ok(["filters", "drawer"].every(id => new RegExp('<div id="' + id + '"[^>]*role="dialog"[^>]*aria-labelledby=').test(chrome)) &&
      /id="drawer"[^>]*aria-modal="true"/.test(chrome), "the Filters panel and the menu are labelled dialogs");
+  /* the 2 Oct 2026 bug and accessibility sweep (shipped 4 Oct): the bio and the picture viewer are modal dialogs,
+     the lock is a form a password manager can save, the page has landmarks, the cards carry no emoji,
+     and small gold and teal text uses its darker text shade */
+  ok(/<div id="profile" role="dialog" aria-modal="true" aria-labelledby="pname">/.test(html) && /<h2 id="pname" tabindex="-1">/.test(js) &&
+     /<div id="lb" role="dialog" aria-modal="true"/.test(html), "the bio and the picture viewer are labelled modal dialogs");
+  ok(/function topModal\(\)/.test(js) && /focusables\(m\)/.test(js), "Tab stays inside the welcome, the bio and the picture viewer");
+  ok(/<form id="lockform"[^>]*><input id="lockuser"[^>]*autocomplete="username"[^>]*hidden[^>]*><input id="lockpw"[^>]*autocomplete="current-password"[^>]*><button type="submit" id="lockbtn">/.test(html) &&
+     /id="lockerr" role="alert"/.test(html) && /function setInertBehindLock\(on\)/.test(js), "the lock is a form with a hidden user name, its error is announced, and the app behind it is inert");
+  ok(/<header id="topbar">/.test(html) && /<main id="views">/.test(html) && /<nav id="dock"/.test(html) && /<nav id="tc"/.test(html), "the page has header, main and navigation landmarks");
+  {
+    const card = js.slice(js.indexOf("function render(){"), js.indexOf("function markTips("));
+    ok(card.length > 500 && !/\p{Emoji_Presentation}|\uFE0F/u.test(card) && /ICON\.person/.test(card), "the cards carry no emoji: the Bio button has a stroke icon");
+  }
+  ok(/--you-ink:#[0-9A-Fa-f]{6}/.test(html) && /\.node \.pill\.biochip\{color:var\(--you-ink\)\}/.test(html) && /#mapsheet \.cert,#profile \.cert\{font-size:10px\}/.test(html),
+     "small gold text uses the darker text shade, and the grade badges are at least 10 px");
+  ok(/d\.setAttribute\("role", "button"\)/.test(js) && /pinsEl\.addEventListener\("keydown"/.test(js), "map markers are buttons a keyboard can reach");
+  ok(/<h2 id="msh-h" tabindex="-1">/.test(js) && /class="sb" tabindex="0" role="region"/.test(js), "the map sheet has a level-2 heading and a list the keyboard can scroll");
   ok(/role="switch"[^>]*aria-checked=/.test(chrome) && /data-view="tree" aria-pressed=/.test(chrome), "switch and toggles expose their state");
   ok(/<div id="filters"[\s\S]*class="tiles"/.test(chrome) && /\.tile\[aria-pressed="true"\]/.test(html), "branch tiles are generated into the Filters panel, one generic rule");
 }

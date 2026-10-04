@@ -398,7 +398,7 @@ html.dark{--sea:#121A1F; --land:#222A2E; --coast:#3D474C; --bord:#39434A; --stat
 #mapsheet.on{display:flex}
 #mapsheet .grab{display:none}
 #mapsheet .sh{padding:12px 14px 8px;border-bottom:1px solid var(--rule);position:relative;flex:none}
-#mapsheet .sh h3{font-family:'EB Garamond',serif;font-size:17px;font-weight:600;margin:0;padding-right:26px;text-transform:none;letter-spacing:0;color:var(--ink)}
+#mapsheet .sh h2{font-family:'EB Garamond',serif;font-size:17px;font-weight:600;margin:0;padding-right:26px;text-transform:none;letter-spacing:0;color:var(--ink)}
 #mapsheet .sh .sub{font-size:11.5px;color:var(--ink-soft);margin-top:2px}
 #mapsheet .shx{position:absolute;top:6px;right:8px;background:none;border:none;font-size:20px;line-height:1;color:var(--ink-soft);cursor:pointer;padding:4px 8px}
 #mapsheet .sb{overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:10px 14px 14px}
@@ -636,7 +636,7 @@ html.nosearch #tl{padding:0 16px}
   #mapsheet .grab{display:block;position:absolute;top:0;left:0;right:0;height:22px;border:none;background:none;cursor:grab;padding:0;touch-action:none;z-index:2}
   #mapsheet .grab::before{content:"";position:absolute;top:7px;left:50%;transform:translateX(-50%);width:38px;height:4px;border-radius:2px;background:var(--rule)}
   #mapsheet .sh{padding-top:20px}
-  #mapsheet .sh h3{padding-right:34px;font-size:15px;line-height:1.25}
+  #mapsheet .sh h2{padding-right:34px;font-size:15px;line-height:1.25}
   body.sheeton #mapctl,body.mapmode.sheeton #restart,body.sheeton #mapwhere{display:none!important}
 }
 /* the narrowest phones (under 360px): Tree and Map keep their icons and lose their visible words
@@ -878,7 +878,7 @@ html.dark .qs-open{--qfg:#B7C0C3;--qbd:#5D686C}html.dark .qs-lead{--qfg:#7FDCDA;
 .rdecs{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .resin .rdec{border-color:var(--sel);background:var(--sel);color:var(--paper);text-decoration:none}
 .rsrcdec{padding:0 14px 12px}
-.rdecchip{--cbg:color-mix(in srgb,var(--sel) 14%,var(--panel));--cfg:var(--sel)}
+.rdecchip{--cbg:color-mix(in srgb,var(--sel) 14%,var(--panel));--cfg:var(--sel-ink,var(--sel))}
 @media(hover:hover){ .resin .rdec:hover{background:color-mix(in srgb,var(--sel) 86%,var(--ink))} }
 /* phones: one column, below the search pill and above the dock */
 .resin.rph{padding:calc(76px + var(--st)) calc(16px + var(--sr)) calc(104px + var(--sb)) calc(16px + var(--sl));gap:16px}
@@ -927,11 +927,61 @@ html.dark .qs-open{--qfg:#B7C0C3;--qbd:#5D686C}html.dark .qs-lead{--qfg:#7FDCDA;
   #dock > [data-view]:not([aria-pressed="true"]){width:48px;padding:0;justify-content:center}
   #dock > [data-view]:not([aria-pressed="true"]) span{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 }
+
+/* ---- the 2 Oct 2026 bug and accessibility sweep (shipped 4 Oct) ----
+   text-only shades of the gold and the teal: the brand colours themselves are too faint for small text
+   on white (2.99:1 and 4.48:1); the dark theme already passes and keeps them */
+:root{--you-ink:#7E5A08;--sel-ink:#0C7170}
+html.dark{--you-ink:var(--you);--sel-ink:var(--sel)}
+.node .pill.biochip{color:var(--you-ink)}
+.node .pill.biochip{display:inline-flex;align-items:center;gap:.3em}
+.node .pill .ic{width:1.2em;height:1.2em;margin-left:-.15em}
+#profile .plink:hover .lb{color:var(--you-ink)}
+#mapsheet .cert.inf,#profile .cert.inf{color:var(--you-ink)}
+#mapsheet .cert,#profile .cert{font-size:10px}
+.fl .tbtn,.resin .tbtn,#introtour,#introskip{color:var(--sel-ink)}
+/* the three views sit in the page's main landmark; it passes the old layout straight through */
+#views{flex:1;display:flex;flex-direction:column;min-height:0;min-width:0;position:relative}
+/* the bio: the card stays put and only the text scrolls, so the name and the close button never leave */
+#profile .pcard{display:flex;flex-direction:column;overflow:hidden;padding:0}
+#profile #pbody{flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain;padding:0 28px 26px}
+#profile .phead{position:sticky;top:0;z-index:3;background:var(--panel);padding:24px 44px 10px 0;margin-bottom:10px;transition:padding .15s ease}
+#profile .phead.stuck{padding-top:12px;padding-bottom:8px;box-shadow:0 1px 0 var(--rule)}
+#profile .phead img{transition:width .15s ease,height .15s ease,transform .15s ease}
+#profile .phead.stuck img{width:44px;height:44px}
+#profile .phead.stuck h2{font-size:20px}
+#profile h2:focus{outline:none}   /* the name only takes focus so reading starts there; it is not a control */
+#profile .pclose{position:absolute;top:10px;right:10px;z-index:4;width:36px;height:36px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:10px;color:var(--ink-soft);background:var(--panel);border:none;cursor:pointer}
+#profile .pclose .ic{width:22px;height:22px}
+#profile .pclose:hover{background:var(--paper);color:var(--ink)}
+#profile .psrc a{display:inline-block;padding:3px 0;min-height:24px;box-sizing:border-box}
+#lb .lbx{min-width:44px;min-height:44px}
+@media(pointer:coarse){
+  #profile .pclose{top:6px;right:6px;width:44px;height:44px;font-size:inherit;padding:0}
+  #profile #pbody{padding:0 20px 24px}
+  #profile .phead{padding-right:48px}
+}
+@media(max-width:720px){
+  #profile #pbody{padding:0 16px 20px}
+  #profile .phead{padding-top:20px}
+}
+/* the map: every marker is a button a keyboard can reach; the sheet's list scrolls by keyboard too */
+#mappins .pin:focus{outline:none}
+#mappins .pin:focus-visible .dot{outline:3px solid var(--sel);outline-offset:2px}
+#mapsheet .sh h2:focus{outline:none}
+#mapsheet .shx{z-index:3;min-width:32px;min-height:32px;top:4px;right:4px}
+@media(pointer:coarse){#mapsheet .shx{min-width:44px;min-height:44px;top:0;right:0}}
+#mapsheet .sb:focus{outline:none}
+#mapsheet .sb:focus-visible{outline:2px solid var(--sel);outline-offset:-2px}
+@media (max-width:840px), (pointer:coarse) and (max-height:520px){
+  #mapsheet .grab{height:26px;left:52px;right:52px}
+  #mapsheet .sh{padding-top:24px}
+}
 </style>
 </head>
 <body>
 
-<div id="lock"><div class="box"><h2><!--build:title-->Nitschelm Family Tree<!--/build:title--></h2><p id="lockmsg">This family tree is password protected.</p><div class="demohint" id="lockdemo" hidden></div><input id="lockpw" type="password" autocomplete="current-password"><button id="lockbtn">Unlock</button><div class="err" id="lockerr"></div></div></div>
+<div id="lock"><div class="box"><h2><!--build:title-->Nitschelm Family Tree<!--/build:title--></h2><p id="lockmsg">This family tree is password protected.</p><div class="demohint" id="lockdemo" hidden></div><form id="lockform" method="post" action="#"><input id="lockuser" name="username" type="text" autocomplete="username" value="family" hidden tabindex="-1" aria-hidden="true"><input id="lockpw" name="password" type="password" autocomplete="current-password"><button type="submit" id="lockbtn">Unlock</button></form><div class="err" id="lockerr" role="alert"></div></div></div>
 
 <!-- ================= FLOATING CONTROLS =================
      One set of controls floating over a full-height canvas, shared by the tree and the map.
@@ -939,7 +989,7 @@ html.dark .qs-open{--qfg:#B7C0C3;--qbd:#5D686C}html.dark .qs-lead{--qfg:#7FDCDA;
      theme, tour), and under them the map's Go to places and its way back out of a journey.
      Phones: a search pill on top and a dock at the bottom (Tree, Map, Filters); the menu
      drawer holds language, appearance, the tour and the status line. -->
-<div id="topbar">
+<header id="topbar">
   <div id="tl" class="fl">
     <button type="button" id="menubtn" class="ib" aria-haspopup="dialog" aria-controls="drawer" aria-expanded="false" data-i18n-label="menu"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
     <h1 id="ttl"><!--build:title-->Nitschelm Family Tree<!--/build:title--><!--build:tag--><!--/build:tag--></h1>
@@ -950,11 +1000,11 @@ html.dark .qs-open{--qfg:#B7C0C3;--qbd:#5D686C}html.dark .qs-lead{--qfg:#7FDCDA;
       <div id="suggest"></div>
     </div>
   </div>
-  <div id="tc" class="fl seg" role="group" data-i18n-label="view_label">
+  <nav id="tc" class="fl seg" data-i18n-label="view_label">
     <button type="button" id="vt-tree" data-view="tree" aria-pressed="true"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="3" width="6" height="5" rx="1.2"/><rect x="3" y="16" width="6" height="5" rx="1.2"/><rect x="15" y="16" width="6" height="5" rx="1.2"/><path d="M12 8v4M6 16v-1.5A2.5 2.5 0 0 1 8.5 12h7a2.5 2.5 0 0 1 2.5 2.5V16"/></svg><span data-i18n="view_tree">Tree</span></button>
     <button type="button" id="vt-map" data-view="map" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 4.5L3.5 6.8v12.7L9 17.2l6 2.3 5.5-2.3V4.5L15 6.8 9 4.5z"/><path d="M9 4.5v12.7M15 6.8v12.7"/></svg><span data-i18n="view_map">Map</span></button>
     <button type="button" id="vt-res" data-view="research" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4.5"/><path d="M14 3l5 5v2.5"/><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M8.5 11h4M8.5 14.5h2.5"/><circle cx="16.2" cy="16.2" r="3.3"/><path d="M18.6 18.6L21 21"/></svg><span data-i18n="view_research">Research</span></button>
-  </div>
+  </nav>
   <div id="tr" class="fl">
     <button type="button" id="filtbtn" class="filtbtn notres" aria-haspopup="dialog" aria-expanded="false" aria-controls="filters"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span data-i18n="filters">Filters</span><span class="dots" aria-hidden="true"></span><svg class="ic chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg></button>
     <span class="dv notres" aria-hidden="true"></span>
@@ -962,7 +1012,7 @@ html.dark .qs-open{--qfg:#B7C0C3;--qbd:#5D686C}html.dark .qs-lead{--qfg:#7FDCDA;
     <button type="button" id="theme" class="ib" aria-label="Dark mode" title="Dark mode"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 14.2A8 8 0 0 1 9.8 4a8 8 0 1 0 10.2 10.2z"/></svg></button>
     <button type="button" id="tourbtn" class="ib" data-i18n-label="tour_take"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.4c-.6.3-1 .8-1 1.5v.4"/><path d="M12 17h.01"/></svg></button>
   </div>
-</div>
+</header>
 <!-- map only: where to go (left) and the way back out of one person's journey (centre) -->
 <div id="row2">
   <div id="goto" class="fl maponly" role="group" aria-labelledby="goto-h">
@@ -972,12 +1022,12 @@ html.dark .qs-open{--qfg:#B7C0C3;--qbd:#5D686C}html.dark .qs-lead{--qfg:#7FDCDA;
   <button type="button" id="mapback" class="maponly" data-i18n-title="map_showall"></button>
 </div>
 <div id="gomenu" class="fl" role="menu" aria-labelledby="gochip" hidden></div>
-<div id="dock" class="fl">
+<nav id="dock" class="fl" data-i18n-label="view_label">
   <button type="button" data-view="tree" aria-pressed="true"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="3" width="6" height="5" rx="1.2"/><rect x="3" y="16" width="6" height="5" rx="1.2"/><rect x="15" y="16" width="6" height="5" rx="1.2"/><path d="M12 8v4M6 16v-1.5A2.5 2.5 0 0 1 8.5 12h7a2.5 2.5 0 0 1 2.5 2.5V16"/></svg><span data-i18n="view_tree">Tree</span></button>
   <button type="button" data-view="map" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 4.5L3.5 6.8v12.7L9 17.2l6 2.3 5.5-2.3V4.5L15 6.8 9 4.5z"/><path d="M9 4.5v12.7M15 6.8v12.7"/></svg><span data-i18n="view_map">Map</span></button>
   <button type="button" data-view="research" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4.5"/><path d="M14 3l5 5v2.5"/><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M8.5 11h4M8.5 14.5h2.5"/><circle cx="16.2" cy="16.2" r="3.3"/><path d="M18.6 18.6L21 21"/></svg><span data-i18n="view_research">Research</span></button>
   <button type="button" id="dockfilt" class="filtbtn notres" aria-haspopup="dialog" aria-expanded="false" aria-controls="filters"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span data-i18n="filters">Filters</span><span class="dots" aria-hidden="true"></span></button>
-</div>
+</nav>
 <button type="button" id="restart" class="fl" hidden><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3.5 4.5v4.5H8"/></svg><span data-i18n="start_over">Start over</span></button>
 <div id="scrim" hidden></div>
 <!-- the branch filters: a popover under the Filters button on wide screens, a bottom sheet on phones -->
@@ -1040,6 +1090,7 @@ html.dark .qs-open{--qfg:#B7C0C3;--qbd:#5D686C}html.dark .qs-lead{--qfg:#7FDCDA;
   </div>
 </div></div>
 
+<main id="views">
 <div id="stage">
   <div id="genlines"></div>
   <svg id="svg"><g id="world"></g></svg>
@@ -1073,10 +1124,11 @@ html.dark .qs-open{--qfg:#B7C0C3;--qbd:#5D686C}html.dark .qs-lead{--qfg:#7FDCDA;
 
 <!-- the Research view (3 Oct 2026): drawn from media/research.bin the first time it is opened -->
 <div id="resview"><div id="resin" class="resin"></div></div>
+</main>
 
 <!-- bio overlay lives OUTSIDE #stage so map pan/zoom/pointer-capture can't hijack its events -->
-<div id="profile"><div class="pcard"><button class="pclose" id="pclose" aria-label="Close">×</button><div id="pbody"></div></div></div>
-<div id="lb" aria-hidden="true"><button class="lbx" id="lbclose" aria-label="Close">×</button><img alt=""></div>
+<div id="profile" role="dialog" aria-modal="true" aria-labelledby="pname"><div class="pcard"><button type="button" class="pclose" id="pclose" aria-label="Close" data-i18n-label="close"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg></button><div id="pbody"></div></div></div>
+<div id="lb" role="dialog" aria-modal="true" aria-hidden="true"><button type="button" class="lbx" id="lbclose" aria-label="Close" data-i18n-label="close">×</button><img alt=""></div>
 
 <script>
 /* ---------------- DATA (verbatim from astrosurf.com/nitschelm, updated 2026-07-14) ---------------- */
@@ -1137,7 +1189,7 @@ const I18N = {
       stats_people:"people", stats_gens:"generations", stats_since:"records since",
       profile_timeline:"Career", profile_links:"Links", profile_btn:"Bio", profile_sources:"Sources", profile_docs:"The original record", profile_transcript:"What it says", profile_doc_src:"see the register", profile_doc_retry:"This picture didn’t load. Try again", loading:"Loading…", extras_err:"This didn’t load. Try again",
       map_loading:"Loading the places…", map_err:"The places didn’t load. Try again in a moment.", profile_father:"Father", profile_mother:"Mother", profile_nobio:"No life story has been written for this person yet — what is known is on their card and in the records below.", profile_quotes:"In the family’s own words",
-      menu:"Menu", close:"Close", done:"Done", view_label:"View", filters:"Filters", branches:"Branches", show_all:"Show all", clear:"Clear",
+      menu:"Menu", close:"Close", sheet_size:"Make this panel larger or smaller", done:"Done", view_label:"View", filters:"Filters", branches:"Branches", show_all:"Show all", clear:"Clear",
       legend_edge:"The colored edge on each card shows its branch.",
       legend_vf:"A dashed line: the family goes on through a daughter.",
       via_f:"through %s",
@@ -1308,7 +1360,7 @@ const I18N = {
       stats_people:"personnes", stats_gens:"générations", stats_since:"actes depuis",
       profile_timeline:"Parcours", profile_links:"Liens", profile_btn:"Bio", profile_sources:"Sources", profile_docs:"Le document original", profile_transcript:"Ce qu’il dit", profile_doc_src:"voir le registre", profile_doc_retry:"L’image ne s’est pas chargée. Réessayer", loading:"Chargement…", extras_err:"Le chargement a échoué. Réessayer",
       map_loading:"Chargement des lieux…", map_err:"Les lieux ne se sont pas chargés. Réessayez dans un instant.", profile_father:"Père", profile_mother:"Mère", profile_nobio:"Aucune notice n’a encore été rédigée pour cette personne — ce que l’on sait figure sur sa carte et dans les documents ci-dessous.", profile_quotes:"Dans les mots de la famille",
-      menu:"Menu", close:"Fermer", done:"Terminé", view_label:"Affichage", filters:"Filtres", branches:"Branches", show_all:"Tout afficher", clear:"Effacer",
+      menu:"Menu", close:"Fermer", sheet_size:"Agrandir ou réduire ce panneau", done:"Terminé", view_label:"Affichage", filters:"Filtres", branches:"Branches", show_all:"Tout afficher", clear:"Effacer",
       legend_edge:"Le liseré de couleur de chaque fiche indique sa branche.",
       legend_vf:"Un trait en pointillé : la famille continue par une fille.",
       via_f:"par %s",
@@ -1988,6 +2040,7 @@ function showLock(){
   { const pw = document.getElementById("lockpw"); pw.placeholder = T("pwph"); pw.setAttribute("aria-label", T("pwph")); }
   lockEl.classList.toggle("auto", autoOpen);
   lockEl.style.display = "flex";
+  setInertBehindLock(true);
   if(autoOpen){
     autoOpen = false;
     const pw = document.getElementById("lockpw"); pw.autocomplete = "off"; pw.value = SITE.autoPw;
@@ -2003,6 +2056,7 @@ async function tryUnlock(){
     const data = await decryptData(key);
     try{ await keyPut(key); }catch(_){}
     lockEl.style.display = "none";
+    setInertBehindLock(false);
     boot(data);
   }catch(_){
     lockEl.classList.remove("auto");   /* an automatic open that failed falls back to the password box */
@@ -2011,8 +2065,13 @@ async function tryUnlock(){
     pwEl.select();
   }
 }
-document.getElementById("lockbtn").onclick = tryUnlock;
-document.getElementById("lockpw").addEventListener("keydown", e=>{ if(e.key==="Enter") tryUnlock(); });
+/* the password box sits in a real form with a fixed, hidden user name, so a phone's password manager offers
+   to save the family password and fills it next time; submitting (the button or Enter) never leaves the page */
+document.getElementById("lockform").addEventListener("submit", e=>{ e.preventDefault(); tryUnlock(); });
+/* while locked, nothing behind the lock can be reached by Tab or a screen reader */
+function setInertBehindLock(on){
+  [...document.body.children].forEach(el=>{ if(el !== lockEl && el.tagName !== "SCRIPT") el.inert = on; });
+}
 /* theme for the lock screen (boot re-applies incl. the toggle icon) */
 try{
   const th = localStorage.getItem(SITE.store + "theme") || "system";
@@ -2051,7 +2110,8 @@ const ICON = Object.fromEntries(Object.entries({
   map: '<path d="M9 4.5L3.5 6.8v12.7L9 17.2l6 2.3 5.5-2.3V4.5L15 6.8 9 4.5z"/><path d="M9 4.5v12.7M15 6.8v12.7"/>',
   moon: '<path d="M20 14.2A8 8 0 0 1 9.8 4a8 8 0 1 0 10.2 10.2z"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4"/>',
-  pin: '<path d="M12 21s-6.5-6.1-6.5-11A6.5 6.5 0 0 1 18.5 10c0 4.9-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>'
+  pin: '<path d="M12 21s-6.5-6.1-6.5-11A6.5 6.5 0 0 1 18.5 10c0 4.9-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>',
+  person: '<circle cx="12" cy="8" r="3.8"/><path d="M4.5 20.5c.9-3.9 3.9-6 7.5-6s6.6 2.1 7.5 6"/>'
 }).map(([k, d]) => [k, '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' + d + '</svg>']));
 /* ---------------- Build ---------------- */
 const NODE_W = 240, LEVEL_H = 132, GAP_X = 22;
@@ -2262,7 +2322,7 @@ function render(){
                   : hiddenKids ? "+"+hiddenKids+" "+T("more_kids")
                   : T("hide");
     const pill = n.children.length ? `<button type="button" class="pill${(!n.open||hiddenKids)?" pill-open":""}" data-pill="1" aria-label="${esc(pillTxt)} — ${esc(p.name)}">${pillTxt}</button>` : "";
-    const bioChip = p.profile ? `<button type="button" class="pill biochip" data-bio="1" aria-label="${T("profile_btn")} — ${esc(p.name)}">👤 ${T("profile_btn")}</button>` : "";
+    const bioChip = p.profile ? `<button type="button" class="pill biochip" data-bio="1" aria-label="${T("profile_btn")} — ${esc(p.name)}">${ICON.person}${T("profile_btn")}</button>` : "";
     const prow = (bioChip || pill) ? `<div class="prow">${bioChip}${pill}</div>` : "";
     const ni = `<span class="ni">i</span>`; /* visibility decided after layout (notes OR truncation) */
     d.innerHTML = `<div class="box" style="--bc:${BC[n.branch]}"><div class="hd"><img class="av${p.g==="f"?" g-f":p.g==="m"?" g-m":""}${p.profile?" hasbio":""}${p.img?" hasimg":""}" src="${p.img||AV}" alt="" loading="lazy"><div class="hdt"><div class="nm">${esc(p.name)}</div><div class="yrs">${esc(fmtYears(p.years))}${bornAt(p)}${ni}${badge}${resLangReady ? rqBadgeHTML(p) : ""}${viaTag(n)}</div></div></div>${sp}${prow}</div>`;
@@ -2696,8 +2756,8 @@ function hydrate(root){
 function openProfile(n){
   if(!EXTRAS_READY){
     const p = n.p; curProfile = p;
-    document.getElementById("pbody").innerHTML = `<div class="phead"><img class="${p.g==="f"?"g-f":p.g==="m"?"g-m":""}" src="${p.img||AV}" alt=""><div><h2>${esc(p.name)}</h2><div class="psub">${esc(fmtYears(p.years))}</div></div></div><p class="pempty pload">${T("loading")}</p>`;
-    profileEl.style.display = "flex";
+    document.getElementById("pbody").innerHTML = `<div class="phead"><img class="${p.g==="f"?"g-f":p.g==="m"?"g-m":""}" src="${p.img||AV}" alt=""><div><h2 id="pname" tabindex="-1">${esc(p.name)}</h2><div class="psub">${esc(fmtYears(p.years))}</div></div></div><p class="pempty pload">${T("loading")}</p>`;
+    showProfileEl(p);
     const still = ()=> profileEl.style.display === "flex" && curProfile === p;
     needExtras().then(()=>{ if(still()) openProfile(n); }, ()=>{
       const l = still() && document.querySelector("#pbody .pload");
@@ -2706,9 +2766,10 @@ function openProfile(n){
     return;
   }
   const p = n.p, pr = p.profile || {};
+  const samePerson = curProfile === p && profileEl.style.display === "flex";
   curProfile = p;   /* people with no bio still get a card — the parent chip must never dead-end */
   const hasBio = !!p.profile;
-  let h = `<div class="phead"><img class="${p.g==="f"?"g-f":p.g==="m"?"g-m":""}" src="${p.img||AV}" alt=""><div><h2>${esc(p.name)}</h2><div class="psub">${esc(fmtYears(p.years))}${pr.headline ? " · " + esc(pickL(pr.headline, pr.headline_fr)) : ""}</div></div></div>`;
+  let h = `<div class="phead"><img class="${p.g==="f"?"g-f":p.g==="m"?"g-m":""}" src="${p.img||AV}" alt=""><div><h2 id="pname" tabindex="-1">${esc(p.name)}</h2><div class="psub">${esc(fmtYears(p.years))}${pr.headline ? " · " + esc(pickL(pr.headline, pr.headline_fr)) : ""}</div></div></div>`;
   h += quickFacts(n);
   /* parents: the one in the tree is a link you can walk up; the spouse is named alongside */
   {
@@ -2813,12 +2874,39 @@ function openProfile(n){
   document.getElementById("pbody").innerHTML = h;
   hydrate(document.getElementById("pbody"));
   if(MEDIA_RE.test(p.imgL || "")) mediaURL(p.imgL).catch(()=>{});   /* the large portrait, before anyone asks for it */
-  profileEl.style.display = "flex";
+  showProfileEl(p, samePerson);
 }
 let bioOpener = null;   /* a Bio opened from the keyboard hands focus back to its chip */
+/* the bio is a modal dialog (2 Oct 2026 sweep): on opening, focus moves to the name at its top (so the arrow
+   keys scroll it and a screen reader starts there); Tab stays inside (trapModal); closing hands focus back
+   to whatever opened it. Walking to a parent re-draws it in place and starts again at the top. */
+function showProfileEl(p, keepScroll){
+  const wasOpen = profileEl.style.display === "flex";
+  if(!wasOpen){
+    const a = document.activeElement;
+    /* only a keyboard user is handed back: a tap's button may sit anywhere on the tree, and focusing it pans there */
+    profileEl._opener = bioOpener || (lastInput === "key" && a && a !== document.body && !profileEl.contains(a) ? a : null);
+  }
+  profileEl.style.display = "flex";
+  const body = document.getElementById("pbody");
+  if(!keepScroll) body.scrollTop = 0;
+  pheadStuck();
+  const a = document.activeElement;
+  if(!wasOpen || !profileEl.contains(a) || a === document.body){
+    const nm = document.getElementById("pname"); if(nm) nm.focus({preventScroll:true});
+  }
+}
+/* the header (portrait, name, the close button beside it) stays at the top while the bio scrolls under it;
+   scrolled, it slims down so a phone keeps its room for the text */
+function pheadStuck(){
+  const b = document.getElementById("pbody"), h = b.querySelector(".phead");
+  if(h) h.classList.toggle("stuck", b.scrollTop > 6);
+}
+document.getElementById("pbody").addEventListener("scroll", pheadStuck, {passive:true});
 function closeProfile(){
   profileEl.style.display = "none";
-  if(bioOpener && document.contains(bioOpener)) bioOpener.focus({preventScroll:true});
+  const back = profileEl._opener; profileEl._opener = null;
+  if(back && document.contains(back) && back.getClientRects().length) back.focus({preventScroll:true});
   bioOpener = null;
 }
 document.getElementById("pclose").onclick = closeProfile;
@@ -2849,9 +2937,17 @@ function openLightbox(src, alt, isDoc, lo){
     }, () => { if(lbRef === ref) lbImg.classList.remove("ld"); });
   }
   lbImg.src = src; lbImg.alt = alt || "";
+  if(!lbOpen()){ const a = document.activeElement; lbEl._opener = a && a !== document.body ? a : null; }
+  lbEl.setAttribute("aria-label", alt || T("profile_docs"));
   lbEl.style.display = "flex"; lbEl.setAttribute("aria-hidden","false");
+  document.getElementById("lbclose").focus({preventScroll:true});
 }
-function closeLightbox(){ lbRef = null; lbEl.style.display = "none"; lbEl.setAttribute("aria-hidden","true"); lbImg.removeAttribute("src"); lbImg.classList.remove("ld"); }
+function closeLightbox(){
+  lbRef = null; lbEl.style.display = "none"; lbEl.setAttribute("aria-hidden","true"); lbImg.removeAttribute("src"); lbImg.classList.remove("ld");
+  const back = lbEl._opener; lbEl._opener = null;
+  if(back && document.contains(back) && back.getClientRects().length) back.focus({preventScroll:true});
+  else if(profileEl.style.display === "flex"){ const nm = document.getElementById("pname"); if(nm) nm.focus({preventScroll:true}); }
+}
 document.getElementById("pbody").addEventListener("click", e=>{
   if(e.target.closest(".xretry")){ const n = allNodes.find(x => x.p === curProfile); if(n) openProfile(n); return; }
   /* walk up the line: the parent chip moves the tree and opens their bio */
@@ -2892,6 +2988,26 @@ function closeTop(back){
   if(document.body.classList.contains("mapmode") && typeof mapEscape === "function") mapEscape();
 }
 window.addEventListener("keydown", e=>{ if(e.key === "Escape") closeTop(false); });
+/* the welcome, the bio and the picture viewer are modal: Tab and Shift+Tab go round inside the one on top
+   and never reach the tree behind it (the menu and the phone's Filters sheet trap focus the same way, below) */
+function topModal(){
+  if(lbOpen()) return lbEl;
+  const iv = document.getElementById("intro");
+  if(iv.style.display === "flex") return iv;
+  if(profileEl.style.display === "flex") return profileEl;
+  return null;
+}
+document.addEventListener("keydown", e=>{
+  if(e.key !== "Tab") return;
+  const m = topModal(); if(!m) return;
+  const f = focusables(m), a = document.activeElement;
+  if(!f.length){ e.preventDefault(); return; }
+  const i = f.indexOf(a);
+  if(i < 0 && m.contains(a) && a !== m) return;   /* on the name at the top: the next stop is inside anyway */
+  if(i < 0){ e.preventDefault(); (e.shiftKey ? f[f.length-1] : f[0]).focus(); }
+  else if(e.shiftKey && i === 0){ e.preventDefault(); f[f.length-1].focus(); }
+  else if(!e.shiftKey && i === f.length-1){ e.preventDefault(); f[0].focus(); }
+}, true);
 
 cards.addEventListener("mouseover",e=>{
   if(tipTouch) return;   /* a tap replayed as a hover */
@@ -3436,13 +3552,20 @@ function showIntro(){
   const box = document.getElementById("introsearch"), hint = document.getElementById("introhint");
   const sug = document.getElementById("introsug");
   box.placeholder = T("itry_ph"); hint.textContent = ""; sug.style.display = "none"; box.value = "";
-  const done = ()=>{
+  const done = (landed)=>{
     iv.style.display = "none"; try{ localStorage.setItem(SITE.store + "intro","1"); }catch(_){}
     if(showIntro.after){ const f = showIntro.after; showIntro.after = null; f(); }
+    /* focus would drop to the page: put it on the button that opens the welcome again (the menu on a phone),
+       never on a text field, which on a phone would bring up the keyboard */
+    const a = document.activeElement;
+    if(landed !== true && (!a || a === document.body || iv.contains(a))){
+      const to = [document.getElementById("tourbtn"), document.getElementById("menubtn")].find(b => b && b.getClientRects().length);
+      if(to) to.focus({preventScroll:true});
+    }
   };
   /* a person picked here lands in the tree, whichever tab the welcome was opened from: opened over the
      map, it used to light up the hidden tree and leave the map on screen, so nothing seemed to happen */
-  const land = n=>{ done(); if(document.body.classList.contains("mapmode") || document.body.classList.contains("resmode")) setView("tree"); goTo(n, true); };
+  const land = n=>{ done(true); if(document.body.classList.contains("mapmode") || document.body.classList.contains("resmode")) setView("tree"); goTo(n, true); };
   /* three people to start with — chosen by what their bios hold, so once the bios are here (v3);
      until then the row keeps its place */
   const st = document.getElementById("istart");
@@ -3488,7 +3611,7 @@ function showIntro(){
     else if(e.key==="ArrowUp" && items.length){ e.preventDefault(); idx=(idx-1+items.length)%items.length; paint(); }
     else if(e.key==="Enter"){ e.preventDefault(); tryFind(); }
   };
-  document.getElementById("introgo").onclick = done;
+  document.getElementById("introgo").onclick = ()=>done();
   /* Show me around: three short steps in the same window */
   const STEPS = [["is1_t" + W, "is1" + W, "ipan" + W, INTRO_ART.tree], ["is2_t", "is2" + W, "is2_x", INTRO_ART.bio], ["is3_t", "is3", "is3_x", INTRO_ART.map]];
   let step = 0;
@@ -3513,9 +3636,9 @@ function showIntro(){
     iv.querySelector(".icard").scrollTop = 0;
     document.getElementById("int-stitle").focus({preventScroll:true});
   };
-  document.getElementById("intronext").onclick = ()=>{ if(step < STEPS.length - 1) showStep(step + 1); else done(); };
+  document.getElementById("intronext").onclick = ()=>{ if(step < STEPS.length - 1){ showStep(step + 1); if(!iv.contains(document.activeElement)) document.getElementById("intronext").focus({preventScroll:true}); } else done(); };
   document.getElementById("introback").onclick = ()=>{ if(step > 0) showStep(step - 1); };
-  document.getElementById("introskip").onclick = done;
+  document.getElementById("introskip").onclick = ()=>done();
   iv.style.display = "flex";
   iv.querySelector(".icard").scrollTop = 0;
   showIntro.done = done;
@@ -4120,6 +4243,14 @@ function buildPins(){
   drawMap();
   mapEmpty(!pinObjs.length);
 }
+/* Enter or Space on a marker does what a tap does; focus then goes to the panel it opened */
+pinsEl.addEventListener("keydown", e=>{
+  if(e.key !== "Enter" && e.key !== " ") return;
+  const pin = e.target.closest && e.target.closest(".pin"); if(!pin || !pin._onTap) return;
+  e.preventDefault(); e.stopPropagation();
+  pin._onTap();
+  requestAnimationFrame(()=>{ const h = sheetEl.classList.contains("on") && document.getElementById("msh-h"); if(h) h.focus({preventScroll:true}); });
+});
 function makePin(o){
   const d = document.createElement("div");
   d.className = "pin" + (o.sq ? " sq" : "") + (o.est ? " est" : "") + (o.step ? " jn" : "");
@@ -4133,6 +4264,9 @@ function makePin(o){
     (o.step ? `<span class="step">${o.step}</span>` : "") +
     (o.label ? `<span class="lbl${o.side ? " s-" + o.side : ""}">${esc(o.label)}</span>` : "");
   d._onTap = o.onTap;
+  /* a keyboard reaches every marker: a button named after the person (or the place, with how many) */
+  d.tabIndex = 0; d.setAttribute("role", "button");
+  d.setAttribute("aria-label", (o.step ? o.step + ". " : "") + (o.label || "") + (o.count > 1 ? ", " + o.count + " " + T("stats_people") : ""));
   pinsEl.appendChild(d);
   return { el:d, lon:o.lon, lat:o.lat, key:o.key, stop:o.stop || null, ox:o.ox || 0, oy:o.oy || 0 };
 }
@@ -4385,9 +4519,9 @@ function exitPerson(){
 function openSheet(title, sub, body){
   sheetFor = null;
   sheetEl.innerHTML =
-    `<div class="sh"><button class="grab" aria-label="Expand"></button>` +
-    `<button class="shx" aria-label="Close">×</button><h3>${title}</h3>${sub?`<div class="sub">${sub}</div>`:""}</div>` +
-    `<div class="sb">${body}</div>`;
+    `<div class="sh"><button type="button" class="grab" aria-label="${esc(T("sheet_size"))}"></button>` +
+    `<button type="button" class="shx" aria-label="${esc(T("close"))}">×</button><h2 id="msh-h" tabindex="-1">${title}</h2>${sub?`<div class="sub">${sub}</div>`:""}</div>` +
+    `<div class="sb" tabindex="0" role="region" aria-labelledby="msh-h">${body}</div>`;
   sheetEl.classList.add("on"); document.body.classList.add("sheeton"); mapSchedule();
   /* on a phone it opens at a peek height so the map stays usable; the grabber
      pulls it up and pushes it back down */

@@ -190,8 +190,13 @@ function verify(out, defaults, cfg) {
   /* no emoji in the controls or in any string (a tour line once carried one) */
   const PICT = /\p{Extended_Pictographic}/u;
   const body = out.slice(out.indexOf("<body>"), out.indexOf("<script>"));
-  const chrome = body.slice(body.indexOf('<div id="topbar">'), body.indexOf('<div id="intro">'));
+  const chrome = body.slice(body.search(/<(?:div|header) id="topbar">/), body.indexOf('<div id="intro">'));
   if (chrome && PICT.test(chrome)) die("an emoji is in the controls' markup");
+  /* and none on the tree's cards: the Bio button carried one, drawn differently on every phone (4 Oct 2026).
+     The card template is render(); typographic symbols drawn as text (the marriage sign, the cross) stay. */
+  const card = m[1].slice(m[1].indexOf("function render(){"), m[1].indexOf("function markTips("));
+  if (!card || card.length < 500) die("the card template (render) was not found");
+  if (/\p{Emoji_Presentation}|\uFE0F/u.test(card)) die("an emoji is in the card template");
   const i18src = m[1].slice(m[1].indexOf("const I18N = {"), m[1].indexOf("\n};", m[1].indexOf("const I18N = {")) + 3);
   const I18N = vm.runInNewContext(i18src.replace(/^const /, "var ") + "\nI18N");
   Object.keys(I18N).forEach(l => Object.entries(I18N[l]).forEach(([k, v]) => { if (PICT.test(String(v))) die("i18n " + l + "." + k + " carries an emoji"); }));
