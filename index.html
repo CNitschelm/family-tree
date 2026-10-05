@@ -716,6 +716,9 @@ body.resmode .treeonly,body.resmode .notres,body.resmode #restart{display:none!i
 /* Research has no Filters button: the dock fits its three views instead of keeping that button's room as an
    empty grey stretch (Cory, 5 Oct 2026) */
 body.resmode #dock{width:max-content;max-width:calc(100% - 24px - var(--sl,0px) - var(--sr,0px))}
+/* the dock is as wide as what it holds (Cory, 5 Oct 2026: on a tablet, Filters and its dots spilled past the dock's
+   right end when every view kept its word); on a narrow phone the cap holds and Filters gives way, its dots clipped */
+@media (max-width:840px){#dock{width:max-content;max-width:calc(100% - 24px - var(--sl,0px) - var(--sr,0px))}#dock .filtbtn{flex:1 1 auto;overflow:hidden}}
 .vh{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .resin{max-width:1240px;margin:0 auto;padding:104px 24px 72px;display:flex;flex-direction:column;gap:20px;color:var(--ink)}
 .resin button{font:inherit;font-family:'Archivo',system-ui,sans-serif;color:var(--ink);background:transparent;border:0;cursor:pointer;margin:0;text-align:left}
