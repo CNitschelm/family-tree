@@ -53,6 +53,14 @@ if [ -n "$staged_res" ]; then
   done
 fi
 
+# 0d. stats.json, the public headline numbers the project page reads (tools/stats.js, 5 Oct 2026), moves
+# with the payload and the research: tools rewrite it on every encrypt and build. A commit of either that
+# leaves its new numbers behind would make the page's live numbers lag, so it goes with them.
+if git diff --cached --name-only 2>/dev/null | grep -qE '^(index\.html|media/)'; then
+  [ -z "$(git diff --name-only -- stats.json 2>/dev/null)" ] || die "index.html or media/ is staged, but stats.json has changes that are not.
+  Commit it with them (in GitHub Desktop: tick stats.json too)."
+fi
+
 if command -v node >/dev/null 2>&1; then
   exec node "$dir/../tools/check-commit-msg.js" "$1"
 fi

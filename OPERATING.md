@@ -53,7 +53,7 @@ node tools/card.js <c042 | "Name|years" | part of a name> [--history]
 node tools/change.js ledger/pending/<file>.json   # 4. applies it, or refuses and says why
 node tools/crypt.js encrypt                  # 5. salt unchanged — never --newsalt, never --force
 node checks/gate.js                          # 6. proves the payload is the ledger; runs the tests
-                                             # 7. commit in GitHub Desktop, index.html and media/ together
+                                             # 7. commit in GitHub Desktop, index.html, media/ and stats.json together
                                              #    (the hook checks the gate, and refuses loose media/ files)
                                              # 8. push; verify the live iv; changelog entry
 node tools/research.js log|set|answer …      # 9. the research state this session changed (any time;
@@ -191,6 +191,7 @@ traps). Record the live commit at the top of `OPEN-ITEMS.md`.
 | | what | public? |
 |---|---|---|
 | `index.html` | the site: encrypted payload + app | yes |
+| `stats.json` | the headline numbers (counts and a date only) the project page on corynitschelm.com reads; rewritten by encrypt, `research.js build` and `linkconf.js build`, checked by the gate (§7) and tests/run.js; the commit hook refuses an index.html or media/ commit that leaves it behind | yes |
 | `media/` | what the cards don't show, encrypted (`tools/payload.js`): one file of bios, notes, sources and places, and one per bio picture; committed with `index.html` (encrypt moves files no longer used to `_to_delete/`) | yes |
 | `media/research.bin`, `media/research-cards.bin` | the Research view's data and the cards' badges, sealed by `tools/research.js` under the payload key; stable names | yes |
 | `map/<hash>.json` | the map's base layers (public geography, no family data), fetched on the first Map open; `tools/mapfile.js` | yes |
@@ -215,6 +216,7 @@ traps). Record the live commit at the top of `OPEN-ITEMS.md`.
 | `tools/crypt.js` | decrypt / encrypt the payload |
 | `tools/payload.js` | the payload format (v3: the cards in the page, the rest in `media/`), used by every tool that reads or writes it |
 | `tools/doctor.js` | local state |
+| `tools/stats.js` | write `stats.json` (or `--check` it) from data.json, research.json and the link ratings |
 | `tools/research.js` | the Research view's data: `status`, `show`, `validate`, `build`, `check`, `link`, and the update commands |
 | `tools/mapfile.js` | the map's base layers: `check`, `write <layers.json>` (a new hashed file; keep the old one a deploy) |
 | `checks/run.js` | prose linter (report only; the gate fails on new HIGH findings) |
