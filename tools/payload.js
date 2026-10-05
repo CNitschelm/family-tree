@@ -274,9 +274,10 @@ function writeMedia(root, media) {
 }
 /* media/ files with a stable name that are not the payload's: the Research view's two files
    (tools/research.js, 3 Oct 2026), and Cory's owner view, owner.bin (tools/linkconf.js, 5 Oct 2026),
-   whose figures sit under a second key only his devices hold. All are sealed under the payload key, so
+   whose figures sit under a second key only his devices hold, and links.bin, the same figures without the
+   reasons, for everyone (register R-0481). All are sealed under the payload key, so
    §14 still proves they are ciphertext, but no payload ever references them, so they are never orphans. */
-const STABLE_MEDIA = new Set(["research.bin", "research-cards.bin", "owner.bin"]);
+const STABLE_MEDIA = new Set(["research.bin", "research-cards.bin", "owner.bin", "links.bin"]);
 /* files in media/ the payload no longer uses (a picture changed, or the extras after any edit) */
 function orphanMedia(root, ids) {
   let names = [];

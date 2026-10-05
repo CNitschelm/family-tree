@@ -8,7 +8,7 @@
  *   node tools/linkconf.js list [low|medium|high]    the links by the figure the tree shows, lowest first
  *   node tools/linkconf.js override <card> <pct> "<his note>"   Cory's own figure for the link above <card>
  *   node tools/linkconf.js override <card> clear     takes it off again
- *   node tools/linkconf.js build                     writes media/owner.bin (commit it, it is ciphertext)
+ *   node tools/linkconf.js build                     writes media/owner.bin and media/links.bin (commit both, they are ciphertext)
  *   node tools/linkconf.js link                      the address that turns the owner view on, once per device
  *
  * The ratings live in ledger/link-confidence.json (private, never published): one entry per child card, with
@@ -17,7 +17,11 @@
  * it on hover. An override is his decision: add an owner entry to ledger/register.jsonl in his words too.
  * Research on weak links skips a link he has overridden unless his note asks for it.
  *
- * Who can see it: only Cory. media/owner.bin is sealed twice. The outer layer is under the payload key, like
+ * Who can see what. The % on each line is for everyone (Cory, 5 Oct 2026, register R-0481: "I want the
+ * percentage to show up for everyone, all users can see it"): media/links.bin holds the figure the tree shows for
+ * each link (his override when there is one) and nothing else, sealed under the payload key like every file in
+ * media/. The reasons, the records' own figure beside an override, and his override notes stay his: media/owner.bin
+ * is sealed twice. The outer layer is under the payload key, like
  * every file in media/ (tests/run.js proves each one is ciphertext that way). Inside it, the figures are under
  * a random key kept in .owner-key (private, gitignored), which a device receives once from the address `link`
  * prints (#owner=<key>) and keeps as a non-extractable key in the browser; #owner-off removes it. The family's
@@ -34,6 +38,7 @@ const ROOT = path.join(__dirname, '..');
 const FILE = path.join(ROOT, 'ledger', 'link-confidence.json');
 const KEYFILE = path.join(ROOT, '.owner-key');
 const OUT = path.join(ROOT, P.MEDIA_DIR, 'owner.bin');
+const PUB = path.join(ROOT, P.MEDIA_DIR, 'links.bin');
 
 const level = p => p >= 90 ? 'high' : p >= 70 ? 'medium' : 'low';
 const shown = r => r.override ? r.override.pct : r.pct;
@@ -128,6 +133,19 @@ function build(doc) {
   const back = JSON.parse(zlib.inflateRawSync(pt.subarray(1 + pt[0])).toString('utf8'));
   if (outer.header !== 'o' || Object.keys(back.l).length !== doc.links.length) throw new Error('media/owner.bin did not read back');
   console.log('wrote media/owner.bin: ' + doc.links.length + ' links, ' + doc.links.filter(r => r.override).length + ' with an override (commit it)');
+  /* everyone's file: the figure only (R-0481). The same content gives the same bytes, so an unchanged
+     build leaves git with nothing to commit; changed content gets a new iv (it is seeded on the content). */
+  const pl = {};
+  doc.links.forEach(r => { pl[r.child] = { p: shown(r) }; });
+  const pjson = Buffer.from(JSON.stringify({ v: 1, l: pl }), 'utf8');
+  const pkey = P.keyFor(pw, enc.salt, enc.iter);
+  const pfile = P.sealBlob(pkey, 'k:' + pjson.length, zlib.deflateRawSync(pjson, { level: 9 }), Buffer.concat([Buffer.from('links\0'), pjson])).file;
+  fs.writeFileSync(PUB, pfile);
+  const pb = P.openBlob(pkey, fs.readFileSync(PUB));
+  const pback = JSON.parse(zlib.inflateRawSync(pb.bytes).toString('utf8'));
+  if (pb.header !== 'k:' + pjson.length || Object.keys(pback.l).length !== doc.links.length || Object.values(pback.l).some(e => Object.keys(e).join() !== 'p'))
+    throw new Error('media/links.bin did not read back');
+  console.log('wrote media/links.bin: ' + doc.links.length + ' figures for everyone, no reasons (commit it)');
 }
 
 function find(doc, card) {

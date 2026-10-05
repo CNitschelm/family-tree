@@ -181,6 +181,14 @@ if (!REAL) {
   const inner = Buffer.concat([iv, P.gcmSeal(OKEY, iv, Buffer.concat([Buffer.from([head.length]), Buffer.from(head, "latin1"), body]))]);
   fs.writeFileSync(path.join(OUT, "media", "owner.bin"), P.sealBlob(P.keyFor(PW, SALT, ITER), "o", inner, Buffer.concat([Buffer.from("owner\0"), inner])).file);
 }
+/* everyone's figures (5 Oct 2026, register R-0481): the figure the tree shows for each link, and nothing else,
+   under the payload key alone, as tools/linkconf.js build writes media/links.bin */
+{
+  const l = {};
+  Object.keys(CONF0.l).forEach(id => { l[id] = { p: CONF0.l[id].p }; });
+  const json = Buffer.from(JSON.stringify({ v: 1, l }));
+  fs.writeFileSync(path.join(OUT, "media", "links.bin"), P.sealBlob(P.keyFor(PW, SALT, ITER), "k:" + json.length, zlib.deflateRawSync(json), Buffer.concat([Buffer.from("links\0"), json])).file);
+}
 
 /* ---------- a server like GitHub Pages: gzip, ETags and 304s, and a log of what was asked for ---------- */
 const types = { ".html": "text/html; charset=utf-8", ".json": "application/json", ".bin": "application/octet-stream" };
@@ -704,12 +712,25 @@ async function run() {
     await page.waitForTimeout(800);
     let L = await log();
     ok(!got(L, /owner\.bin/).length, "a device without the owner key never asks for the owner file");
-    ok(!(await labels()).some(l => l.pct.length), "and no line shows a figure");
+    /* the figures themselves are for everyone (R-0481): every line carries its %, with no reason and no override mark */
+    await page.waitForFunction(() => document.querySelectorAll("#world tspan.cfp").length > 0, null, { timeout: 5000 }).catch(() => {});
+    let pub = await labels();
+    ok(pub.length > 0 && pub.every(l => l.pct.length === 1 && /^(· )?\d{1,3}%$/.test(l.pct[0])), "without the key every line still shows its % (" + pub.map(l => l.txt).slice(0, 4).join(" | ") + ")");
+    const plow = pub.find(l => l.txt === "50%"), povr = pub.find(l => l.txt === "80%");
+    ok(!!plow && /cf-l/.test(plow.cls) && /50%/.test(plow.title) && !/test tree/.test(plow.title), "a weak link shows its figure in the low colour, but not the reason");
+    ok(!!povr && !/cfo/.test(povr.cls) && !/records give|My own test note/.test(povr.title), "Cory's own figure shows as a plain figure: no mark, no note, no records' figure");
+    await page.click('.node:has(.nm:text-is("Octavus Testmann")) [data-bio]');
+    await page.waitForSelector("#profile .pcfwhy", { timeout: 4000 }).catch(() => {});
+    const pbio = await page.evaluate(() => { const e = document.querySelector("#profile .pcfwhy"); return e ? e.textContent.replace(/\s+/g, " ").trim() : null; });
+    ok(pbio === "How sure 80%", "the bio says how sure, and nothing more (" + pbio + ")");
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
     await page.evaluate(() => { location.hash = "#owner"; });
     await page.waitForTimeout(600);
-    ok(!(await labels()).some(l => l.pct.length) && !got(await log(), /owner\.bin/).length, "#owner alone (the Decide buttons' mark) shows no figures either");
+    ok((await labels()).every(l => !/cfo/.test(l.cls)) && !got(await log(), /owner\.bin/).length, "#owner alone (the Decide buttons' mark) fetches nothing more");
     await page.evaluate(k => { location.hash = "#owner=" + k; }, OKEY64);
-    await page.waitForFunction(() => document.querySelectorAll("#world tspan.cfp").length > 0, null, { timeout: 5000 }).catch(() => {});
+    /* everyone's figures are already there: wait for the owner file's own mark (the test's one override) */
+    await page.waitForFunction(() => !!document.querySelector("#world tspan.cfo"), null, { timeout: 5000 }).catch(() => {});
     let lb = await labels();
     ok(lb.length > 0 && lb.every(l => l.pct.length === 1 && /^(· )?\d{1,3}%$/.test(l.pct[0])), "#owner=<key>: every line down to a child carries its % (" + lb.map(l => l.txt).slice(0, 4).join(" | ") + ")");
     ok((await page.evaluate(() => location.hash)) === "", "and the key leaves the address at once");
@@ -727,20 +748,81 @@ async function run() {
     await page.waitForTimeout(300);
     /* a reload keeps the key: the figures come back by themselves */
     await page.reload();
-    await page.waitForFunction(() => document.querySelectorAll("#world tspan.cfp").length > 0, null, { timeout: 8000 }).catch(() => {});
-    ok((await labels()).some(l => l.pct.length), "after a reload the figures come back without the address");
+    await page.waitForFunction(() => !!document.querySelector("#world tspan.cfo"), null, { timeout: 8000 }).catch(() => {});
+    ok((await labels()).some(l => /cfo/.test(l.cls)), "after a reload Cory's figures come back without the address");
     await page.evaluate(() => { location.hash = "#owner-off"; });
     await page.waitForTimeout(800);
-    ok(!(await labels()).some(l => l.pct.length), "#owner-off takes the figures away");
+    const offL = await labels();
+    ok(offL.some(l => l.pct.length) && offL.every(l => !/cfo/.test(l.cls) && !/test tree|My own test note/.test(l.title)), "#owner-off takes the reasons away; everyone's figures stay");
+    await reset();
     await page.reload();
     await page.waitForTimeout(1500);
-    ok(!(await labels()).some(l => l.pct.length), "and they stay away after a reload");
-    /* someone else's address with a wrong key: nothing shows, and nothing breaks */
+    ok((await labels()).every(l => !/cfo/.test(l.cls) && !/test tree|My own test note/.test(l.title)) && !got(await log(), /owner\.bin/).length, "and after a reload the owner file is not asked for again");
+    /* someone else's address with a wrong key: only everyone's figures, and nothing breaks */
     await page.evaluate(k => { location.hash = "#owner=" + k; }, "A".repeat(43));
     await page.waitForTimeout(1200);
-    ok(!(await labels()).some(l => l.pct.length), "a wrong key shows nothing");
+    ok((await labels()).every(l => !/cfo/.test(l.cls) && !/test tree|My own test note/.test(l.title)), "a wrong key shows no reasons");
     await page.evaluate(() => { location.hash = "#owner-off"; });
     await page.waitForTimeout(400);
+    await ctx.close();
+  }
+  /* ---------------- the bio on a desktop (Cory, 5 Oct 2026): wider, and a header that slims without jitter ---------------- */
+  {
+    console.log("\n== bio on a desktop: width, and the header that slims as it scrolls");
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await ctx.newPage();
+    watch(page, "bio header");
+    await page.goto(BASE);
+    await unlock(page);
+    await page.waitForTimeout(800);
+    await page.locator(".node [data-bio]").first().click();
+    await page.waitForSelector("#profile .phead", { timeout: 4000 }).catch(() => {});
+    const w = await page.evaluate(() => document.querySelector("#profile .pcard").getBoundingClientRect().width);
+    ok(w > 700, "on a wide screen the bio takes more of it (" + Math.round(w) + "px wide)");
+    /* Cory's video: a small scroll made the header slim, the slimmer header pulled the text back up, the header
+       widened again, and round it went. Scroll in small steps and watch the scroll and the text stay put. */
+    const r = await page.evaluate(async () => {
+      const b = document.getElementById("pbody"), head = b.querySelector(".phead");
+      const pad = document.createElement("div"); pad.style.height = "3000px"; b.appendChild(pad);
+      const mark = document.createElement("p"); mark.textContent = "mark"; head.after(mark);
+      const pos = () => mark.getBoundingClientRect().top - b.getBoundingClientRect().top + b.scrollTop;
+      const p0 = pos(), seen = [];
+      for (const y of [8, 20, 26, 30, 24, 10, 3, 1, 0, 40, 33, 27, 29]) {
+        b.scrollTop = y; b.dispatchEvent(new Event("scroll"));
+        for (let i = 0; i < 4; i++) await new Promise(res => requestAnimationFrame(res));
+        seen.push({ y, at: b.scrollTop, stuck: head.classList.contains("stuck"), pos: pos() });
+      }
+      return { p0, seen };
+    });
+    const at = y => r.seen.find(x => x.y === y) || {};
+    ok(r.seen.every(x => x.at === x.y), "the bio stays where it is scrolled to (" + r.seen.map(x => x.y + ">" + x.at).join(" ") + ")");
+    ok(r.seen.every(x => Math.abs(x.pos - r.p0) < 1), "and the text under the header never moves as it slims or widens");
+    ok(!at(20).stuck && at(26).stuck && at(10).stuck && at(3).stuck && !at(1).stuck && !at(0).stuck && at(40).stuck,
+      "it slims past 24px and widens again only at the very top");
+    await shot(page, "b1-bio-desktop.png");
+    await ctx.close();
+  }
+  /* ---------------- Research on a phone (Cory, 5 Oct 2026): no empty stretch where the tree's Filters button sits ---------------- */
+  {
+    console.log("\n== research on a phone: the dock fits its views");
+    const ctx = await browser.newContext({ viewport: { width: 412, height: 860 }, hasTouch: true, isMobile: true });
+    const page = await ctx.newPage();
+    watch(page, "research dock");
+    await page.goto(BASE);
+    await unlock(page);
+    await page.waitForTimeout(600);
+    const shown = await page.evaluate(() => { const b = document.querySelector('#dock [data-view="research"]'); return !!b && !b.hidden && b.getClientRects().length > 0; });
+    if (shown) {
+      await page.click('#dock [data-view="research"]');
+      await page.waitForTimeout(700);
+      const g = await page.evaluate(() => {
+        const d = document.getElementById("dock").getBoundingClientRect();
+        const bs = [...document.querySelectorAll("#dock > *")].filter(b => b.getClientRects().length).map(b => b.getBoundingClientRect());
+        return { right: d.right - Math.max(...bs.map(b => b.right)), left: Math.min(...bs.map(b => b.left)) - d.left };
+      });
+      ok(Math.abs(g.right - g.left) < 3, "in Research the dock ends at its last view: no empty stretch on the right (" + Math.round(g.left) + "px / " + Math.round(g.right) + "px)");
+      await shot(page, "r9-research-dock-phone.png");
+    }
     await ctx.close();
   }
   /* ---------------- lines through a daughter (Cory, 3 Oct 2026): dashed all the way down, and a tag ---------------- */
