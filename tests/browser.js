@@ -97,7 +97,7 @@ const R = {
             { id: "s2", t: "A booklet on the mill (1911)", t_fr: "Une brochure sur le moulin (1911)", where: "Town library · online", where_fr: "Bibliothèque municipale · en ligne", how: "Online", how_fr: "En ligne", st: "found", since: "2026-09-15", log: [["2026-09-15", "Read. It names the mill, not who ran it.", "Lu. Elle nomme le moulin, pas qui le tenait."]] }
           ] },
         { q: "Did Quintus take over the mill?", q_fr: "Quintus a-t-il repris le moulin ?", note: "A sketch of the mill shows two men.", note_fr: "Un croquis du moulin montre deux hommes.", state: "lead",
-          src: [{ id: "s3", t: "The sketch’s caption", t_fr: "La légende du croquis", where: "Town library · online", where_fr: "Bibliothèque municipale · en ligne", how: "Online", how_fr: "En ligne", st: "todo", who: "Us, online", who_fr: "Nous, en ligne", since: "2026-10-02", next: "Find a larger copy of the sketch.", next_fr: "Trouver une copie plus grande du croquis." }] }
+          src: [{ id: "s3", t: "The sketch’s caption", t_fr: "La légende du croquis", where: "Town library · online", where_fr: "Bibliothèque municipale · en ligne", how: "Online", how_fr: "En ligne", st: "todo", who: "Cory, online", who_fr: "Cory, en ligne", since: "2026-10-02", next: "Find a larger copy of the sketch.", next_fr: "Trouver une copie plus grande du croquis." }] }
       ] },
     { id: "i2", theme: "t1", title: "The millstone’s carved year", title_fr: "L’année gravée sur la meule", line: "Alphaville", line_fr: "Alphaville", branch: "legacy", imp: 1, updated: "2026-09-30",
       next: "Cory’s call: ask the museum for a closer look?", next_fr: "À Cory de décider : demander au musée de regarder de plus près ?",
@@ -120,7 +120,7 @@ const R = {
         { q: "Should the bakers join the tree?", q_fr: "Faut-il ajouter les boulangers à l’arbre ?", note: "Yes.", note_fr: "Oui.", state: "answered",
           src: [{ id: "s9", t: "Cory’s decision", t_fr: "La décision de Cory", where: "Asked on 1 October", where_fr: "Demandé le 1er octobre", how: "Decision", how_fr: "Décision", st: "done", since: "2026-10-01" }] },
         { q: "When did the founder die?", q_fr: "Quand le fondateur est-il mort ?", note: "No date yet.", note_fr: "Pas encore de date.", state: "open", people: [{ card: "c009", n: "Branch3 Testmann", y: "1672–1732" }],
-          src: [{ id: "s10", t: "A burial list", t_fr: "Une liste d’inhumations", where: "City archives · online", where_fr: "Archives municipales · en ligne", how: "Online", how_fr: "En ligne", st: "ready", who: "Us, online", who_fr: "Nous, en ligne", since: "2026-10-02", next: "Search the list.", next_fr: "Parcourir la liste." }] }
+          src: [{ id: "s10", t: "A burial list", t_fr: "Une liste d’inhumations", where: "City archives · online", where_fr: "Archives municipales · en ligne", how: "Online", how_fr: "En ligne", st: "ready", who: "Cory, online", who_fr: "Cory, en ligne", since: "2026-10-02", next: "Search the list.", next_fr: "Parcourir la liste." }] }
       ] },
     { id: "i4", theme: "t2", title: "A cousin who went to sea?", title_fr: "Un cousin parti en mer ?", line: "Unknown", line_fr: "Inconnu", branch: "", imp: 0, updated: "2026-10-02",
       next: "Set aside for now.", next_fr: "Mis de côté pour l’instant.", summary: "A letter mentions a cousin who went to sea. Nothing else is known.", summary_fr: "Une lettre parle d’un cousin parti en mer. On n’en sait pas plus.", people: [],
@@ -131,8 +131,8 @@ const R = {
       summary: "A photograph shows the family name over a shop door. The year is cut off.", summary_fr: "Une photo montre le nom de la famille au-dessus d’une boutique. L’année est coupée.", people: [{ card: "c010", n: "Branch4 Testmann", y: "1673–1733" }],
       qs: [{ q: "Which year did the shop open?", q_fr: "En quelle année la boutique a-t-elle ouvert ?", note: "The photograph narrows it to one decade.", note_fr: "La photo la situe dans une décennie.", state: "partly",
         src: [
-          { id: "s12", t: "A trade directory, 1851", t_fr: "Un annuaire du commerce, 1851", where: "Library · online", where_fr: "Bibliothèque · en ligne", how: "Online", how_fr: "En ligne", st: "ready", who: "Us, online", who_fr: "Nous, en ligne", since: "2026-09-10" },
-          { id: "s13", t: "A newspaper advert", t_fr: "Une annonce de journal", where: "Newspaper archive · online", where_fr: "Archives de presse · en ligne", how: "Online", how_fr: "En ligne", st: "ready", who: "Us, online", who_fr: "Nous, en ligne", since: "2026-09-10" }
+          { id: "s12", t: "A trade directory, 1851", t_fr: "Un annuaire du commerce, 1851", where: "Library · online", where_fr: "Bibliothèque · en ligne", how: "Online", how_fr: "En ligne", st: "ready", who: "Cory, online", who_fr: "Cory, en ligne", since: "2026-09-10" },
+          { id: "s13", t: "A newspaper advert", t_fr: "Une annonce de journal", where: "Newspaper archive · online", where_fr: "Archives de presse · en ligne", how: "Online", how_fr: "En ligne", st: "ready", who: "Cory, online", who_fr: "Cory, en ligne", since: "2026-09-10" }
         ] }] }
   ]
 };
@@ -144,6 +144,9 @@ R.visits.v1.dec = "x2";
 R.investigations.find(x => x.id === "i4").dec = "x3";
 /* a research card (register R-0448): the two sources we can read alone, online, both wait on it */
 R.investigations.find(x => x.id === "i5").qs[0].src.forEach(s => { s.dec = "go1"; });
+/* one person's archive visits (5 Oct 2026): the visit list's places and priorities */
+{ const src = id => R.investigations.flatMap(iv => iv.qs.flatMap(q => q.src)).find(s => s.id === id);
+  Object.assign(src("s1"), { pri: "A", pos: 1 }); Object.assign(src("s4"), { pri: "B", pos: 2 }); }
 const cards = []; (function walk(p) { cards.push({ id: p.id, name: p.name, years: p.years }); (p.unions || []).forEach(u => (u.c || []).forEach(walk)); })(root);
 const v = RJ.validate(R, { cards, quiet: true });
 if (v.errors.length) { console.error(v.errors.join("\n")); process.exit(1); }
@@ -340,7 +343,22 @@ async function run() {
     ok((await page.textContent(".rvisit h1")) === "Alphaville mill museum", "the visit list opens");
     ok((await page.evaluate(() => location.hash)) === "#research/visit/v1", "the address names the visit list");
     ok((await page.$$(".rvlist li")).length === 2, "it lists the two things to photograph there");
+    ok((await page.$$eval(".rvisit .rpri", e => e.map(x => x.textContent))).join("|") === "ADo first|BIf time allows", "under their priorities");
     await shot(page, "d5-visit.png");
+    /* the person who arranges it: all their visit lists on one page (5 Oct 2026) */
+    await page.click('[data-ra="who"]');
+    await page.waitForSelector(".rwho h1");
+    ok((await page.textContent(".rwho h1")) === "A neighbour’s list", "a visit list opens its person's whole list (" + await page.textContent(".rwho h1") + ")");
+    ok((await page.evaluate(() => location.hash)) === "#research/who/a-neighbour", "the address names the person");
+    const wl = await page.evaluate(() => ({ arch: document.querySelectorAll(".rwho .rarch").length,
+      rows: [...document.querySelectorAll(".rwho .rvlist li")].map(li => li.querySelector(".rvn").textContent + " " + li.querySelector("b").textContent),
+      todo: document.querySelectorAll(".rwho .rvdo").length, how: document.querySelectorAll(".rwho .rhow li").length, upd: (document.querySelector(".rwho .rvwho") || {}).textContent }));
+    ok(wl.arch === 1 && wl.rows.join("|") === "1 The first mill ledger|2 The millstone itself" && wl.todo === 2 && wl.how === 3 && /^List last changed /.test(wl.upd || ""),
+      "it shows each archive, the items in order with what to photograph, how to photograph, and when the list last changed (" + JSON.stringify(wl) + ")");
+    await shot(page, "d5b-who.png");
+    await page.click('[data-ra="back"]');
+    await page.waitForSelector(".rvisit:not(.rwho) h1");
+    ok((await page.evaluate(() => location.hash)) === "#research/visit/v1", "its Back button returns to the visit list");
     await page.click('[data-ra="back"]');
     await page.waitForSelector(".rgroups");
     ok((await page.getAttribute('[data-ra="lens"][data-v="status"]', "aria-pressed")) === "true" && (await page.$$(".rgrp")).length === 1,
@@ -540,6 +558,14 @@ async function run() {
     await unlock(page, { keepIntro: true });
     await page.waitForSelector(".rvisit h1", { state: "attached", timeout: 8000 }).catch(() => {});
     ok((await page.textContent(".rvisit h1").catch(() => "")) === "Alphaville mill museum", "a link to a visit list, opened cold, opens it behind the welcome card");
+    /* a person's list (5 Oct 2026), the address in any case; a name with no list falls back */
+    await page.goto(BASE + "#research/who/A-Neighbour");
+    await page.waitForSelector(".rwho h1", { state: "attached", timeout: 8000 }).catch(() => {});
+    ok((await page.textContent(".rwho h1").catch(() => "")) === "A neighbour’s list", "a link to a person's list opens it, whatever the case");
+    ok((await page.evaluate(() => location.hash)) === "#research/who/a-neighbour", "and the address settles in lower case");
+    await page.goto(BASE + "#research/who/nobody");
+    await page.waitForTimeout(600);
+    ok(!(await page.$(".rwho")) && !/^#research\/who/.test(await page.evaluate(() => location.hash)), "a name with no visit list falls back to the investigations");
     /* the welcome card's own search lands on the tree, out of Research */
     await page.fill("#introsearch", "Branch4");
     await page.waitForSelector("#introsug .isit", { timeout: 3000 });
@@ -762,6 +788,15 @@ async function run() {
     await page.waitForTimeout(300);
     ok(/Musée du moulin d’Alphaville/.test(await page.textContent(".rvisit h1")), "French: the visit list");
     await shot(page, "p6-visit-fr.png");
+    await page.tap('[data-ra="who"]');
+    await page.waitForSelector(".rwho h1");
+    ok((await page.textContent(".rwho h1")) === "La liste de Une voisine" && (await page.$$eval(".rwho .rpri span", e => e.map(x => x.textContent))).join("|") === "À faire en priorité|Si le temps le permet",
+      "French: the person's list and its priorities");
+    ok(await page.evaluate(() => document.getElementById("resview").scrollWidth <= document.getElementById("resview").clientWidth + 1), "no sideways scroll on the person's list");
+    await shot(page, "p7-who-fr.png");
+    await page.goBack();
+    await page.waitForTimeout(500);
+    ok(await page.isVisible(".rvisit:not(.rwho) h1"), "Back from the person's list returns to the visit list");
     await ctx.close();
   }
   console.log("\npage errors: " + (errors.length ? "\n  " + errors.join("\n  ") : "none"));
@@ -802,6 +837,16 @@ async function runReal() {
         await page.evaluate(x => { location.hash = "#research/visit/" + x; }, v);
         await page.waitForSelector(".rvisit h1", { timeout: 8000 }).catch(() => {});
         await shot(page, label + "-" + lang + "-visit-" + v + ".png");
+      }
+      /* each person's whole list (5 Oct 2026), from the button on a visit list */
+      for (const v of Object.keys(R0.visits || {})) {
+        await page.evaluate(x => { location.hash = "#research/visit/" + x; }, v);
+        await page.waitForSelector('.rvisit [data-ra="who"]', { timeout: 8000 }).catch(() => {});
+        const slug = await page.$eval('.rvisit [data-ra="who"]', b => b.dataset.id).catch(() => "");
+        if (!slug) continue;
+        await page.click('.rvisit [data-ra="who"]');
+        await page.waitForSelector(".rwho h1", { timeout: 8000 }).catch(() => {});
+        await shot(page, label + "-" + lang + "-who-" + slug + ".png");
       }
     }
     await ctx.close();

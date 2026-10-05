@@ -17,7 +17,8 @@
  *   node tools/research.js link [--write]               fill in people's card ids from data.json
  *
  *   node tools/research.js set <source|visit> key=value …        st, who, who_fr, since, next, next_fr,
- *                                                                why, why_fr, where, where_fr, how, how_fr, by, visit, dec
+ *                                                                why, why_fr, where, where_fr, how, how_fr, by, visit, dec,
+ *                                                                pri, pos, access, access_fr
  *   node tools/research.js log <source|visit> "<English>" "<French>" [--date YYYY-MM-DD]
  *   node tools/research.js answer <investigation> <question no.> "<note>" "<note in French>"
  *   node tools/research.js state <investigation> <question no.> open|lead|partly|answered
@@ -27,6 +28,11 @@
  *   node tools/research.js add-inv '<json>'
  *   node tools/research.js decide <https://claude.ai/artifact/…>  the address of Cory's private decisions page ("" removes it)
  *
+ * A person's archive visits (5 Oct 2026): the page's #research/who/<name> gathers every visit list whose `who` is
+ * that person. On a source in a visit list, `pos` is its place on the list (1, 2, 3 …, each once per list) and `pri`
+ * its priority: A do first, B if time allows, C only at the end. `next` says what to photograph.
+ * "Us" (Cory, 5 Oct 2026): the family reads every string, so research Claude and Cory do online is "Cory, online"
+ * ("Cory, en ligne"), never "Us, online"; validate warns on the old words, and the tier rule still knows them.
  * Begin research (4 Oct 2026, register R-0448): a card whose id is go and a number (go1…) is a research card, work
  * Claude can do alone, online; the page labels its button Begin research. The same dec carries it.
  * Cory's Decide buttons (3 Oct 2026, register R-0445): an investigation, source or visit list that waits on one of
@@ -77,7 +83,7 @@ function tierOf(s) {
   if (s.st === "hold") return "hold";
   if (s.st === "ready") return "solo";
   if (s.st === "cory") return "assist";
-  if (s.st === "todo") return s.who === "Us, online" ? "solo" : (s.who === "Cory" ? "assist" : "others");
+  if (s.st === "todo") return (s.who === "Cory, online" || s.who === "Us, online") ? "solo" : (s.who === "Cory" ? "assist" : "others");
   return "others";
 }
 function invTier(iv) {
@@ -159,7 +165,7 @@ function denyList() {
 /* every text a family member can read, with where it sits (for the privacy rules): EVERY string in the
    family's copy (publicCopy), whatever its key, so a field added by hand or through add-source is checked
    too (review, 3 Oct 2026). Only the keys whose form validate() pins down are passed over. */
-const FORMAL = new Set(["id", "theme", "visit", "branch", "st", "state", "by", "card", "since", "updated", "icon", "dec", "decide"]);
+const FORMAL = new Set(["id", "theme", "visit", "branch", "st", "state", "by", "card", "since", "updated", "icon", "dec", "decide", "pri", "pos"]);
 function eachText(R, fn) {
   (function walk(x, where, key) {
     if (typeof x === "string") { if (x && !FORMAL.has(key)) fn(where, x); return; }
@@ -237,6 +243,8 @@ function validate(R, opts = {}) {
   const decOk = (o, where) => { if (!o || o.dec === undefined) return; decs++; if (!/^[a-z]{1,4}[0-9]{1,3}$/.test(String(o.dec))) E(where + ": dec must be one decision card id, such as m1 or bz1"); };
   if (!themes.size) E("no themes");
   const visits = R.visits || {};
+  const vPos = {};   /* visit list → the places taken on it (pos), to catch one used twice */
+  const usOk = (o, where) => { if (o.who === "Us, online" || o.who_fr === "Nous, en ligne") W(where + ": say \"Cory, online\" (\"Cory, en ligne\"), not \"Us\": everyone with the password reads this (Cory, 5 Oct 2026)"); };
   Object.entries(visits).forEach(([id, v]) => {
     claim(id, "visit");
     ["name", "access"].forEach(k => needEn(v, k, id));
@@ -244,6 +252,7 @@ function validate(R, opts = {}) {
     if (v.st && !STATUSES.includes(v.st)) E(id + ": unknown status " + v.st);
     touchedOk(v, id);
     decOk(v, id);
+    usOk(v, id);
     dateOk(v.since, id + ".since", false);
     logOk(v.log, id);
   });
@@ -292,9 +301,14 @@ function validate(R, opts = {}) {
         decOk(s, ws);
         if (s.visit && !visits[s.visit]) E(ws + ": visit " + s.visit + " does not exist");
         if (s.st === "visit" && !s.visit) W(ws + ": needs a visit, but names no visit list");
+        if (s.pri !== undefined && !["A", "B", "C"].includes(s.pri)) E(ws + ": pri must be A (do first), B (if time allows) or C (only at the end)");
+        if (s.pos !== undefined && !(Number.isInteger(s.pos) && s.pos >= 1 && s.pos <= 99)) E(ws + ": pos must be its place on the visit list, a whole number from 1 to 99");
+        if ((s.pri !== undefined || s.pos !== undefined) && !s.visit) E(ws + ": pri and pos order a visit list, but " + ws + " is on none");
+        if (s.visit && Number.isInteger(s.pos)) { const t = vPos[s.visit] = vPos[s.visit] || {}; if (t[s.pos]) E(ws + ": place " + s.pos + " on visit list " + s.visit + " is taken by " + t[s.pos]); else t[s.pos] = ws; }
+        usOk(s, ws);
         dateOk(s.since, ws + ".since", !CLOSED.has(s.st) && s.st !== "todo" && s.st !== "hold");
         logOk(s.log, ws);
-        if (s.st === "todo" && !s.by && s.who && s.who !== "Us, online" && s.who !== "Cory") W(ws + ": not started and waiting on " + s.who + " — fine, it counts as needs others");
+        if (s.st === "todo" && !s.by && s.who && s.who !== "Cory, online" && s.who !== "Us, online" && s.who !== "Cory") W(ws + ": not started and waiting on " + s.who + " — fine, it counts as needs others");
         if (!CLOSED.has(s.st) && s.st !== "hold") open++;
         const last = (s.log || []).map(e => e[0]).filter(isDate).sort().pop();
         if (last && iv.updated && last > iv.updated) E(w + ".updated (" + iv.updated + ") is older than " + ws + "'s log (" + last + ")");
@@ -530,8 +544,13 @@ function main(argv) {
     case "set": {
       const id = args.shift(), f = find(R, id); if (!f || f.kind === "inv") throw new Error("set takes a source or a visit id; for an investigation use: inv");
       const kv = parseKV(args), o = f.kind === "src" ? f.s : f.v;
-      const allowed = ["st", "who", "who_fr", "since", "next", "next_fr", "why", "why_fr", "where", "where_fr", "how", "how_fr", "by", "visit", "t", "t_fr", "dec"];
-      for (const [k, v] of Object.entries(kv)) { if (!allowed.includes(k)) throw new Error("set: " + k + " is not something set changes (" + allowed.join(", ") + ")"); if (v === "") delete o[k]; else o[k] = v; }
+      const allowed = ["st", "who", "who_fr", "since", "next", "next_fr", "why", "why_fr", "where", "where_fr", "how", "how_fr", "by", "visit", "t", "t_fr", "dec", "pri", "pos", "access", "access_fr"];
+      for (const [k, v] of Object.entries(kv)) {
+        if (!allowed.includes(k)) throw new Error("set: " + k + " is not something set changes (" + allowed.join(", ") + ")");
+        if (v === "") delete o[k];
+        else if (k === "pos") { if (!/^\d{1,2}$/.test(v)) throw new Error("set: pos is a place on the visit list, 1 to 99"); o[k] = +v; }
+        else o[k] = v;
+      }
       if (kv.st && !kv.since) o.since = day;
       if (f.kind === "src") touch(f.iv); else if (!R.updated || R.updated < day) R.updated = day;
       mark(o, f.kind === "src" ? f.iv : null);

@@ -55,7 +55,7 @@ const research = () => ({
       people: [{ card: 'c001', n: 'Probus Quillfeather', y: '1850–1920' }],
       qs: [{ q: 'Does the ledger name him?', q_fr: 'Le registre le nomme-t-il ?', state: 'open', src: [
         { id: 's1', t: 'The first ledger', t_fr: 'Le premier registre', st: 'visit', visit: 'v1', who: 'A neighbour', who_fr: 'Une voisine', since: '2026-09-20' },
-        { id: 's2', t: 'A booklet', t_fr: 'Une brochure', st: 'ready', who: 'Us, online', who_fr: 'Nous, en ligne', since: '2026-09-20' }] }] },
+        { id: 's2', t: 'A booklet', t_fr: 'Une brochure', st: 'ready', who: 'Cory, online', who_fr: 'Cory, en ligne', since: '2026-09-20' }] }] },
     { id: 'i2', theme: 't1', title: 'The millstone', title_fr: 'La meule', next: 'Look at it.', next_fr: 'La regarder.', summary: 'A carved year.', summary_fr: 'Une année gravée.',
       updated: '2026-10-01', imp: 1,
       qs: [{ q: 'What year?', q_fr: 'Quelle année ?', state: 'answered', note: 'Found.', note_fr: 'Trouvée.', src: [{ id: 's3', t: 'The stone', t_fr: 'La meule', st: 'found', since: '2026-09-21' }] }] }
@@ -72,7 +72,7 @@ section('the tier rule is the page\'s');
   if (closed && fn) {
     const pageTier = vm.runInNewContext(closed[0] + '\n' + fn[0] + '\nresTier');
     let same = 0, all = 0;
-    for (const st of RJ.STATUSES) for (const by of [undefined, ...RJ.TIERS]) for (const who of [undefined, 'Us, online', 'Cory', 'A cousin']) {
+    for (const st of RJ.STATUSES) for (const by of [undefined, ...RJ.TIERS]) for (const who of [undefined, 'Cory, online', 'Us, online', 'Cory', 'A cousin']) {
       const s = { st, by, who }; all++;
       if (pageTier(s) === RJ.tierOf(s)) same++;
     }
@@ -94,6 +94,14 @@ section('validation');
   bad('open sources need an impact', R => { R.investigations[0].imp = 0; }, /imp must be 1–3/);
   bad('a topic icon that is not an SVG path is refused', R => { R.themes[0].icon = '"/><script>alert(1)</script>'; }, /icon must be an SVG path/);
   bad('a _touched that is not a time is refused', R => { R.investigations[0]._touched = 'yesterday'; }, /_touched must be a time/);
+  /* a visit list's places and priorities (one person's archive visits, 5 Oct 2026) */
+  { const R = research(); Object.assign(R.investigations[0].qs[0].src[0], { pri: 'A', pos: 1 }); ok(errs(R).length === 0, 'a priority and a place on its visit list are valid (' + errs(R).join('; ') + ')'); }
+  bad('a priority other than A, B or C is refused', R => { R.investigations[0].qs[0].src[0].pri = 'D'; }, /pri must be A/);
+  bad('a place that is not a whole number is refused', R => { R.investigations[0].qs[0].src[0].pos = '1'; }, /pos must be/);
+  bad('a priority on a source in no visit list is refused', R => { R.investigations[0].qs[0].src[1].pri = 'A'; }, /on none/);
+  bad('two items in one place on a visit list are refused', R => { const I = R.investigations; I[0].qs[0].src[0].pos = 1; Object.assign(I[1].qs[0].src[0], { visit: 'v1', pos: 1 }); }, /is taken by/);
+  { const R = research(); Object.assign(R.investigations[0].qs[0].src[1], { who: 'Us, online', who_fr: 'Nous, en ligne' }); const v = RJ.validate(R, { cards: null, quiet: true });
+    ok(!v.errors.length && v.warnings.some(w => /say "Cory, online"/.test(w)), 'the old "Us, online" draws a warning: everyone with the password reads it'); }
 }
 
 // ------------------------------------------------------------------ privacy
@@ -149,6 +157,12 @@ section('a change set\'s research items must really have been updated');
   r = run('set', 'v1', 'next=The neighbour goes on Saturday.', 'next_fr=La voisine y va samedi.');
   R = load();
   ok(r.status === 0 && RJ.claimsFor(R, [cs('v1')]).length === 0, 'set on a visit list counts as moving it');
+  r = run('set', 's1', 'pri=A', 'pos=2');
+  R = load();
+  ok(r.status === 0 && R.investigations[0].qs[0].src[0].pri === 'A' && R.investigations[0].qs[0].src[0].pos === 2, 'set takes a priority, and a place on the visit list as a number');
+  ok(run('set', 's1', 'pos=two').status !== 0 && load().investigations[0].qs[0].src[0].pos === 2, 'and refuses a place that is not one');
+  r = run('set', 'v1', 'access=On Saturday mornings.', 'access_fr=Le samedi matin.');
+  ok(r.status === 0 && load().visits.v1.access === 'On Saturday mornings.', 'set changes how a visit list is reached (access)');
   ok(RJ.claimsFor(R, [cs('s9')]).some(m => /not in research\.json/.test(m)), 'an id that does not exist is named');
   ok(RJ.claimsFor(R, [cs('none: only a wording fix')]).length === 0, '"none: <why>" claims nothing');
   /* an item edited by hand has no _touched: its own dates count, not its investigation's */

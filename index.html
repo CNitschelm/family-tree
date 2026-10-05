@@ -866,6 +866,20 @@ html.dark .qs-open{--qfg:#B7C0C3;--qbd:#5D686C}html.dark .qs-lead{--qfg:#7FDCDA;
 .rvw{font-size:12.5px;line-height:1.4;color:var(--ink-soft)}
 .rvy{font-size:13px;line-height:1.45}
 .rvc{margin-top:3px}
+/* one person's archive visits (#research/who/<name>, 5 Oct 2026) and the priorities on a visit list */
+.rpri{display:flex;align-items:center;gap:10px;margin:8px 0 -2px;font-size:12.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--ink-soft)}
+.rpri i{font-style:normal;width:24px;height:24px;flex:none;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;letter-spacing:0;background:var(--rs-soft);border:1px solid var(--div);color:var(--ink)}
+.rvdo{display:flex;gap:7px;align-items:flex-start;font-size:13.5px;line-height:1.45;font-weight:500}
+.rvdo .ic{width:16px;height:16px;flex:none;margin-top:2px;color:var(--rs-visit)}
+.rvlist li.rvdone{opacity:.72}
+.rarch{display:flex;flex-direction:column;gap:10px;margin-top:10px;padding-top:16px;border-top:1px solid var(--rule)}
+.rarh{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.rarh h2{display:flex;align-items:center;gap:8px;font-family:'EB Garamond',serif;font-size:24px;line-height:1.15;min-width:0}
+.rarh h2 .ic{width:20px;height:20px;flex:none;color:var(--rs-visit)}
+.rarn{font-size:12.5px;color:var(--ink-soft);white-space:nowrap}
+.rvacc{font-size:14px;line-height:1.5;color:var(--ink-soft)}
+.rhow ul{margin:6px 0 0 18px;display:flex;flex-direction:column;gap:4px}
+.rwhob{align-self:flex-start}
 .rwait{min-height:40vh;display:flex;align-items:center;justify-content:center}
 .rwait .pload{font-size:15px;color:var(--ink-soft);animation:ldpulse 1.1s ease-in-out infinite alternate}
 .resin .xretry{font-size:14px;padding:9px 14px;border:1px solid var(--rule);border-radius:8px;background:var(--panel);text-align:center}
@@ -1296,6 +1310,18 @@ const I18N = {
       res_items:"%n items",
       res_back_all:"All investigations",
       res_back:"Back",
+      res_who_kicker:"Archive visits",
+      res_who_title:"%s’s list",
+      res_who_lede:"Everything to photograph, archive by archive, in order of priority. This page is kept up to date: when the list changes, it changes here.",
+      res_who_upd:"List last changed %d",
+      res_who_open:"%s’s whole list",
+      res_how_h:"How to photograph",
+      res_how_1:"Clear photographs are enough: the page flat, well lit, the whole page in the frame, every page. Nothing needs to be read on site.",
+      res_how_2:"A single register: photograph all of it. A bundle of loose pieces: every piece within the dates given.",
+      res_how_3:"Photography rules differ from one reading room to another, so it is worth asking at the desk on arrival.",
+      res_pri_A:"Do first",
+      res_pri_B:"If time allows",
+      res_pri_C:"Only at the end",
       res_loading:"Loading the research…",
       res_err:"The research didn’t load. Try again",
       res_sort_note:"In each topic: ready to do first, then needs Cory’s OK, then needs others. Bigger steps first within each.",
@@ -1468,6 +1494,18 @@ const I18N = {
       res_items:"%n documents",
       res_back_all:"Toutes les enquêtes",
       res_back:"Retour",
+      res_who_kicker:"Visites aux archives",
+      res_who_title:"La liste de %s",
+      res_who_lede:"Tout ce qu’il y a à photographier, archive par archive, par ordre de priorité. Cette page est tenue à jour : quand la liste change, elle change ici.",
+      res_who_upd:"Liste modifiée le %d",
+      res_who_open:"Toute la liste de %s",
+      res_how_h:"Comment photographier",
+      res_how_1:"Des photos nettes suffisent : la page à plat, bien éclairée, entière dans le cadre, chaque page. Rien n’est à lire sur place.",
+      res_how_2:"Un registre : le photographier en entier. Une liasse de pièces : chaque pièce comprise dans les dates indiquées.",
+      res_how_3:"Les règles de photographie varient d’une salle de lecture à l’autre : mieux vaut demander à l’accueil en arrivant.",
+      res_pri_A:"À faire en priorité",
+      res_pri_B:"Si le temps le permet",
+      res_pri_C:"En fin de visite seulement",
       res_loading:"Chargement des recherches…",
       res_err:"Les recherches ne se sont pas chargées. Réessayer",
       res_sort_note:"Dans chaque thème : d’abord ce qui est prêt, puis ce qui attend l’accord de Cory, puis ce qui dépend d’autres personnes. Les plus grands pas d’abord.",
@@ -4861,7 +4899,7 @@ const R_CHIPS = ["all", "cory", "wait", "visit", "ready", "todo", "hold", "done"
 const R_QSTATES = ["open", "lead", "partly", "answered"];
 let RES = null, resP = null, resFail = false;
 /* where the view is: lens, the investigation picked, the phone's screen, what is open */
-const RS = { lens:"topic", inv:null, scr:"list", src:null, visit:null, filter:"all", th:null, qc:{}, sx:{}, stack:[] };
+const RS = { lens:"topic", inv:null, scr:"list", src:null, visit:null, who:null, filter:"all", th:null, qc:{}, sx:{}, stack:[] };
 const isRes = () => document.body.classList.contains("resmode");
 const resPhone = () => PHONEQ.matches;
 const rT = (k, n, t) => String(T(k)).replace("%n", n === undefined ? "" : n).replace("%t", t === undefined ? "" : t);
@@ -4893,7 +4931,7 @@ function resTier(s){
   if(s.st === "hold") return "hold";
   if(s.st === "ready") return "solo";
   if(s.st === "cory") return "assist";
-  if(s.st === "todo") return s.who === "Us, online" ? "solo" : (s.who === "Cory" ? "assist" : "others");
+  if(s.st === "todo") return (s.who === "Cory, online" || s.who === "Us, online") ? "solo" : (s.who === "Cory" ? "assist" : "others");
   return "others";
 }
 function resPrep(R){
@@ -5189,28 +5227,77 @@ function rPhSrc(){
 function rVisit(){
   const v = RES.visits[RS.visit];
   if(!v){ RS.scr = "list"; return resPhone() ? rPhList() : rDesk(); }
-  const items = RES.vItems[RS.visit] || [];
+  const items = RES.vItems[RS.visit] || [], slug = rSlug(v.who);
   const back = RS.stack.length ? T("res_back") : T("res_back_all");
   let h = rBack(back) + `<article class="rvisit" aria-labelledby="rv-h"><div class="rkick">${rIc(R_IC.arch)}<span>${T("res_visit_kicker")}</span></div>` +
     `<h1 id="rv-h" tabindex="-1">${esc(rL(v, "name"))}</h1>${v.access ? `<p class="rlede">${esc(rL(v, "access"))}</p>` : ""}` +
-    (v.who ? `<div class="rvwho">${esc(rT("res_who_line").replace("%s", rL(v, "who")))}</div>` : "") +
+    (v.who ? `<div class="rvwho">${esc(rT("res_who_line").replace("%s", () => rL(v, "who")))}</div>` : "") +
+    (slug ? `<button type="button" class="rbtn rwhob" data-ra="who" data-id="${esc(slug)}">${rIc(R_IC.cam)}<span>${esc(T("res_who_open").replace("%s", () => rL(v, "who")))}</span>${rIc(R_IC.right)}</button>` : "") +
     `<div class="rphoto">${rIc(R_IC.cam)}<span>${T("res_photo_note")}</span></div>` +
-    `<div class="rsech"><h2 class="rlbl">${T("res_to_photo")}</h2><span>${esc(rT(items.length === 1 ? "res_items_1" : "res_items", items.length))}</span></div><ol class="rvlist">`;
-  items.forEach((s, i) => {
-    h += `<li><span class="rvn">${i + 1}</span><div><b>${esc(rL(s, "t"))}</b><span class="rvw">${esc(rL(s, "where"))}</span>` +
-      (s.why ? `<span class="rvy">${esc(rL(s, "why"))}</span>` : "") + `<span class="rvc">${rStChip(s.st)}</span></div></li>`;
-  });
-  h += `</ol>`;
+    `<div class="rsech"><h2 class="rlbl">${T("res_to_photo")}</h2><span>${esc(rT(items.length === 1 ? "res_items_1" : "res_items", items.length))}</span></div>` + rVList(RS.visit);
   if(v.next) h += `<div class="rnextbox"><div class="rlbl">${T("res_next")}</div><div class="rnt">${esc(rL(v, "next"))}</div></div>`;
   if(v.dec && rDecHref(v.dec)) h += `<div class="rdecs">${rDecide(v.dec)}</div>`;
   if(v.log && v.log.length) h += `<h2 class="rlbl">${T("res_log")}</h2>` + rLog(v.log);
   return h + `</article>`;
 }
 
-/* ---- drawing, and keeping the address in step (#research, #research/<id>, #research/visit/<id>) ---- */
+/* ---- one person's archive visits (Cory, 5 Oct 2026: "build a feature where he can more easily see his assignments
+   on the site"): #research/who/<name> gathers every visit list that person arranges (its `who`), each list's items
+   in its own order (`pos`) under their priority (`pri`: A do first, B if time allows, C only at the end), with what
+   to photograph (`next`). The name in the address is the list's `who` folded to lower case, accents and spaces
+   gone: nothing in this file names anyone. ---- */
+const R_PRI = ["A", "B", "C"];
+const rSlug = s => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+const rWhoVisits = slug => slug ? Object.keys(RES.visits).filter(k => rSlug(RES.visits[k].who) === slug) : [];
+/* a visit list's items in its own order: its places (pos) first, then as the file lists them */
+function rVItems(vk){
+  const at = s => Number.isInteger(s.pos) ? s.pos : 1e3;
+  return (RES.vItems[vk] || []).map((s, i) => [s, i]).sort((a, b) => (at(a[0]) - at(b[0])) || (a[1] - b[1])).map(x => x[0]);
+}
+function rVRow(s, n){
+  return `<li${R_CLOSED.has(s.st) ? ' class="rvdone"' : ""}><span class="rvn">${n}</span><div><b>${esc(rL(s, "t"))}</b><span class="rvw">${esc(rL(s, "where"))}</span>` +
+    (s.next ? `<span class="rvdo">${rIc(R_IC.cam)}<span>${esc(rL(s, "next"))}</span></span>` : "") +
+    (s.why ? `<span class="rvy">${esc(rL(s, "why"))}</span>` : "") +
+    (s.st !== "visit" ? `<span class="rvc">${rStChip(s.st)}</span>` : "") + `</div></li>`;
+}
+/* the items, under A, B and C when the list has priorities */
+function rVList(vk){
+  const items = rVItems(vk), num = s => Number.isInteger(s.pos) ? s.pos : items.indexOf(s) + 1;
+  if(!items.some(s => R_PRI.indexOf(s.pri) >= 0)) return `<ol class="rvlist">${items.map(s => rVRow(s, num(s))).join("")}</ol>`;
+  return R_PRI.concat("").map(p => {
+    const g = items.filter(s => (R_PRI.indexOf(s.pri) >= 0 ? s.pri : "") === p);
+    if(!g.length) return "";
+    return (p ? `<h3 class="rpri"><i aria-hidden="true">${p}</i><span>${T("res_pri_" + p)}</span></h3>` : "") +
+      `<ol class="rvlist">${g.map(s => rVRow(s, num(s))).join("")}</ol>`;
+  }).join("");
+}
+function rWho(){
+  const ks = rWhoVisits(RS.who);
+  if(!ks.length){ RS.scr = "list"; RS.who = null; return resPhone() ? rPhList() : rDesk(); }
+  const back = RS.stack.length ? T("res_back") : T("res_back_all");
+  /* when the list last changed: the newest date on these visit lists and on their items */
+  const dates = [];
+  ks.forEach(k => { const v = RES.visits[k]; dates.push(v.since); (v.log || []).forEach(e => dates.push(e[0]));
+    (RES.vItems[k] || []).forEach(s => { dates.push(s.since); (s.log || []).forEach(e => dates.push(e[0])); }); });
+  const last = dates.filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d || "")).sort().pop();
+  let h = rBack(back) + `<article class="rvisit rwho" aria-labelledby="rw-h"><div class="rkick">${rIc(R_IC.arch)}<span>${T("res_who_kicker")}</span></div>` +
+    `<h1 id="rw-h" tabindex="-1">${esc(T("res_who_title").replace("%s", () => rL(RES.visits[ks[0]], "who")))}</h1><p class="rlede">${T("res_who_lede")}</p>` +
+    (last ? `<div class="rvwho">${esc(T("res_who_upd").replace("%d", () => rDate(last)))}</div>` : "") +
+    `<div class="rphoto rhow">${rIc(R_IC.cam)}<div><b>${T("res_how_h")}</b><ul>${[1, 2, 3].map(i => `<li>${T("res_how_" + i)}</li>`).join("")}</ul></div></div>`;
+  ks.forEach(k => {
+    const v = RES.visits[k], n = (RES.vItems[k] || []).length;
+    h += `<section class="rarch" aria-labelledby="rw-${esc(k)}"><div class="rarh"><h2 id="rw-${esc(k)}">${rIc(R_IC.arch)}<span>${esc(rL(v, "name"))}</span></h2>` +
+      `<span class="rarn">${esc(rT(n === 1 ? "res_items_1" : "res_items", n))}</span></div>` +
+      (v.access ? `<p class="rvacc">${esc(rL(v, "access"))}</p>` : "") + rVList(k) + `</section>`;
+  });
+  return h + `</article>`;
+}
+
+/* ---- drawing, and keeping the address in step (#research, #research/<id>, #research/visit/<id>, #research/who/<name>) ---- */
 function resHashNow(){
   if(!isRes()) return "";
   if(RS.scr === "visit" && RS.visit) return "#research/visit/" + RS.visit;
+  if(RS.scr === "who" && RS.who) return "#research/who/" + RS.who;
   if(RS.scr === "src" && RS.src) return "#research/" + (RES && RES.src[RS.src] ? RES.src[RS.src].inv : "");
   if((RS.scr === "inv" || !resPhone()) && RS.inv && RS.lens === "topic") return "#research/" + RS.inv;
   return "#research";
@@ -5233,6 +5320,7 @@ function renderRes(how){
   const keep = how && how.focus;   /* the control that was used: given focus again after the redraw */
   let h;
   if(RS.scr === "visit") h = rVisit();
+  else if(RS.scr === "who") h = rWho();
   else if(resPhone()) h = RS.scr === "inv" ? rPhInv() : RS.scr === "src" ? rPhSrc() : rPhList();
   else h = rDesk();
   resIn.innerHTML = h;
@@ -5251,7 +5339,7 @@ function renderRes(how){
 }
 /* go somewhere inside the view; on phones every step is a screen the Back button can undo */
 function resGo(scr, set, opts){
-  if(resPhone() || scr === "visit" || RS.scr === "visit") RS.stack.push({ scr:RS.scr, inv:RS.inv, src:RS.src, visit:RS.visit, lens:RS.lens, y:resEl.scrollTop });
+  if(resPhone() || scr === "visit" || scr === "who" || RS.scr === "visit" || RS.scr === "who") RS.stack.push({ scr:RS.scr, inv:RS.inv, src:RS.src, visit:RS.visit, who:RS.who, lens:RS.lens, y:resEl.scrollTop });
   RS.scr = scr; Object.assign(RS, set || {});
   renderRes(Object.assign({ top:true, y:0, focusHead:true }, opts || {}));
 }
@@ -5262,15 +5350,16 @@ function resUp(){
     RS.scr = "list"; renderRes({ top:true, y:0, focusHead:true }); return true;
   }
   const b = RS.stack.pop();
-  Object.assign(RS, { scr:b.scr, inv:b.inv, src:b.src, visit:b.visit, lens:b.lens });
+  Object.assign(RS, { scr:b.scr, inv:b.inv, src:b.src, visit:b.visit, who:b.who, lens:b.lens });
   renderRes({ top:true, y:b.y || 0, focusHead:false });
   return true;
 }
 /* open the view at a place (a deep link, a bio's "Open in Research", or just the tab) */
 function openResearch(target){
-  if(target){   /* an address: #research (the list), #research/<investigation>, #research/visit/<archive> */
+  if(target){   /* an address: #research (the list), #research/<investigation>, #research/visit/<archive>, #research/who/<name> */
     RS.stack = [];
     if(target.visit){ RS.scr = "visit"; RS.visit = target.visit; }
+    else if(target.who){ RS.scr = "who"; RS.who = target.who; }
     else if(target.inv){ RS.lens = "topic"; RS.inv = target.inv; RS.th = null; RS.scr = resPhone() ? "inv" : "list"; }
     else RS.scr = "list";
   }
@@ -5278,13 +5367,15 @@ function openResearch(target){
   needResearch().then(()=>{
     if(target && target.inv && !RES.byId[target.inv]){ RS.scr = "list"; RS.inv = null; }
     if(target && target.visit && !RES.visits[target.visit]){ RS.scr = "list"; RS.visit = null; }
+    if(target && target.who && !rWhoVisits(target.who).length){ RS.scr = "list"; RS.who = null; }
     renderRes({ top:true, y:0 });
   }, ()=>renderRes());
 }
 function resFromHash(){
-  const m = /^#research(?:\/(visit\/)?([A-Za-z0-9_-]+))?$/.exec(location.hash || "");
+  const m = /^#research(?:\/(visit\/|who\/)?([A-Za-z0-9_-]+))?$/.exec(location.hash || "");
   if(!m) return null;
-  return m[2] ? (m[1] ? { visit:m[2] } : { inv:m[2] }) : {};
+  if(!m[2]) return {};
+  return m[1] === "visit/" ? { visit:m[2] } : m[1] === "who/" ? { who:m[2].toLowerCase() } : { inv:m[2] };
 }
 
 resIn.addEventListener("click", e=>{
@@ -5331,6 +5422,7 @@ resIn.addEventListener("click", e=>{
     return;
   }
   if(a === "visit"){ resGo("visit", { visit:id }); return; }
+  if(a === "who"){ resGo("who", { who:id }); return; }
   if(a === "back"){ resUp(); return; }
   if(a === "person"){
     const n = allNodes.find(x => x.p.id === b.dataset.card); if(!n) return;
@@ -5346,7 +5438,7 @@ window.addEventListener("hashchange", ()=>{
   if(t){ if(!isRes()) setView("research", t); else openResearch(t); }
 });
 { /* turning a tablet, or a window crossing the phone width: start the view over in the new layout */
-  const re = ()=>{ RS.stack = []; if(RS.scr !== "visit") RS.scr = "list"; renderRes({ top:true, y:0 }); };
+  const re = ()=>{ RS.stack = []; if(RS.scr !== "visit" && RS.scr !== "who") RS.scr = "list"; renderRes({ top:true, y:0 }); };
   if(PHONEQ.addEventListener) PHONEQ.addEventListener("change", re); else if(PHONEQ.addListener) PHONEQ.addListener(re);
 }
 function syncResLang(){ if(isRes()) renderRes(); }
@@ -5433,7 +5525,7 @@ resLangReady = true;
 }
 
 /* the Research view at load: its tab (unless this build has no research), the badges' small file, and a
-   link straight to it (#research, #research/<investigation>, #research/visit/<archive>) */
+   link straight to it (#research, #research/<investigation>, #research/visit/<archive>, #research/who/<name>) */
 if(!SITE.research) document.querySelectorAll('[data-view="research"]').forEach(b=>{ b.hidden = true; });
 loadRQ();
 { const t = SITE.research && resFromHash(); if(t) setView("research", t); }
