@@ -167,6 +167,20 @@ fs.copyFileSync(path.join(ROOT, mapName), path.join(OUT, mapName));
 const rs = RJ.sealed(R0, PW, P.readEnc(sealed.line));
 fs.writeFileSync(path.join(OUT, "media", "research.bin"), rs.data);
 fs.writeFileSync(path.join(OUT, "media", "research-cards.bin"), rs.cards);
+/* Cory's owner view (5 Oct 2026, register R-0475): invented figures under an invented owner key, sealed as
+   tools/linkconf.js seals the real ones (an inner layer under the owner key, inside the payload key) */
+const OKEY = crypto.randomBytes(32), OKEY64 = OKEY.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const CONF0 = { v: 1, made: "2026-10-05", l: {} };
+(function walk(p) { (p.unions || []).forEach(u => (u.c || []).forEach(c => { CONF0.l[c.id] = { p: 95, e: 95, w: "A test record names the parent." }; walk(c); })); })(DATA0);
+if (!REAL) {
+  CONF0.l[idOf["Quintus Testmann"]] = { p: 50, e: 50, w: "Only a test tree says so." };
+  CONF0.l[idOf["Octavus Testmann"]] = { p: 80, e: 60, w: "A test record fits.", o: "My own test note." };
+}
+{
+  const json = Buffer.from(JSON.stringify(CONF0)), body = zlib.deflateRawSync(json), head = "c:" + json.length, iv = crypto.randomBytes(12);
+  const inner = Buffer.concat([iv, P.gcmSeal(OKEY, iv, Buffer.concat([Buffer.from([head.length]), Buffer.from(head, "latin1"), body]))]);
+  fs.writeFileSync(path.join(OUT, "media", "owner.bin"), P.sealBlob(P.keyFor(PW, SALT, ITER), "o", inner, Buffer.concat([Buffer.from("owner\0"), inner])).file);
+}
 
 /* ---------- a server like GitHub Pages: gzip, ETags and 304s, and a log of what was asked for ---------- */
 const types = { ".html": "text/html; charset=utf-8", ".json": "application/json", ".bin": "application/octet-stream" };
@@ -673,6 +687,60 @@ async function run() {
     ok(await page.evaluate(() => localStorage.getItem("ft-owner") === null), "#owner-off unmarks the device");
     d = await decs();
     ok(d.length === 0 && (await page.evaluate(() => location.hash)) === "#research/visit/v1", "and the buttons go, the view staying where it was (" + d.length + ")");
+    await ctx.close();
+  }
+  /* ---------------- Cory's owner view (5 Oct 2026, register R-0475): link figures on his devices only ---------------- */
+  if (!REAL) {
+    console.log("\n== owner view: how sure each link is");
+    await reset();
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await ctx.newPage();
+    watch(page, "owner view");
+    const labels = () => page.evaluate(() => [...document.querySelectorAll("#world text.ulabel")].map(t => ({ txt: [...t.childNodes].filter(n => n.nodeName !== "title").map(n => n.textContent).join("").replace(/\s+/g, " ").trim(),
+      pct: [...t.querySelectorAll("tspan.cfp")].map(s => s.textContent.trim()), cls: [...t.querySelectorAll("tspan.cfp")].map(s => s.getAttribute("class")).join(" "),
+      title: (t.querySelector("title") || {}).textContent || "" })));
+    await page.goto(BASE);
+    await unlock(page);
+    await page.waitForTimeout(800);
+    let L = await log();
+    ok(!got(L, /owner\.bin/).length, "a device without the owner key never asks for the owner file");
+    ok(!(await labels()).some(l => l.pct.length), "and no line shows a figure");
+    await page.evaluate(() => { location.hash = "#owner"; });
+    await page.waitForTimeout(600);
+    ok(!(await labels()).some(l => l.pct.length) && !got(await log(), /owner\.bin/).length, "#owner alone (the Decide buttons' mark) shows no figures either");
+    await page.evaluate(k => { location.hash = "#owner=" + k; }, OKEY64);
+    await page.waitForFunction(() => document.querySelectorAll("#world tspan.cfp").length > 0, null, { timeout: 5000 }).catch(() => {});
+    let lb = await labels();
+    ok(lb.length > 0 && lb.every(l => l.pct.length === 1 && /^(· )?\d{1,3}%$/.test(l.pct[0])), "#owner=<key>: every line down to a child carries its % (" + lb.map(l => l.txt).slice(0, 4).join(" | ") + ")");
+    ok((await page.evaluate(() => location.hash)) === "", "and the key leaves the address at once");
+    const low = lb.find(l => l.txt === "50%"), ovr = lb.find(l => l.txt === "80%");
+    ok(!!low && /cf-l/.test(low.cls) && /50%/.test(low.title) && /test tree/.test(low.title), "a weak link shows its figure in the low colour, with the reason on hover");
+    ok(!!ovr && /cfo/.test(ovr.cls) && /records give 60%/.test(ovr.title) && /My own test note/.test(ovr.title), "a figure Cory set himself is marked, with the records' figure and his note on hover");
+    await shot(page, "o1-owner-figures.png");
+    /* the bio says it too */
+    await page.click('.node:has(.nm:text-is("Octavus Testmann")) [data-bio]');
+    await page.waitForSelector("#profile .pcfwhy", { timeout: 4000 }).catch(() => {});
+    const bio = await page.evaluate(() => { const e = document.querySelector("#profile .pcfwhy"); return e ? e.textContent.replace(/\s+/g, " ").trim() : null; });
+    ok(/^How sure 80% \(your figure; the records give 60%\) · My own test note\.?$/.test(bio || ""), "the bio carries the figure and his note (" + bio + ")");
+    await shot(page, "o2-owner-bio.png");
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+    /* a reload keeps the key: the figures come back by themselves */
+    await page.reload();
+    await page.waitForFunction(() => document.querySelectorAll("#world tspan.cfp").length > 0, null, { timeout: 8000 }).catch(() => {});
+    ok((await labels()).some(l => l.pct.length), "after a reload the figures come back without the address");
+    await page.evaluate(() => { location.hash = "#owner-off"; });
+    await page.waitForTimeout(800);
+    ok(!(await labels()).some(l => l.pct.length), "#owner-off takes the figures away");
+    await page.reload();
+    await page.waitForTimeout(1500);
+    ok(!(await labels()).some(l => l.pct.length), "and they stay away after a reload");
+    /* someone else's address with a wrong key: nothing shows, and nothing breaks */
+    await page.evaluate(k => { location.hash = "#owner=" + k; }, "A".repeat(43));
+    await page.waitForTimeout(1200);
+    ok(!(await labels()).some(l => l.pct.length), "a wrong key shows nothing");
+    await page.evaluate(() => { location.hash = "#owner-off"; });
+    await page.waitForTimeout(400);
     await ctx.close();
   }
   /* ---------------- lines through a daughter (Cory, 3 Oct 2026): dashed all the way down, and a tag ---------------- */

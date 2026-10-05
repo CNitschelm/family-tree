@@ -177,6 +177,14 @@ html.dark .idots i.on{background:var(--you)}
 .edge.vf{stroke-dasharray:6 4}
 .node .vft{margin-left:6px;font-style:italic}
 .ulabel{font-size:10px;fill:var(--ink-soft);font-family:'Archivo',sans-serif}
+/* Cory's owner view (5 Oct 2026): how sure each parent-child link is, on the line down to the child and in the bio */
+.ulabel .cfp{font-weight:700}
+.ulabel .cf-h,.pcf.cf-h{fill:var(--fr);color:var(--fr)}
+.ulabel .cf-m,.pcf.cf-m{fill:var(--us-ohio);color:var(--us-ohio)}
+.ulabel .cf-l,.pcf.cf-l{fill:var(--us-west);color:var(--us-west)}
+.ulabel .cfo{text-decoration:underline dotted}
+.pcf{font-weight:700}
+.pcfwhy{font-size:12.5px;line-height:1.45;color:var(--ink-soft);margin:6px 0 0}
 .node{position:absolute;cursor:pointer}
 .node .box{
   background:var(--panel);border:1px solid var(--rule);border-radius:8px;
@@ -1209,6 +1217,7 @@ const I18N = {
       via_f:"through %s",
       via_f_t:"This line goes on through %s, a daughter of the family",
       via_f_lb:"Through",
+      conf_t:"How sure the link is: %p%", conf_o:"your figure; the records give %e%", conf_lb:"How sure",
       dead_hide:"Hide dead lines", dead_note:"Leaves out people with no living descendant. Search, a branch you pick, or a card’s + button still shows them.",
       language:"Language", appearance:"Appearance", th_auto:"Auto", th_light:"Light", th_dark:"Dark",
       dark_mode:"Dark mode", light_mode:"Light mode", lang_switch:"Passer en français", tour_take:"Take the tour",
@@ -1392,6 +1401,7 @@ const I18N = {
       via_f:"par %s",
       via_f_t:"Cette lignée continue par %s, une fille de la famille",
       via_f_lb:"Par",
+      conf_t:"Certitude du lien : %p %", conf_o:"votre chiffre ; les sources donnent %e %", conf_lb:"Certitude",
       dead_hide:"Masquer les lignées éteintes", dead_note:"Écarte les personnes sans descendant vivant. La recherche, une branche choisie ou le bouton + d’une fiche les montrent toujours.",
       language:"Langue", appearance:"Apparence", th_auto:"Auto", th_dark:"Sombre",
       th_light:"Clair", light_mode:"Mode clair", /* ft-allow-names: "clair" is the French word for light (the appearance switch), not a person */
@@ -1595,16 +1605,21 @@ let DATAKEY = null;   /* the unlock key, kept for the pictures that arrive later
    opened once with #owner (#owner-off undoes it). That only keeps the view tidy for everyone else: the buttons
    open his private decisions page, and his claude.ai login is what guards it. */
 let OWNER = false, ownerRedraw = null;
+/* #owner=<key> (5 Oct 2026, register R-0475) also gives this device the key to Cory's owner view: how sure each
+   parent-child link is, as a % on the line down to each child (see confLoad in boot). The key waits here until
+   the page can keep it; #owner-off drops it with the rest. Without the key nothing is fetched and nothing shows. */
+let ownerKeyIn = null, ownerKeyDrop = false, CONF = null, confHook = null;
 function ownerFromHash(){
-  const m = /^#owner(-off)?$/.exec(location.hash || ""); if(!m) return false;
+  const m = /^#owner(?:(-off)|=([A-Za-z0-9_-]{43}))?$/.exec(location.hash || ""); if(!m) return false;
   try{ if(m[1]) localStorage.removeItem(SITE.store + "owner"); else localStorage.setItem(SITE.store + "owner", "1"); }catch(_){}
   OWNER = !m[1];
+  if(m[1]){ ownerKeyDrop = true; ownerKeyIn = null; } else if(m[2]){ ownerKeyIn = m[2]; ownerKeyDrop = false; }
   try{ history.replaceState(history.state, "", location.pathname + location.search); }catch(_){}
   return true;
 }
 try{ OWNER = localStorage.getItem(SITE.store + "owner") === "1"; }catch(_){}
 ownerFromHash();
-window.addEventListener("hashchange", ()=>{ if(ownerFromHash() && ownerRedraw) ownerRedraw(); });
+window.addEventListener("hashchange", ()=>{ if(ownerFromHash()){ if(ownerRedraw) ownerRedraw(); if(confHook) confHook(); } });
 async function decryptData(key){
   let pt = new Uint8Array(await crypto.subtle.decrypt({name:"AES-GCM", iv:b64b(ENC.iv)}, key, b64b(ENC.ct)));
   if(ENC.z) pt = await inflateRaw(pt, ENC.n);
@@ -2331,11 +2346,13 @@ function render(){
     path.setAttribute("class", b.viaF ? "edge vf" : "edge");
     path.dataset.a=a.id; path.dataset.b=b.id;
     world.appendChild(path);
-    if(b.unionSpouse && (a.p.unions||[]).filter(u=>u.s).length>1){
+    const two = b.unionSpouse && (a.p.unions||[]).filter(u=>u.s).length>1, cf = CONF && CONF.l[b.p.id];
+    if(two || cf){
       const t = document.createElementNS("http://www.w3.org/2000/svg","text");
       t.setAttribute("x", x2+8); t.setAttribute("y", y2-9); /* clear of the selection outline+glow */
       t.setAttribute("class","ulabel");
-      t.textContent = "w/ " + unionLabel(a.p, b.unionIdx);
+      if(two) t.textContent = "w/ " + unionLabel(a.p, b.unionIdx);
+      if(cf) confOnLine(t, cf, two);   /* Cory's owner view only: the % after the w/ label, or alone */
       world.appendChild(t);
     }
   });
@@ -2823,6 +2840,7 @@ function openProfile(n){
         `</div>`;
     }
   }
+  h += confBio(p);   /* Cory's owner view only: how sure the link to the parent is, and why */
   if(resLangReady) h += rqBio(p);   /* open research questions about this person (media/research-cards.bin) */
   const bioParas = pickL(pr.bio, pr.bio_fr) || [];
   if(bioParas.length) h += `<div class="pbio">` + bioParas.map(x=>`<p>${esc(x)}</p>`).join("") + `</div>`;
@@ -5479,6 +5497,66 @@ function loadRQ(){
   if(!SITE.research) return;
   openResearchFile(RESFILES.cards, "q").then(x => { RQ = x; rqBadges(); }, ()=>{});
 }
+/* Cory's owner view (5 Oct 2026, register R-0475): how sure each parent-child link is, from tools/linkconf.js.
+   media/owner.bin is sealed twice: under the payload key like every file in media/, and inside that under a key
+   only his devices hold, given once by a #owner=<key> address and kept as a non-extractable key, as the unlock
+   key is. A device without that key never fetches the file; with it, each line down to a child gets its %
+   (after the "w/" label where there is one) and the bio gets the reason. The family's password alone cannot
+   read it. A figure Cory set himself is underlined, and the records' own figure is on hover. */
+const CONFFILE = "media/owner.bin";
+const ckPut = k => idbTx("readwrite", st => st.put(k, "owner"));
+const ckGet = () => idbTx("readonly", st => st.get("owner"));
+const ckDel = () => idbTx("readwrite", st => st.delete("owner"));
+const b64u = s => b64b(s.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - s.length % 4) % 4));
+const confLvl = p => p >= 90 ? "h" : p >= 70 ? "m" : "l";
+const confTitle = c => T("conf_t").replace("%p", c.p) + (c.o ? " (" + T("conf_o").replace("%e", c.e) + ")" : "") + ((c.o || c.w) ? ". " + (c.o || c.w) : "");
+function confOnLine(t, c, after){
+  const ti = document.createElementNS("http://www.w3.org/2000/svg","title");
+  ti.textContent = confTitle(c);
+  t.insertBefore(ti, t.firstChild);
+  const s = document.createElementNS("http://www.w3.org/2000/svg","tspan");
+  s.setAttribute("class", "cfp cf-" + confLvl(c.p) + (c.o ? " cfo" : ""));
+  s.textContent = (after ? " · " : "") + c.p + "%";
+  t.appendChild(s);
+}
+function confBio(p){
+  const c = CONF && CONF.l[p.id]; if(!c) return "";
+  return `<p class="pcfwhy"><span class="lb">${esc(T("conf_lb"))}</span> <span class="pcf cf-${confLvl(c.p)}">${c.p}%</span>` +
+    (c.o ? ` (${esc(T("conf_o").replace("%e", c.e))})` : "") + ((c.o || c.w) ? ` · ${esc(c.o || c.w)}` : "") + `</p>`;
+}
+async function confKey(){
+  if(ownerKeyDrop){ ownerKeyDrop = false; try{ await ckDel(); }catch(_){} return null; }
+  if(ownerKeyIn){
+    const raw = ownerKeyIn; ownerKeyIn = null;
+    try{ const k = await crypto.subtle.importKey("raw", b64u(raw), {name:"AES-GCM"}, false, ["decrypt"]); await ckPut(k); return k; }
+    catch(_){ return null; }
+  }
+  try{ return (await ckGet()) || null; }catch(_){ return null; }
+}
+async function confOpen(key){
+  const r = await fetch(CONFFILE, {cache:"no-cache"});   /* a stable name: always ask whether it changed */
+  if(!r.ok) throw new Error("HTTP " + r.status);
+  const b = await r.arrayBuffer();
+  const outer = new Uint8Array(await crypto.subtle.decrypt({name:"AES-GCM", iv:new Uint8Array(b, 0, 12)}, DATAKEY, new Uint8Array(b, 12)));
+  const ol = outer[0];
+  if(new TextDecoder().decode(outer.subarray(1, 1 + ol)) !== "o") throw new Error("not the owner file");
+  const inner = outer.slice(1 + ol);
+  const pt = new Uint8Array(await crypto.subtle.decrypt({name:"AES-GCM", iv:inner.slice(0, 12)}, key, inner.slice(12)));
+  const il = pt[0], head = new TextDecoder().decode(pt.subarray(1, 1 + il)).split(":");
+  if(head[0] !== "c") throw new Error("not the link figures");
+  const body = pt.slice(1 + il);
+  return JSON.parse(new TextDecoder().decode(head[1] ? await inflateRaw(body, +head[1]) : body));
+}
+let confQ = Promise.resolve();
+function confLoad(){
+  confQ = confQ.then(async () => {   /* one at a time: an #owner address can arrive while the file is on its way */
+    const key = await confKey();
+    let c = null;
+    if(key){ try{ const x = await confOpen(key); c = x && x.l ? x : null; }catch(_){ /* no file yet, or an old key: nothing shows */ } }
+    if(c || CONF){ CONF = c; render(); }
+  });
+}
+confHook = confLoad;
 resLangReady = true;
 
 /* The phone's Back button, or a swipe back, closes what is open (the welcome, a picture, a bio, a panel, a
@@ -5528,6 +5606,7 @@ resLangReady = true;
    link straight to it (#research, #research/<investigation>, #research/visit/<archive>, #research/who/<name>) */
 if(!SITE.research) document.querySelectorAll('[data-view="research"]').forEach(b=>{ b.hidden = true; });
 loadRQ();
+confLoad();
 { const t = SITE.research && resFromHash(); if(t) setView("research", t); }
 
 }

@@ -128,6 +128,7 @@ function openMediaFile(enc, pw, file) {
   const { header, bytes } = openBlob(keyFor(pw, enc.salt, enc.iter), file);
   if (header === "x") return "x:" + bytes.length;
   if (/^r:\d+$/.test(header) || header === "q") return header.split(":")[0] + ":" + bytes.length;   /* the Research view's files */
+  if (header === "o") return "o:" + bytes.length;   /* the owner view (tools/linkconf.js): a second layer inside */
   return header + bytes.toString("base64");
 }
 
@@ -272,9 +273,10 @@ function writeMedia(root, media) {
   return { written, kept };
 }
 /* media/ files with a stable name that are not the payload's: the Research view's two files
-   (tools/research.js, 3 Oct 2026). They are sealed under the same key, so §14 still proves they
-   are ciphertext, but no payload ever references them, so they are never orphans. */
-const STABLE_MEDIA = new Set(["research.bin", "research-cards.bin"]);
+   (tools/research.js, 3 Oct 2026), and Cory's owner view, owner.bin (tools/linkconf.js, 5 Oct 2026),
+   whose figures sit under a second key only his devices hold. All are sealed under the payload key, so
+   §14 still proves they are ciphertext, but no payload ever references them, so they are never orphans. */
+const STABLE_MEDIA = new Set(["research.bin", "research-cards.bin", "owner.bin"]);
 /* files in media/ the payload no longer uses (a picture changed, or the extras after any edit) */
 function orphanMedia(root, ids) {
   let names = [];
