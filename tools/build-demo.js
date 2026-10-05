@@ -24,6 +24,9 @@
  *   research  → when site.research is true: a made-up research file for the demo's own invented people
  *               (tools/research.js's format; card ids from <data>), sealed under the demo's password and
  *               inlined in RESFILES. With site.research false the Research tab is hidden.
+ *   links     → optional: a made-up {"<card id>": <percent 0–100>} file, the "how sure" figure the tree shows on the
+ *               line down to each child (the family page reads media/links.bin, R-0481). Sealed under the demo's
+ *               password and inlined in PUBFILE. Without it the demo shows no figures and asks for no file.
  *
  * The demo's config and data are NOT in this repo (it is public and GitHub Pages serves every
  * file in it); they live with the site that publishes the demo. This file carries no names and
@@ -147,6 +150,8 @@ function build(template, cfg, dir, opts = {}) {
   if (!/const RESFILES = \{[^\n]*\};/.test(html)) die("template has no RESFILES line");
   if (cfg.site.research && !cfg.research) die("site.research is on, so the demo needs a research file (\"research\" in demo.json) — or set site.research to false");
   if (cfg.site.research) file(cfg.research);
+  if (!/const PUBFILE = "[^"\n]*";/.test(html)) die("template has no PUBFILE line");
+  if (cfg.links) file(cfg.links);
   return { html, defaults };
 }
 
@@ -173,6 +178,24 @@ async function encrypt(html, cfg, dir) {
     const uri = b => "data:application/octet-stream;base64," + b.toString("base64");
     html = html.replace(/const RESFILES = \{[^\n]*\};/, () => "const RESFILES = " + JSON.stringify({ data: uri(f.data), cards: uri(f.cards) }) + ";");
   }
+  /* the line figures: the demo's own made-up file, sealed as tools/linkconf.js seals media/links.bin; or none
+     at all (an empty PUBFILE asks for nothing, so the one-file demo makes no request that could fail) */
+  let pub = "";
+  if (cfg.links) {
+    const L = JSON.parse(fs.readFileSync(path.join(dir, cfg.links), "utf8"));
+    const ids = new Set(all.map(x => x.p.id)), l = {};
+    Object.entries(L).forEach(([id, pct]) => {
+      if (!ids.has(id)) die("links: " + id + " is not a card in the demo's data");
+      if (!Number.isInteger(pct) || pct < 0 || pct > 100) die("links: " + id + " needs a whole percent from 0 to 100");
+      l[id] = { p: pct };
+    });
+    const P = require("./payload.js"), zlib = require("zlib");
+    const json = Buffer.from(JSON.stringify({ v: 1, l }), "utf8");
+    const key = P.keyFor(cfg.password, sealed.enc.salt, sealed.enc.iter);
+    const f = P.sealBlob(key, "k:" + json.length, zlib.deflateRawSync(json, { level: 9 }), Buffer.concat([Buffer.from("links\0"), json])).file;
+    pub = "data:application/octet-stream;base64," + f.toString("base64");
+  }
+  html = html.replace(/const PUBFILE = "[^"\n]*";/, () => "const PUBFILE = " + JSON.stringify(pub) + ";");
   return { html, iv: sealed.enc.iv, people: count(data) };
 }
 function count(p) { let n = 1; (p.unions || []).forEach(u => (u.c || []).forEach(c => { n += count(c); })); return n; }

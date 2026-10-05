@@ -5581,6 +5581,7 @@ function loadRQ(){
    takes its place. */
 const PUBFILE = "media/links.bin";
 function pubConfLoad(){
+  if(!PUBFILE) return;   /* a build with no figures (the demo without a links file) asks for nothing */
   openResearchFile(PUBFILE, "k").then(x => { if(x && x.l){ PUBCONF = x; if(!CONF) render(); } }, ()=>{ /* not in this build: no figures */ });
 }
 const CONFFILE = "media/owner.bin";

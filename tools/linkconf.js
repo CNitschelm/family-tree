@@ -146,6 +146,7 @@ function build(doc) {
   if (pb.header !== 'k:' + pjson.length || Object.keys(pback.l).length !== doc.links.length || Object.values(pback.l).some(e => Object.keys(e).join() !== 'p'))
     throw new Error('media/links.bin did not read back');
   console.log('wrote media/links.bin: ' + doc.links.length + ' figures for everyone, no reasons (commit it)');
+  try { require('./stats.js').write(true); } catch (e) { console.log('note: stats.json not updated: ' + e.message); }
 }
 
 function find(doc, card) {

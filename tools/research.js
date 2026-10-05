@@ -362,6 +362,7 @@ function build(R, pw) {
   }
   fs.writeFileSync(STAMP, blobId(f.data) + " media/" + OUT.data + "\n" + blobId(f.cards) + " media/" + OUT.cards + "\n" +
     "# written by tools/research.js build " + new Date().toISOString() + " for research.json updated " + R.updated + "\n");
+  try { require("./stats.js").write(true); } catch (e) { console.log("note: stats.json not updated: " + e.message); }   /* the public numbers count the research too */
   return { v, f };
 }
 /* the gate's question: does media/ hold exactly what research.json makes? */

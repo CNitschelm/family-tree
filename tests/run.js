@@ -335,6 +335,22 @@ section("Union labels");
 }
 
 /* ---------- 3. Decrypt DATA ---------- */
+/* ---------- stats.json: the public headline numbers (5 Oct 2026) ----------
+ * The project page on corynitschelm.com reads them. Public, so numbers and a date only: anything else in it
+ * (a name, a place, any text) fails here, in CI too. tools/stats.js writes it; the gate checks it is current. */
+section("Public numbers");
+{
+  let S = null; try { S = JSON.parse(fs.readFileSync(path.join(ROOT, "stats.json"), "utf8")); } catch (_) {}
+  ok(!!S, "stats.json exists and is JSON");
+  if (S) {
+    const keys = Object.keys(S);
+    ok(S.v === 1 && /^\d{4}-\d{2}-\d{2}$/.test(S.updated || ""), "stats.json carries v 1 and an updated date");
+    ok(keys.every(k => k === "v" || k === "updated" || (Number.isInteger(S[k]) && S[k] >= 0 && S[k] < 100000)), "stats.json holds whole numbers only, besides its date");
+    ok(keys.every(k => /^[a-z][A-Za-z]{0,30}$/.test(k)) && keys.length <= 24, "stats.json keys are plain counters");
+    ok(S.people > 0 && S.generations > 0, "stats.json counts people and generations");
+  }
+}
+
 section("Decrypt DATA");
 let PW = (process.env.FT_PASSWORD || "").trim();
 if (!PW) { try { PW = fs.readFileSync(path.join(ROOT, ".password"), "utf8").trim(); } catch (_) {} }

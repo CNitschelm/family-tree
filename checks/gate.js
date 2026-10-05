@@ -185,6 +185,18 @@ section('6. research data');
   }
 }
 
+section('7. the public numbers (stats.json)');
+{
+  /* the project page on corynitschelm.com reads these; they must say what the data says (tools/stats.js) */
+  try {
+    const S = require('../tools/stats.js'), n = S.compute();
+    let cur = null; try { cur = JSON.parse(fs.readFileSync(S.OUT, 'utf8')); } catch (_) {}
+    const off = S.KEYS.filter(k => n[k] !== undefined && (cur || {})[k] !== n[k]);
+    if (off.length) fail(`stats.json is not what the data says (${off.join(', ')}) — run: node tools/stats.js, and commit stats.json`);
+    else console.log(`  ok  stats.json current (${n.people} people, updated ${cur.updated})`);
+  } catch (e) { fail(`tools/stats.js did not run: ${e.message}`); }
+}
+
 finish();
 fs.writeFileSync(STAMP, `${enc.iv}\n${new Date().toISOString()} PASS ${trail.length} change set(s) ${edits.length} edit(s) over ${base}\n`);
 console.log(`\nGATE: PASS — ${trail.length} change set(s), ${edits.length} edit(s). .gate-stamp written for iv ${enc.iv}; commit in GitHub Desktop.`);

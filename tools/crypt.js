@@ -198,6 +198,7 @@ function readEnc(html) {
       const left = P.orphanMedia(ROOT, keep);
       if (left.length) console.log("note: " + left.length + " unused file(s) could not be moved out of media/: " + left.slice(0, 3).join(", "));
     }
+    try { require("./stats.js").write(true); } catch (e) { console.log("note: stats.json not updated: " + e.message); }   /* the public headline numbers move with the payload */
     console.log(newSalt
       ? "note: NEW SALT — every family member must re-enter the password."
       : "note: salt unchanged — family devices stay unlocked.");
