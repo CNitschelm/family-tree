@@ -79,6 +79,7 @@ without asking" (R-0381) and the 1 Aug daughters rule (R-0386).
 - **Still ask first:** anyone outside the male line (a spouse's family, a daughter's children), and any link that
   rests only on a compiled tree or on inference. Those are research leads (the Research view's "Every Nitschelm
   of the line"), not cards.
+- **Line only in the plan** (R-0538, Cory, 8 Oct 2026: "Anything that goes through a woman should not be included even if they show on tree"): the generation cards, the completeness tracker and the bio cards cover the men of the line and their sons and daughters, never anyone below a daughter, even when that card is drawn. Those cards stay; work on them only when Cory asks for that person.
 - Spouses stay unions, never cards. Living people: birth year only. Enriching existing people (bios, documents,
   photos, sources, corrections) never needs permission.
 
