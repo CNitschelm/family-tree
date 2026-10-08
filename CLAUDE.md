@@ -61,7 +61,7 @@ without asking" (R-0381) and the 1 Aug daughters rule (R-0386).
 - **Daughters get cards; their children are not drawn.** A daughter's marriage is a union on her card.
 - **The daughters' lines already drawn are decided line by line** (R-0439): one yes/no card per line on Cory's
   decisions page (notes/decisions_page.md). Until a line is answered, its cards stay; never remove one without his
-  answer. The Schweitzer–Sartre line (c114–c122) stays as a fixed exception, those nine cards only (R-0440).
+  answer. The Schweitzer–Sartre line (c114–c122) came off the tree on 8 Oct 2026 (R-0539, superseding R-0440); it is told in c113's bio, and the cards are kept in TRIMMED-PEOPLE.md.
 - **No cards for stillborn children** (R-0441); a parent's note or bio may mention one.
 - **At most two marriages on a card** (R-0442), so cards keep their size. When more are known, the card keeps the
   marriage whose children are drawn, then the latest; the earlier ones are told in the bio only. A child whose

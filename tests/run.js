@@ -736,7 +736,7 @@ section("Lines through a daughter");
   ok(!wrong.length, "every card below a daughter of the line is marked through her, all the way down, and no other card is (" + wrong.length + " wrong)");
   ok(root.viaF === null, "the root is not marked");
   const sw = allNodes.filter(n => /^c1(1[4-9]|2[0-2])$/.test(n.p.id));
-  ok(sw.length === 9 && sw.every(n => n.viaF && n.viaF.p.id === "c113"), "the Schweitzer line's nine cards (c114–c122) are marked through c113 (" + sw.filter(n => n.viaF && n.viaF.p.id === "c113").length + " of " + sw.length + ")");
+  ok(sw.length === 0, "the Schweitzer line's nine cards (c114–c122) are off the tree, told in c113's bio instead (R-0539; " + sw.length + " found)");
   ok(allNodes.filter(n => n.viaF).every(n => n.viaF.p.g === "f" && !n.viaF.viaF), "each mark names the daughter where the line left the male line");
   ok(/path\.setAttribute\("class", b\.viaF \? "edge vf" : "edge"\)/.test(js) && /\.edge\.vf\{stroke-dasharray:/.test(html), "their connectors are dashed");
   ok(/\$\{viaTag\(n\)\}<\/div>/.test(js), "each such card carries the tag");
