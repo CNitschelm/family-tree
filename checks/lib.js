@@ -225,6 +225,8 @@ function yearsOf(node) {
   m = y.match(/^\?\s*[–—-]\s*(\d{4})$/); if (m) return { b: null, d: +m[1] };
   m = y.match(/^c\.?\s*(\d{4})\s*[–—-]\s*(\d{4}|\?)$/i); if (m) return { b: +m[1], d: m[2] === '?' ? null : +m[2], approx: true };
   m = y.match(/^c\.?\s*(\d{4})/i); if (m) return { b: +m[1], d: null, approx: true };
+  // a long-dead man known only from his marriage is written "m. 1667" (R-0533): no birth year
+  m = y.match(/^m\.\s*(\d{4})$/i); if (m) return { b: null, d: null, married: +m[1] };
   m = y.match(/(\d{4})/); return m ? { b: +m[1], d: null, loose: true } : { b: null, d: null };
 }
 

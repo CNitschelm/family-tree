@@ -217,6 +217,7 @@ Check https://www.githubstatus.com/api/v2/summary.json **before** theorising. On
 
 ## Useful technique notes
 - **Archives d'Alsace (archives68/67):** every media has a direct full-res JPEG at `https://archives68.alsace.eu/images/<media-uuid>.jpg`. Don't fight the canvas viewer — draw into a `<canvas>` harness with `ctx.drawImage(img, sx,sy,sw,sh, 0,0,cw,ch)` and screenshot that. Harvest uuids by driving the "Média" input and reading `location.href`, or by scraping the thumbnail rail's DOM attributes. Fetch the catalogue page first (`Caractéristiques physiques` / `Présentation du contenu`) to learn what a register actually covers.
+- **archives68 page list without a browser (8 Oct 2026):** `python3 working/i18-plan/a68list.py <ark>` prints every media's index, uuid and JPEG URL, via the viewer's endpoint `https://archives68.alsace.eu/visualizer/api?arkName=<ark>&uuid=<uuid>` (15 media per call; plain curl from the PC works).
 - Bot-blocked to WebFetch (FindAGrave, Wikimedia Commons, WikiTree, archives68): use the Claude-in-Chrome tools instead.
 - Pre-1682 Protestant Alsace uses the **Julian** calendar — check weekday claims against it.
 - Kurrent traps: K≈R, N≈M/H, C≈L, H has an S-like swirl.
