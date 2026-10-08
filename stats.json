@@ -1,6 +1,6 @@
 {
  "v": 1,
- "updated": "2026-10-07",
+ "updated": "2026-10-08",
  "people": 315,
  "generations": 16,
  "recordsSince": 1577,
@@ -16,5 +16,5 @@
  "investigations": 24,
  "questionsOpen": 28,
  "questionsAnswered": 21,
- "researchSources": 130
+ "researchSources": 131
 }
