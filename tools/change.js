@@ -104,7 +104,7 @@ let hist = null;
 const history = () => (hist = hist || L.history('origin/main', { quiet: false }));
 
 const KINDS = new Set(['fact', 'grade', 'source', 'wording', 'translation', 'structure', 'owner']);
-const LISTS = new Set(['src', 'pl', 'union', 'bio', 'bio_fr', 'hl', 'hl_fr', 'sources', 'docs']);
+const LISTS = new Set(['src', 'pl', 'union', 'bio', 'bio_fr', 'hl', 'hl_fr', 'sources', 'docs', 'timeline']);
 const textish = v => typeof v === 'string' && v.length > 0;
 const tokDiff = (a, b) => {
   const A = L.years(a).concat(L.numbers(a)), B = L.years(b).concat(L.numbers(b));
@@ -277,7 +277,7 @@ const retired = L.loadChanges().flatMap(c => c.retired || []);
     if (op === 'add') {
       if (e.item === undefined) return err(i, 'add needs "item"');
       const arr = head === 'union' ? (card.node.unions = card.node.unions || []) :
-        ['bio', 'bio_fr', 'hl', 'hl_fr', 'sources', 'docs'].includes(head) ? ((card.node.profile = card.node.profile || {})[head] = card.node.profile[head] || []) :
+        ['bio', 'bio_fr', 'hl', 'hl_fr', 'sources', 'docs', 'timeline'].includes(head) ? ((card.node.profile = card.node.profile || {})[head] = card.node.profile[head] || []) :
         (card.node[head] = card.node[head] || []);
       const dupKey = x => JSON.stringify(head === 'src' ? x.u || x.l : head === 'sources' ? x.url || x.label : head === 'pl' ? [x.k, x.t, x.y] : x);
       if (arr.some(x => dupKey(x) === dupKey(e.item))) return err(i, `${head} already has this item`);
@@ -291,7 +291,7 @@ const retired = L.loadChanges().flatMap(c => c.retired || []);
       checkRegister(i, e, card, fam, '', JSON.stringify(e.item));
       applied.push({ ...e, op, card: cid, field: `${head}[${at}]`, before: null, after: e.item });
     } else {
-      const arr = head === 'union' ? card.node.unions : ['bio', 'bio_fr', 'hl', 'hl_fr', 'sources', 'docs'].includes(head) ? (card.node.profile || {})[head] : card.node[head];
+      const arr = head === 'union' ? card.node.unions : ['bio', 'bio_fr', 'hl', 'hl_fr', 'sources', 'docs', 'timeline'].includes(head) ? (card.node.profile || {})[head] : card.node[head];
       if (!arr || !arr.length) return err(i, `${head} is empty`);
       let at;
       try { at = /^\d+$/.test(String(e.at)) ? +e.at : (() => { const r = L.resolve(card.node, `${head}[${e.at}]`); return r.prop; })(); } catch (x) { return err(i, x.message); }

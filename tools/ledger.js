@@ -73,6 +73,9 @@ const nextId = (data, retired = []) => {
 const PROFILE_LISTS = new Set(['bio', 'bio_fr', 'hl', 'hl_fr', 'sources', 'docs']);
 const PROFILE_SCALARS = new Set(['headline', 'headline_fr']);
 const NODE_LISTS = { src: 'src', pl: 'pl', union: 'unions' };
+// The career timeline (profile.timeline: {y, t, t_fr}) can be edited item by item, but stays one leaf
+// ("profile.timeline") in leaves(), so the history and the gate see it as they always have.
+const PROFILE_EDIT_LISTS = new Set([...PROFILE_LISTS, 'timeline']);
 
 function parsePath(p) {
   const m = /^([a-z_]+)(?:\[([^\]]*)\])?(?:\.([a-z_0-9]+))?$/i.exec(p);
@@ -80,7 +83,7 @@ function parsePath(p) {
   return { head: m[1], sel: m[2], key: m[3] };
 }
 function listOf(node, head, create) {
-  if (PROFILE_LISTS.has(head)) {
+  if (PROFILE_EDIT_LISTS.has(head)) {
     if (!node.profile) { if (!create) return null; node.profile = {}; }
     if (!node.profile[head]) { if (!create) return null; node.profile[head] = []; }
     return node.profile[head];
@@ -113,7 +116,7 @@ function resolve(node, p) {
   }
   if (sel === undefined && !key) {
     if (PROFILE_SCALARS.has(head)) return { obj: node.profile || null, prop: head, ensure: () => (node.profile = node.profile || {}) };
-    if (PROFILE_LISTS.has(head) || NODE_LISTS[head]) throw new Error(`"${p}" names a whole list; name one element`);
+    if (PROFILE_EDIT_LISTS.has(head) || NODE_LISTS[head]) throw new Error(`"${p}" names a whole list; name one element`);
     return { obj: node, prop: head, ensure: () => node };
   }
   const list = listOf(node, head, false);
