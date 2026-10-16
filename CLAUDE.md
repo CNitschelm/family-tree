@@ -87,6 +87,12 @@ without asking" (R-0381) and the 1 Aug daughters rule (R-0386).
 See `OPERATING.md`, "Where things live". In short: `index.html` is the site; `data.json`, `research.json`, `.password`,
 `ledger/` and every research `.md` are private and never committed.
 
+**Family papers: save every file (Cory, 16 Oct 2026).** When a session refers to anything a relative sent (an email
+attachment, a photograph, a scan, a written account), it files every attachment of that message, as received, in the
+source archive in the same session: `archive/family/<date>-<slug>/` in family-tree-sources, with a row in that folder's
+README. All of them, not only the ones the site uses: the copies on the site are re-encoded and do not count as saved.
+The few deliberate exceptions are listed at the foot of that README.
+
 ## Privacy invariant (non-negotiable) — read this before every commit
 
 **Nothing outside the AES-GCM ciphertext may name a person.** Not the site's plaintext
