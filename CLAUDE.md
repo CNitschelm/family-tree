@@ -67,14 +67,15 @@ without asking" (R-0381) and the 1 Aug daughters rule (R-0386).
   marriage whose children are drawn, then the latest; the earlier ones are told in the bio only. A child whose
   parents did not marry hangs on a union with no spouse name and no note (c182 under c181, c294 under c004): no
   marriage sign, and it does not count as a marriage.
-- **The tree hides dead lines by default** (R-0444, R-0572). A card is on a live line when the person is living (dates
-  "b. YYYY", or none) or has a living descendant on the tree; the "Hide dead lines" switch in Filters (on when the
-  tree opens, back on with Start over) leaves every other card out of every view the filters build, inside a
-  picked branch too (Cory, 17 Oct 2026: "someone like this should be hidden when it is enabled"). A card's pill
-  opens its live children first and then the rest ("+N more"), and search shows anyone. A branch where no one is
-  living shows in full beside a living one (Show all: "its ok"); picked on its own (Origins aside), it turns the
-  switch off with a note that says why. In index.html: `n.live`, `hideDead`, `firstKids`, `pickedAllDead`,
-  `deadAutoOff`, `toast`; tests/run.js "Filters" and tests/browser.js check it.
+- **The tree hides dead lines by default** (R-0444, R-0572, R-0575). A card is on a live line when the person is living
+  (dates "b. YYYY", or none) or has a living descendant on the tree; the "Hide dead lines" switch in Filters (on when
+  the tree opens, back on with Start over) leaves every other card out of every view the filters build: inside a
+  picked branch, and a branch where no one is living, even beside living ones under Show all (Cory, 17 Oct 2026:
+  "someone like this should be hidden when it is enabled"; "Example of filter not working still"). A note says so
+  when such a branch is picked; picked on its own (Origins aside), it turns the switch off, with a note that says
+  why. A card's pill opens its live children first and then the rest ("+N more"), and search shows anyone. In
+  index.html: `n.live`, `hideDead`, `firstKids`, `pickedAllDead`, `deadAutoOff`, `deadLeftOut`, `toast`;
+  tests/run.js "Filters" and tests/browser.js check it.
 - **Lines through a daughter are marked all the way down** (R-0446): below a daughter of the line every connector is
   dashed and every card says "through <her first name>" (index.html `viaF`, `viaTag`). Nothing to do per line: a line
   that stays is marked, one that goes takes its marks with it.
@@ -94,7 +95,10 @@ to today, worked out from the pins each time it opens (nothing is stored, so a n
 camera follows the pins only, with a look-ahead, eased and speed-capped; time runs at one chosen speed (no
 fast-forward); deaths are a soft rose ring and a fade, an unknown date of death only a fade. Its history notes are
 `history.json` (private: each note with its page and supporting words) → `node tools/history.js build` →
-`media/history.bin` (commit it). The demo build gets no notes. index.html: the PLAY block in the map section;
+`media/history.bin` (commit it). The demo build gets no notes. People on dead lines with no portrait are counted in a
+crowd's "+N", not drawn ("the map gets way too busy", R-0576). At Cory's own first record the year stands still for a
+coronation he asked for (trumpets, a synthesized fanfare, a crown, confetti, R-0577); `PLAY_HERO` holds his card id
+and the demo build blanks it; a joke closes the playback. index.html: the PLAY block in the map section;
 tests/run.js "Play"; tests/browser.js "play" and, with `--real`, pictures of it on the real pins.
 
 **Family papers: save every file (Cory, 16 Oct 2026).** When a session refers to anything a relative sent (an email

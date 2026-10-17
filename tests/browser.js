@@ -162,7 +162,9 @@ const sealed = P.sealData(DATA0, PW, { salt: SALT, iter: ITER });
 const page0 = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 fs.mkdirSync(path.join(OUT, "media"), { recursive: true });
 fs.mkdirSync(path.join(OUT, "map"), { recursive: true });
-fs.writeFileSync(path.join(OUT, "index.html"), page0.replace(/const ENC = \{[^\n]*\};/, () => sealed.line));
+/* the coronation's card: in the invented family, Daughter1 (b. 1950) */
+fs.writeFileSync(path.join(OUT, "index.html"), page0.replace(/const ENC = \{[^\n]*\};/, () => sealed.line)
+  .replace(/const PLAY_HERO = "[^"]*";/, () => REAL ? 'const PLAY_HERO = "' + (page0.match(/const PLAY_HERO = "([^"]*)";/) || ["", ""])[1] + '";' : 'const PLAY_HERO = "' + idOf["Daughter1 Testmann"] + '";'));
 for (const [k, f] of sealed.media) fs.writeFileSync(path.join(OUT, "media", k + ".bin"), f);
 const mapName = page0.match(/const MAPFILE = "([^"]+)";/)[1];
 fs.copyFileSync(path.join(ROOT, mapName), path.join(OUT, mapName));
@@ -308,6 +310,18 @@ async function run() {
     await page.waitForTimeout(300);
     await page.click("#restart");
     await page.waitForTimeout(600);
+    /* Cory, 17 Oct 2026 (R-0575): Show all with the switch on leaves out the branch where no one is living, and says so */
+    await page.click("#filtbtn");
+    await page.click("#fall");
+    await page.waitForTimeout(600);
+    const note2 = await page.isVisible("#toast") ? await page.textContent("#toastmsg") : "";
+    ok((await page.getAttribute("#deadsw", "aria-checked")) === "true" && /Schweitzer branch is left out/.test(note2) && !(await shown("Child9 Testmann")) && !(await shown("Branch9 Testmann")),
+      "Show all with the switch on: the all-dead branch stays out and a note says why (" + note2 + ")");
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+    await page.click("#toast .tx");
+    await page.click("#restart");
+    await page.waitForTimeout(600);
     /* Cory, 17 Oct 2026: picking only a branch where no one is living turns the switch off, with a note saying why */
     await page.click("#filtbtn");
     await page.click('.tile[data-br="schw"]');
@@ -373,6 +387,14 @@ async function run() {
     const drawn = await page.evaluate(() => { const c = document.getElementById("pbhist"), d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i]) n++; return n; });
     ok(drawn > 100, "the timeline draws the births, moves and deaths (" + drawn + " px)");
     ok((await page.$$("#pbmarks .pbm.h")).length === 2 && (await page.$$("#pbmarks .pbm.f")).length >= 3, "the history notes and the family's own are marked on the timeline");
+    /* Cory, 17 Oct 2026: "Anyone that doesn't have a living relative && has no photo should be in +X" — in 1745 the
+       nine sons are all on dead lines with no portrait: no face for any of them, and one +9 at their place */
+    await page.evaluate(() => { const r = document.getElementById("pbrange"); r.value = 1745; r.dispatchEvent(new Event("input", { bubbles: true })); r.dispatchEvent(new Event("change", { bubbles: true })); });
+    await page.waitForTimeout(500);
+    const folded = await page.evaluate(() => ({ sons: [...document.querySelectorAll("#playfaces .pf")].filter(e => /^Child/.test(e.getAttribute("aria-label"))).length,
+      more: [...document.querySelectorAll("#playfaces .pfmore")].filter(e => e.style.display !== "none").map(e => e.textContent + (e.classList.contains("solo") ? " solo" : "")) }));
+    ok(folded.sons === 0 && folded.more.includes("+9 solo") && (await page.textContent("#pbcount")) === "9 people",
+      "people on dead lines with no portrait are counted in a +N, not drawn (" + JSON.stringify(folded) + ")");
     await shot(page, "pl1-play.png");
     /* a mark: back to just before it, playing, and its note comes up with its source */
     await page.click('#pbmarks .pbm.h[data-t="1600"]');
@@ -411,6 +433,27 @@ async function run() {
     await page.click("#playchip");
     await page.waitForTimeout(400);
     ok(await page.isVisible("#playbar"), "Play opens again");
+    /* the coronation (Cory, 17 Oct 2026): at the crowned person's first record the year stands still, trumpets,
+       a crown and confetti; the fixture crowns Daughter1 (b. 1950) */
+    await page.evaluate(() => { const r = document.getElementById("pbrange"); r.value = 1947; r.dispatchEvent(new Event("input", { bubbles: true })); r.dispatchEvent(new Event("change", { bubbles: true })); });
+    if ((await page.getAttribute("#pbplay", "aria-label")) !== "Pause") await page.click("#pbplay");
+    await page.waitForSelector("#playparty", { timeout: 6000 }).catch(() => {});
+    const partyOn = !!(await page.$("#playparty"));
+    await page.waitForTimeout(1400);
+    await shot(page, "pl3-party.png");
+    const yA = await page.textContent("#pbyear");
+    await page.waitForTimeout(1500);
+    const yB = await page.textContent("#pbyear");
+    ok(partyOn && yA === "1950" && yB === "1950" && (await page.$$("#playparty .pt")).length === 2,
+      "at the crowned person's birth the year stands still and the trumpets come in (" + yA + ", " + yB + ")");
+    ok(/Hear ye, hear ye! Daughter1 Testmann is born in Alphaville/.test(await page.textContent("#playbar .pbcaps")) && !!(await page.$("#playbar .pcap.royal")),
+      "a royal note announces the birth");
+    await page.waitForSelector("#playparty", { state: "detached", timeout: 9000 }).catch(() => {});
+    await page.waitForTimeout(1200);
+    const crowned = await page.evaluate(() => [...document.querySelectorAll("#playfaces .pf.crowned")].map(e => e.getAttribute("aria-label").split(",")[0]));
+    ok(!(await page.$("#playparty")) && crowned.join() === "Daughter1 Testmann" && +(await page.textContent("#pbyear")) > 1950,
+      "then time runs on, and the crown stays on her head (" + crowned.join() + ")");
+    await shot(page, "pl4-crowned.png");
     await page.keyboard.press("Escape");
     await page.waitForTimeout(500);
     ok(await page.isHidden("#playbar") && (await page.$$("#mappins .pin")).length > 0, "Escape closes Play and the pins come back");

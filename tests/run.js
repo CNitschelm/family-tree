@@ -161,6 +161,7 @@ section("Build template");
     ok(/const MAPFILE = "data:application\/json;base64,/.test(r.html), "the demo carries its map layers inline (it is one file)");
     ok(r.html.includes('const HISTFILE = "";') && /const HISTFILE = "media\/history\.bin";/.test(html),
       "Play's history notes are the family's own: the demo gets none and asks for no file");
+    ok(r.html.includes('const PLAY_HERO = "";') && /const PLAY_HERO = "c\d{3}";/.test(html), "the coronation is the family build's own: the demo crowns nobody");
   } catch (e) { ok(false, "tools/build-demo.js still builds from this file — " + e.message); }
   finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 }
@@ -646,9 +647,9 @@ BRANCHES.forEach(b => activeFilters.add(b.key));
 /* Since 3 Oct 2026 (scope rule: the whole male line) a line can carry brothers and sisters who are
  * on no branch: a branch view shows its direct line narrowly, and the parent's pill shows "the rest of
  * this generation". So with every filter on and "Hide dead lines" off, every LINE and every BRANCH must be
- * shown in full; with the switch on (Cory, 17 Oct 2026) every line, every LIVING card of a branch, and every
- * card of a branch with no living line (R-0444), and no other card on a dead line. Either way, whatever is
- * left out must hang off a shown card, one pill click away — nothing unreachable. */
+ * shown in full; with the switch on (Cory, 17 Oct 2026, R-0575) every LIVING card of the lines and branches,
+ * and no card on a dead line at all. Either way, whatever is left out must hang off a shown card, one pill
+ * click away — nothing unreachable. */
 [false, true].forEach(hide => {
   setHide(hide); setOpenFromFilters();
   const shown = new Set(); (function w(n) { shown.add(n); visChildren(n).forEach(w); })(root);
@@ -657,13 +658,13 @@ BRANCHES.forEach(b => activeFilters.add(b.key));
   const lines = new Set(); heads.concat(trunkHead ? [trunkHead] : []).forEach(h => { let a = h; while (a) { lines.add(a); a = a.parent; } });
   const inBranch = n => { let a = n; while (a) { if (heads.includes(a)) return true; a = a.parent; } return false; };
   const inDeadBranch = n => { let a = n; while (a) { if (heads.includes(a) && !a.live) return true; a = a.parent; } return false; };
-  const want = n => lines.has(n) || (inBranch(n) && (!hide || n.live || inDeadBranch(n)));
+  const want = n => (lines.has(n) || inBranch(n)) && (!hide || n.live);
   const missing = allNodes.filter(n => !shown.has(n) && want(n));
-  const extra = hide ? [...shown].filter(n => !n.live && !lines.has(n) && !inDeadBranch(n)) : [];
+  const extra = hide ? [...shown].filter(n => !n.live) : [];
   const offRoots = allNodes.filter(n => !shown.has(n) && n.parent && shown.has(n.parent));
   const offTotal = offRoots.reduce((a, n) => a + subtreeSize(n), 0);
   ok(!missing.length && !extra.length && shown.size === visCount() && shown.size + offTotal === allNodes.length,
-    (hide ? "switch on: legacy + all branches = every line, the living lines of every branch, and in full every branch with no living line ("
+    (hide ? "switch on: legacy + all branches = the living cards of every line and branch, and no card on a dead line ("
           : "switch off: legacy + all branches = every line and every branch in full (") + BRANCHES.length + " filters, " + shown.size +
     " cards); the other " + offTotal + " hang off a shown card, a pill click away" +
     (missing.length ? " — MISSING: " + missing.map(n => n.p.id).join(", ") : "") +
@@ -742,6 +743,14 @@ ok(visCount() === legacyN, "reset restores default view");
     }
     activeFilters.clear(); activeFilters.add("legacy"); activeFilters.add("schw");
     ok(deadAutoOff() === null && get("hideDead") === true, "a living branch beside them: the switch stays on");
+    /* Cory, 17 Oct 2026, of a card in the Ohio branch that Show all still showed: "Example of filter not working
+     * still" (R-0575): beside a living branch they are left out too, and a note says why */
+    const deadLeftOut = get("deadLeftOut"), before = new Set(activeFilters);
+    BRANCHES.forEach(b => activeFilters.add(b.key)); setOpenFromFilters();
+    const n3 = deadLeftOut(before), sh3 = shownOf();
+    ok(n3 && deadPicks.every(([k]) => n3.includes(T2(k))) && deadPicks.every(([, h]) => !sh3.has(h)) && get("hideDead") === true,
+      "Show all with the switch on: the branches where no one is living are left out, and one note names them (" + n3 + ")");
+    ok(deadLeftOut(new Set(activeFilters)) === null, "…and the note comes only when such a branch is just picked");
   } else ok(true, "no branch without a living line to check (every branch reaches a living person)");
   setHide(false); initView();
   ok(get("hideDead") === true && visCount() === legacyN, "Start over turns the switch back on");
@@ -1097,6 +1106,11 @@ section("Play");
   /* Cory, 17 Oct 2026: "no dont do that becuase it should be consistent" — one steady speed, no fast-forward */
   ok(/PLAY\.t = Math\.min\(m\.t1, PLAY\.t \+ dt \* PLAY\.speed\);/.test(js) && pg("PLAY_SPEEDS").join() === "1,2,5,10",
     "time runs at the one speed chosen in the bar (1, 2, 5 or 10 years a second), with no fast-forward");
+  /* the coronation (Cory, 17 Oct 2026): his card, a living man of the tree with a dated pin, crowned at his first record */
+  const hid = (js.match(/const PLAY_HERO = "([^"]*)";/) || [])[1], htr = M.tracks.find(t => t.n.p.id === hid);
+  ok(hid && htr && livingP(htr.n.p) && htr.end === null && /if\(hero && prev < hero\.t0 && PLAY\.t >= hero\.t0\)\{ PLAY\.t = hero\.t0;/.test(js) &&
+     /PLAY\.playing && !PLAY\.drag && !PLAY\.party/.test(js),
+    "the coronation waits for its card's first record (" + (htr ? Math.floor(htr.t0) : "none") + ") and the year stands still while it plays");
   const playKeys = Object.keys(I18N.en).filter(k => /^play_/.test(k));
   ok(playKeys.length >= 25 && playKeys.every(k => typeof I18N.fr[k] === "string" && I18N.fr[k].trim()) && ["play_m_country", "play_m_bornin", "play_end"].every(k => I18N.fr[k] !== I18N.en[k]),
     "every Play string is in English and French (" + playKeys.length + ")");
