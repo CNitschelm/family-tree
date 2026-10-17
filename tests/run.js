@@ -1114,6 +1114,25 @@ section("Play");
   const playKeys = Object.keys(I18N.en).filter(k => /^play_/.test(k));
   ok(playKeys.length >= 25 && playKeys.every(k => typeof I18N.fr[k] === "string" && I18N.fr[k].trim()) && ["play_m_country", "play_m_bornin", "play_end"].every(k => I18N.fr[k] !== I18N.en[k]),
     "every Play string is in English and French (" + playKeys.length + ")");
+  /* Cory, 17 Oct 2026, of his face with a city nearby written under it: "looks wrong. i am in bangkok" — in Play the
+     map's town names keep off the faces, their names and the +N chips, and each crowd's own place is named under it */
+  {
+    const lctx = { console };
+    vm.createContext(lctx);
+    try {
+      vm.runInContext(grab("const LBL_MS", "\n") + "\n" + [
+        "var MS = 1000, MTX = 0, MTY = 0, said = [];",
+        "const invLat = v => v <= 0 ? 90 : -90, sx = lon => lon * 2 + 500, sy = lat => 500 - lat * 2, cssVar = () => '#000', playOn = () => true;",
+        "const LBL = [{n:'Under Face', lon:-25, lat:2.5, r:0}, {n:'Bangkok', lon:-20, lat:0, r:0}, {n:'Beside Name', lon:10, lat:1.5, r:0}, {n:'Close Below', lon:15, lat:-22.5, r:0}, {n:'Far Town', lon:150, lat:80, r:0}];",
+        "const ctx = {save(){}, restore(){}, beginPath(){}, arc(){}, fill(){}, strokeText(){}, measureText: t => ({width: t.length * 6}), fillText(t, x, y){ said.push(t + '@' + Math.round(x) + ',' + Math.round(y)); }};",
+        "const PLAY = {marks:[[446, 486, 28, 28], [476, 491, 150, 18]], places:[{n:'Bangkok', x:460, y:524}]};"
+      ].join("\n") + "\n" + grab("let pinBoxes", "/* leader lines") + "\ndrawLabels(1000, 1000);", lctx);
+    } catch (e) { ok(false, "the map's place names load on their own (" + e.message + ")"); }
+    const said = vm.runInContext("typeof said === 'undefined' ? [] : said", lctx), names = said.map(x => x.split("@")[0]);
+    ok(said[0] === "Bangkok@460,524" && names.filter(x => x === "Bangkok").length === 1 && !names.includes("Under Face") && !names.includes("Beside Name") &&
+       names.includes("Close Below") && names.includes("Far Town"),
+      "in Play each crowd's own place is named under it, and no town name sits on a face or a name (" + said.join(" ") + ")");
+  }
 }
 /* the history notes: one sealed file, the general history of the places, each with the page it comes from */
 {

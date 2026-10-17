@@ -374,6 +374,7 @@ async function run() {
     await page.waitForTimeout(400);
     ok(await page.isVisible("#playbar") && await page.isHidden("#playchip") && (await page.$$("#mappins .pin")).length === 0,
       "Play opens its bar, in place of the map's pins");
+    ok(await page.isHidden("#mapwhere") && await page.isHidden("#mapaim"), "Play shows no place pill: its faces and the names under them say where");
     ok(/green ring/.test(await page.textContent("#playbar .pbcaps")), "the first Play explains the rings once");
     const y1 = +(await page.textContent("#pbyear"));
     await page.waitForTimeout(1800);
@@ -455,6 +456,8 @@ async function run() {
       "a royal note announces the birth");
     await page.waitForTimeout(700);
     ok((await page.$$("#playbar .pcap.royal")).length === 1, "and only that one (Cory, 17 Oct 2026: \"just keep the one above it\")");
+    const king = await page.evaluate(() => { const e = document.querySelector("#playfaces .pf.king"); return e ? { w: e.offsetWidth, t: e.style.transform } : null; });
+    ok(king && king.w >= 50 && !/scale\((1\.[0-9]*[1-9]|[2-9])/.test(king.t), "the crowned face grows in size, not by scaling a small picture, so it stays sharp (" + JSON.stringify(king) + ")");
     await page.waitForSelector("#playparty", { state: "detached", timeout: 9000 }).catch(() => {});
     await page.waitForTimeout(1200);
     const crowned = await page.evaluate(() => [...document.querySelectorAll("#playfaces .pf.crowned")].map(e => e.getAttribute("aria-label").split(",")[0]));
@@ -464,6 +467,15 @@ async function run() {
     await page.keyboard.press("Escape");
     await page.waitForTimeout(500);
     ok(await page.isHidden("#playbar") && (await page.$$("#mappins .pin")).length > 0, "Escape closes Play and the pins come back");
+    /* the pill names the centre of the view, and a mark shows that spot (Cory, 17 Oct 2026: "its not clear WHERE on
+       the screen it is referring to") */
+    await page.click('#goto [data-mr="alsace"]');
+    await page.waitForTimeout(1600);
+    const aim = await page.evaluate(() => { const a = document.getElementById("mapaim").getBoundingClientRect(), m = document.getElementById("mapview").getBoundingClientRect(), w = document.getElementById("mapwhere");
+      return { pill: getComputedStyle(w).display !== "none" && !!w.querySelector(".wx"), aim: getComputedStyle(document.getElementById("mapaim")).display !== "none",
+        dx: Math.round(Math.abs(a.left + a.width / 2 - (m.left + m.width / 2))), dy: Math.round(Math.abs(a.top + a.height / 2 - (m.top + m.height / 2))), text: w.textContent }; });
+    ok(aim.pill && aim.aim && aim.dx <= 1 && aim.dy <= 1, "the place pill comes with a mark at the spot it describes, the centre of the map (" + JSON.stringify(aim) + ")");
+    await shot(page, "map-aim.png");
     await page.click("#lang");
     await page.waitForTimeout(400);
     ok((await page.textContent("#playchip span")) === "Faire défiler les années", "Play is in French too");
@@ -1189,14 +1201,14 @@ async function runReal() {
     const seek = y => page.evaluate(v => { const r = document.getElementById("pbrange"); r.value = v; r.dispatchEvent(new Event("input", { bubbles: true })); r.dispatchEvent(new Event("change", { bubbles: true })); }, y);
     await page.evaluate(() => document.getElementById("pbplay").click());   /* pause: each picture is one year */
     const lone = [];
-    for (const y of [1500, 1600, 1700, 1760, 1800, 1850, 1880, 1900, 1905, 1950, 2000]) {
+    for (const y of [1500, 1600, 1700, 1760, 1800, 1850, 1880, 1900, 1905, 1950, 2000, 2026]) {
       await seek(y);
       await page.waitForTimeout(700);
       await shot(page, label + "-play-" + y + ".png");
       if (await page.evaluate(() => [...document.querySelectorAll("#playfaces .pfmore.solo")].some(e => e.style.display !== "none" && e.textContent === "+1"))) lone.push(y);
     }
     ok(!lone.length, label + ": never a +1 with no face — one person alone has a face" + (lone.length ? " (not in " + lone.join(", ") + ")" : ""));
-    ok(+(await page.textContent("#pbyear")) === 2000, label + ": Play moves to any year from its slider");
+    ok(+(await page.textContent("#pbyear")) === 2026, label + ": Play moves to any year from its slider");
     await seek(1838);
     await page.evaluate(() => { document.getElementById("pbspeed").click(); document.getElementById("pbplay").click(); });   /* 5 years a second */
     for (let i = 1; i <= 8; i++) { await page.waitForTimeout(1000); await shot(page, label + "-play-run-" + i + ".png"); }

@@ -448,6 +448,12 @@ html.dark{--sea:#121A1F; --land:#222A2E; --coast:#3D474C; --bord:#39434A; --stat
 #mapwhere b{font-weight:700}
 #mapwhere span{color:var(--ink-soft);margin-left:7px}
 #mapwhere.fam{border-color:var(--you)}
+/* the spot the pill describes: the centre of the view (Cory, 17 Oct 2026: "its not clear WHERE on the screen it is referring to") */
+#mapwhere .wx{display:inline-block;width:12px;height:12px;margin:0 6px 0 -3px;vertical-align:-2px;color:var(--ink-soft)}
+#mapwhere .wx svg,#mapaim svg{display:block;width:100%;height:100%}
+#mapwhere.fam .wx,#mapaim.fam{color:var(--you)}
+#mapaim{position:absolute;left:50%;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;z-index:2;pointer-events:none;color:var(--ink-soft);opacity:.85;
+  filter:drop-shadow(0 0 1.5px var(--panel)) drop-shadow(0 0 1px var(--panel))}
 #mapsheet.on ~ #maplegend{display:none}
 #mapempty{position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:2;pointer-events:none}
 #mapempty span{background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding:12px 18px;font-size:13px;color:var(--ink-soft);box-shadow:0 6px 20px rgba(31,42,51,.18)}
@@ -659,7 +665,7 @@ html.nosearch #tl{padding:0 16px}
   #mapsheet .grab::before{content:"";position:absolute;top:7px;left:50%;transform:translateX(-50%);width:38px;height:4px;border-radius:2px;background:var(--rule)}
   #mapsheet .sh{padding-top:20px}
   #mapsheet .sh h2{padding-right:34px;font-size:15px;line-height:1.25}
-  body.sheeton #mapctl,body.mapmode.sheeton #restart,body.sheeton #mapwhere{display:none!important}
+  body.sheeton #mapctl,body.mapmode.sheeton #restart,body.sheeton #mapwhere,body.sheeton #mapaim{display:none!important}
 }
 /* the narrowest phones (under 360px): Tree and Map keep their icons and lose their visible words
    (still their names to a screen reader), so Filters and its dots keep room in every language */
@@ -1065,7 +1071,7 @@ html.dark{--born:#74C493;--rest:#D39AA8}
 #playchip{grid-column:3;justify-self:end;display:none;align-items:center;gap:8px;height:44px;padding:0 16px 0 13px;border:0;border-radius:22px;
   font:inherit;font-family:'Archivo',system-ui,sans-serif;font-size:14px;font-weight:600;color:var(--ink);cursor:pointer;white-space:nowrap}
 body.mapmode #playchip{display:inline-flex}
-body.playing #playchip,body.playing #mappins,body.playing #maplegend,body.playing #mapempty,body.mapmode.playing #restart{display:none!important}
+body.playing #playchip,body.playing #mappins,body.playing #maplegend,body.playing #mapempty,body.mapmode.playing #restart,body.playing #mapwhere,body.playing #mapaim{display:none!important}
 #playfaces{position:absolute;inset:0;z-index:2;pointer-events:none;overflow:hidden}
 #playfaces .pf{position:absolute;left:0;top:0;width:26px;height:26px;margin:-13px 0 0 -13px;pointer-events:auto;cursor:pointer;will-change:transform}
 #playfaces .pf img{width:100%;height:100%;display:block;object-fit:cover;border-radius:50%;border:2px solid var(--bc);background:var(--panel);box-shadow:0 1px 4px rgba(31,42,51,.32)}
@@ -1266,6 +1272,7 @@ html.dark #playbar .pcap.royal{background:linear-gradient(180deg,#4A3A10,#33280A
   <div id="mappins"></div>
   <div id="mapsheet"></div>
   <div id="mapwhere"></div>
+  <div id="mapaim"><svg viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="4.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M11 1.5v4.3M11 16.2v4.3M1.5 11h4.3M16.2 11h4.3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div>
   <div id="maplegend"></div>
   <div id="mapempty"><span></span></div>
   <div id="mapctl" class="zc fl">
@@ -4193,7 +4200,8 @@ function drawMap(){
 }
 /* A pill naming whatever the centre of the view is nearest to. At village zoom
    the map has no other way of telling you where you are. */
-const whereEl = document.getElementById("mapwhere");
+const whereEl = document.getElementById("mapwhere"), aimEl = document.getElementById("mapaim");
+aimEl.style.display = "none";
 const R_EARTH = 6371;
 function haversine(la1, lo1, la2, lo2){
   const dLa = (la2-la1)*D2R, dLo = (lo2-lo1)*D2R;
@@ -4227,15 +4235,15 @@ function updateWhere(w, h){
     }
     /* Past about 150 km the phrase stops meaning anything, and by then you are
        zoomed out far enough to read the country and state names anyway. */
-    if(!best || best.d > 150){ whereEl.style.display = "none"; whereEl.textContent = ""; return; }
+    if(!best || best.d > 150 || playOn()){ whereEl.style.display = aimEl.style.display = "none"; whereEl.textContent = ""; return; }
     const km = best.d;
     const near = km < 2
       ? esc(best.n)
       : (km < 1000 ? Math.round(km) + " km " : Math.round(km/100)*100 + " km ")
         + bearingWord(clat, clon, best.lat, best.lon) + " " + T("map_of") + " " + esc(best.n);
-    whereEl.innerHTML = `<b>${near}</b>${best.c ? `<span>· ${esc(best.c)}</span>` : ""}`;
-    whereEl.classList.toggle("fam", fam);
-    whereEl.style.display = "";
+    whereEl.innerHTML = `<i class="wx">${aimEl.innerHTML}</i><b>${near}</b>${best.c ? `<span>· ${esc(best.c)}</span>` : ""}`;
+    whereEl.classList.toggle("fam", fam); aimEl.classList.toggle("fam", fam);
+    whereEl.style.display = aimEl.style.display = "";
   }, 60);
 }
 /* An inland valley at village zoom has no coast and no border in frame; a very
@@ -4307,15 +4315,28 @@ function drawLabels(w, h){
   ctx.font = "500 11px Archivo, system-ui, sans-serif";
   ctx.textBaseline = "middle";
   ctx.lineJoin = "round";
-  const boxes = pinBoxes.slice();
+  const play = playOn() && PLAY.marks;
+  const boxes = play ? PLAY.marks.slice() : pinBoxes.slice(), named = play ? new Set() : pinNames;
+  const hit = b => boxes.some(o => b[0] < o[0]+o[2] && b[0]+b[2] > o[0] && b[1] < o[1]+o[3] && b[1]+b[3] > o[1]);
+  if(play){   /* Play: each crowd's own place, under it, before any town; a town never sits on a face or a name */
+    ctx.font = "600 11px Archivo, system-ui, sans-serif"; ctx.textAlign = "center";
+    PLAY.places.forEach(p => {
+      const tw = ctx.measureText(p.n).width, b = [p.x - tw / 2 - 3, p.y - 7, tw + 6, 14];
+      if(b[0] > w || b[0] + b[2] < 0 || b[1] > h || b[1] + b[3] < 0 || hit(b)) return;
+      boxes.push(b); named.add(p.n.toLowerCase());
+      ctx.lineWidth = 3; ctx.strokeStyle = cssVar("--land"); ctx.globalAlpha = .85; ctx.strokeText(p.n, p.x, p.y);
+      ctx.globalAlpha = 1; ctx.fillStyle = cssVar("--ink"); ctx.fillText(p.n, p.x, p.y);
+    });
+    ctx.font = "500 11px Archivo, system-ui, sans-serif"; ctx.textAlign = "left";
+  }
   let drawn = 0;
   for(const l of cand){
     if(drawn >= 46) break;
-    if(pinNames.has(l.n.toLowerCase())) continue;   /* a family marker already names it */
+    if(named.has(l.n.toLowerCase())) continue;   /* a family marker already names it */
     const x = sx(l.lon), y = sy(l.lat);
     const tw = ctx.measureText(l.n).width;
     const bx = x + 5, by = y - 7, bw = tw + 7, bh = 14;
-    if(boxes.some(o => bx < o[0]+o[2] && bx+bw > o[0] && by < o[1]+o[3] && by+bh > o[1])) continue;
+    if(hit(play ? [x - 4, by, bw + 9, bh] : [bx, by, bw, bh])) continue;
     boxes.push([x-4, y-5, bw+9, bh]);
     drawn++;
     ctx.globalAlpha = .85;
@@ -5403,6 +5424,7 @@ function playFace(tr){
   el.setAttribute("role", "button"); el.tabIndex = -1;
   el.setAttribute("aria-label", p.name + (p.years ? ", " + fmtYears(p.years) : ""));
   el._onTap = () => { PLAY.playing = false; playStop(); showJourney(tr.n); };   /* their journey; Play goes on from here next time */
+  if(tr === PLAY.hero && MEDIA_RE.test(p.imgL || "")) mediaURL(p.imgL).then(u => { el.querySelector("img").src = u; }).catch(() => {});   /* sharp when he swells */
   facesEl.appendChild(el);
   return {el, halo:el.firstChild, lbl:el.lastChild, x:0, y:0, mv:-1, ox:0, oy:0, ring:"", lblOn:false};
 }
@@ -5430,11 +5452,12 @@ function playFaces(dt){
     const [x, y] = playPt(k);
     const host = groups.find(c => Math.abs(c.x - x) < merge && Math.abs(c.y - y) < merge);
     if(host){ host.items.push(...arr); host.sx += x * arr.length; host.sy += y * arr.length; host.n += arr.length; }
-    else groups.push({x, y, items:arr.slice(), sx:x * arr.length, sy:y * arr.length, n:arr.length});
+    else groups.push({k, x, y, items:arr.slice(), sx:x * arr.length, sy:y * arr.length, n:arr.length});
   });
   groups.forEach(c => {
     const cx = c.sx / c.n, cy = c.sy / c.n;
     c.items.sort((a, b) => a.since - b.since || a.tr.n.id - b.tr.n.id);
+    c.items.forEach(st => { st.g = c; });
     const vis = c.items.filter(st => !st.fold);
     vis.forEach((st, i) => { const r = gap * Math.sqrt(i), a = i * 2.39996323; st.x = cx + Math.cos(a) * r; st.y = cy + Math.sin(a) * r; st.hide = i >= CAP; });
     c.items.forEach(st => { if(st.fold){ st.x = cx; st.y = cy; st.hide = true; } });
@@ -5458,7 +5481,7 @@ function playFaces(dt){
     const o = c.shown ? c.r * .8 + size * .35 : 0, w = Math.max(24, 12 + 6.5 * String(c.more).length + 6.5);
     c.bx = c.cx + o; c.by = c.cy - o; chips.push([c.bx - w / 2, c.by - 10, w, 20]);
   });
-  const boxes = [];
+  const boxes = [], marks = [];
   const order = movers.concat([...live.values()].filter(st => !st.move));   /* names: the travellers first */
   order.forEach(st => {
     const tr = st.tr;
@@ -5490,15 +5513,21 @@ function playFaces(dt){
       if(tr.endKind === "died" && !REDUCED){ ring = "died"; rs = 1 + .55 * easeOut(p); ro = .65 * (1 - p); }
     }
     const el = f.el;
-    if(tr === PLAY.hero){   /* the coronation: his face swells and glows, and from the cymbal on it wears the crown */
+    let fs = size;
+    if(tr === PLAY.hero){   /* the coronation: his face swells and glows, and from the cymbal on it wears the crown. It grows in
+                               size, not by scaling a small picture, so it stays sharp (Cory, 17 Oct 2026: "looks pixelated") */
       const pr = PLAY.party;
-      sc *= playPartyScale();
+      fs = Math.round(size * playPartyScale() * 10) / 10;
       el.classList.toggle("king", !!pr);
       el.classList.toggle("crowned", !pr || pr.e >= 2.35);
       if(pr){ ring = ""; }
     }
     el.style.display = st.hide ? "none" : "";
-    if(f.size !== size){ f.size = size; el.style.width = el.style.height = size + "px"; el.style.margin = (-size / 2) + "px 0 0 " + (-size / 2) + "px"; }
+    if(f.size !== fs){ f.size = fs; el.style.width = el.style.height = fs + "px"; el.style.margin = (-fs / 2) + "px 0 0 " + (-fs / 2) + "px"; }
+    if(!st.hide){
+      marks.push([f.x - fs / 2 - 1, f.y - fs / 2 - 1, fs + 2, fs + 2]);
+      if(st.g && !st.move) st.g.bot = Math.max(st.g.bot === undefined ? -Infinity : st.g.bot, f.y + fs / 2);
+    }
     el.style.transform = `translate(${f.x.toFixed(1)}px,${f.y.toFixed(1)}px) scale(${sc.toFixed(3)})`;
     if(f.fi < 1) op *= easeOut(f.fi);
     el.style.opacity = op < 1 ? op.toFixed(3) : "";
@@ -5528,6 +5557,10 @@ function playFaces(dt){
       s.style.transform = `translate(${c.bx.toFixed(1)}px,${c.by.toFixed(1)}px) translate(-50%,-50%)`;
     }
   });
+  /* the map's own town names keep off the faces, their names and the +N chips, and each crowd's place is named under
+     it (Cory, 17 Oct 2026, of a city nearby written under his face: "looks wrong. i am in bangkok") */
+  PLAY.marks = marks.concat(boxes, chips);
+  PLAY.places = groups.filter(c => c.shown || c.more).map(c => ({n:gName(c.k), x:c.cx, y:(c.bot !== undefined ? c.bot : c.cy + 9) + 9}));
   return busy;
 }
 /* the trails, on the canvas under the faces: every finished move a faint line, so the routes build up, and the
