@@ -194,9 +194,11 @@ traps). Record the live commit at the top of `OPEN-ITEMS.md`.
 | `stats.json` | the headline numbers (counts and a date only) the project page on corynitschelm.com reads; rewritten by encrypt, `research.js build` and `linkconf.js build`, checked by the gate (§7) and tests/run.js; the commit hook refuses an index.html or media/ commit that leaves it behind | yes |
 | `media/` | what the cards don't show, encrypted (`tools/payload.js`): one file of bios, notes, sources and places, and one per bio picture; committed with `index.html` (encrypt moves files no longer used to `_to_delete/`) | yes |
 | `media/research.bin`, `media/research-cards.bin` | the Research view's data and the cards' badges, sealed by `tools/research.js` under the payload key; stable names | yes |
+| `media/history.bin` | the history notes on the map's Play timeline, sealed by `tools/history.js build` under the payload key from `history.json`; a stable name, fetched on the first Play | yes |
 | `map/<hash>.json` | the map's base layers (public geography, no family data), fetched on the first Map open; `tools/mapfile.js` | yes |
 | `tools/` `checks/` `tests/` `githooks/` | the tools above; `tests/run.js` (site), `tests/ledger.js` (this loop), `tests/research.js` (the research tools, the hook's research check, crypt.js's keep rule), `tests/browser.js` (load on open, in Chromium) | yes |
 | `research.json`, `.research-stamp`, `ledger/research-deny.txt` | the research state (the one source of the Research view), what `research.js build` last wrote, and names never to publish | no |
+| `history.json` | Play's history notes: each with the page it was read on and the words that support it (only the captions, years and source go into media/history.bin) | no |
 | `data.json`, `.password`, `.data-stamp`, `.gate-stamp` | working copy, password, provenance stamps | no |
 | `ledger/` | `register.jsonl` (settled questions), `changes.jsonl` (every applied change), `pending/` (change files), `history/` (payload history cache), `LOCK` | no |
 | `OPEN-ITEMS.md` | the live commit and what is genuinely open — short | no |

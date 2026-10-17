@@ -67,12 +67,14 @@ without asking" (R-0381) and the 1 Aug daughters rule (R-0386).
   marriage whose children are drawn, then the latest; the earlier ones are told in the bio only. A child whose
   parents did not marry hangs on a union with no spouse name and no note (c182 under c181, c294 under c004): no
   marriage sign, and it does not count as a marriage.
-- **The tree hides dead lines by default** (R-0444). A card is on a live line when the person is living (dates
+- **The tree hides dead lines by default** (R-0444, R-0572). A card is on a live line when the person is living (dates
   "b. YYYY", or none) or has a living descendant on the tree; the "Hide dead lines" switch in Filters (on when the
-  tree opens, back on with Start over) leaves every other card out of the opening view. A branch picked by its
-  tile still shows in full, a card's pill opens its live children first and then the rest ("+N more"), and search
-  shows anyone. In index.html: `n.live`, `hideDead`, `firstKids`; tests/run.js "Filters" and tests/browser.js
-  check it.
+  tree opens, back on with Start over) leaves every other card out of every view the filters build, inside a
+  picked branch too (Cory, 17 Oct 2026: "someone like this should be hidden when it is enabled"). A card's pill
+  opens its live children first and then the rest ("+N more"), and search shows anyone. A branch where no one is
+  living shows in full beside a living one (Show all: "its ok"); picked on its own (Origins aside), it turns the
+  switch off with a note that says why. In index.html: `n.live`, `hideDead`, `firstKids`, `pickedAllDead`,
+  `deadAutoOff`, `toast`; tests/run.js "Filters" and tests/browser.js check it.
 - **Lines through a daughter are marked all the way down** (R-0446): below a daughter of the line every connector is
   dashed and every card says "through <her first name>" (index.html `viaF`, `viaTag`). Nothing to do per line: a line
   that stays is marked, one that goes takes its marks with it.
@@ -84,8 +86,16 @@ without asking" (R-0381) and the 1 Aug daughters rule (R-0386).
   photos, sources, corrections) never needs permission.
 
 ## Where things live
-See `OPERATING.md`, "Where things live". In short: `index.html` is the site; `data.json`, `research.json`, `.password`,
-`ledger/` and every research `.md` are private and never committed.
+See `OPERATING.md`, "Where things live". In short: `index.html` is the site; `data.json`, `research.json`, `history.json`,
+`.password`, `ledger/` and every research `.md` are private and never committed.
+
+**Play on the map (Cory, 17 Oct 2026, R-0573).** The map's "Play the years" button plays the family from the first record
+to today, worked out from the pins each time it opens (nothing is stored, so a new pin is in the next playback). The
+camera follows the pins only, with a look-ahead, eased and speed-capped; time runs at one chosen speed (no
+fast-forward); deaths are a soft rose ring and a fade, an unknown date of death only a fade. Its history notes are
+`history.json` (private: each note with its page and supporting words) → `node tools/history.js build` →
+`media/history.bin` (commit it). The demo build gets no notes. index.html: the PLAY block in the map section;
+tests/run.js "Play"; tests/browser.js "play" and, with `--real`, pictures of it on the real pins.
 
 **Family papers: save every file (Cory, 16 Oct 2026).** When a session refers to anything a relative sent (an email
 attachment, a photograph, a scan, a written account), it files every attachment of that message, as received, in the

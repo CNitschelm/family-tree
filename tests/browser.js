@@ -58,7 +58,9 @@ const g5 = person("Octavus Testmann", "1627–1694", "m", { profile: { headline:
 g5.unions = [{ s: "Ottilie Probe", sy: "1650", c: BR.map(([key, bid], i) => {
   const h = person("Branch" + (i + 1) + " Testmann", (1670 + i) + "–" + (1730 + i), i % 2 ? "f" : "m", { anchor: key, branch: bid,
     pl: [{ k: i % 2 ? "beta" : "gamma", t: "birth", c: "doc", y: 1670 + i }, { k: "delta", t: "residence", c: "inf", y: 1700 + i, w: "Inferred from a test.", w_fr: "Déduit d’un test." }] });
-  h.unions = [{ s: "Spouse" + (i + 1) + " Probe", sy: String(1695 + i), c: [person("Child" + (i + 1) + " Testmann", String(1700 + i) + "–" + (1760 + i), "m"), person("Daughter" + (i + 1) + " Testmann", "b. " + (1950 + i), "f")] }];
+  /* the last branch has no living daughter: a line where no one is living, for the dead-lines switch (17 Oct 2026) */
+  h.unions = [{ s: "Spouse" + (i + 1) + " Probe", sy: String(1695 + i), c: [person("Child" + (i + 1) + " Testmann", String(1700 + i) + "–" + (1760 + i), "m")]
+    .concat(i === BR.length - 1 ? [] : [person("Daughter" + (i + 1) + " Testmann", "b. " + (1950 + i), "f")]) }];
   return h;
 }) }];
 const g4 = person("Septimus Testmann", "1598–1661", "m", { unions: [{ s: "Tertia Probe", sy: "1622", c: [g5] }] });
@@ -190,6 +192,14 @@ if (!REAL) {
   fs.writeFileSync(path.join(OUT, "media", "links.bin"), P.sealBlob(P.keyFor(PW, SALT, ITER), "k:" + json.length, zlib.deflateRawSync(json), Buffer.concat([Buffer.from("links\0"), json])).file);
 }
 
+/* Play's history notes (17 Oct 2026): invented ones, sealed as tools/history.js seals the real ones */
+{
+  const json = Buffer.from(JSON.stringify([
+    { y: 1600, y2: null, en: "A test event in 1600", fr: "Un événement de test en 1600", src: "Test source", url: "https://example.org/a" },
+    { y: 1700, y2: 1705, en: "Another test event, 1700–1705", fr: "Un autre événement de test, 1700–1705", src: "Test source", url: "https://example.org/b" }]));
+  fs.writeFileSync(path.join(OUT, "media", "history.bin"), P.sealBlob(P.keyFor(PW, SALT, ITER), "h:" + json.length, zlib.deflateRawSync(json), Buffer.concat([Buffer.from("history\0"), json])).file);
+}
+
 /* ---------- a server like GitHub Pages: gzip, ETags and 304s, and a log of what was asked for ---------- */
 const types = { ".html": "text/html; charset=utf-8", ".json": "application/json", ".bin": "application/octet-stream" };
 const reqLog = [];
@@ -287,7 +297,40 @@ async function run() {
     await page.click("#restart");
     await page.waitForTimeout(600);
     ok((await page.getAttribute("#deadsw", "aria-checked")) === "true", "Start over turns the switch back on");
+    /* Cory, 17 Oct 2026: with the switch on, a branch picked by its tile shows its living lines only */
+    await page.click("#filtbtn");
+    await page.click('.tile[data-br="east"]');
+    await page.waitForTimeout(600);
+    t = await pillOf("Branch2 Testmann");
+    ok(await shown("Daughter2 Testmann") && !(await shown("Child2 Testmann")) && /^\+1 /.test(t || ""),
+      "switch on, a branch tile shows its living line and the pill offers the dead one (" + t + ")");
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+    await page.click("#restart");
+    await page.waitForTimeout(600);
+    /* Cory, 17 Oct 2026: picking only a branch where no one is living turns the switch off, with a note saying why */
+    await page.click("#filtbtn");
+    await page.click('.tile[data-br="schw"]');
+    await page.waitForTimeout(600);
+    const note = await page.isVisible("#toast") ? await page.textContent("#toastmsg") : "";
+    ok((await page.getAttribute("#deadsw", "aria-checked")) === "false" && /Schweitzer/.test(note) && (await page.getAttribute("#toast", "role")) === "status" &&
+       await shown("Child9 Testmann"),
+      "picking only a branch where no one is living turns the switch off, shows the branch, and a note says why (" + note + ")");
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+    await page.click("#toast .tx");
+    ok(await page.isHidden("#toast"), "…and the note's × closes it");
+    await page.click("#restart");
+    await page.waitForTimeout(600);
+    /* Cory, 17 Oct 2026: living people are marked in the suggestions, so someone finds their own name */
+    await page.fill("#search", "Daughter3");
+    await page.waitForSelector("#suggest .it", { timeout: 3000 });
+    ok((await page.textContent("#suggest .it .lv")) === "Living", "a living person's suggestion is tagged Living");
+    await page.fill("#search", "");
+    await page.waitForTimeout(400);
     await page.fill("#search", "Child3");
+    await page.waitForFunction(() => /Child3/.test((document.querySelector("#suggest .it") || {}).textContent || ""), null, { timeout: 3000 });
+    ok(!(await page.$("#suggest .it .lv")), "…and a person on a dead line is not");
     await page.waitForSelector("#suggest .it", { timeout: 3000 });
     await page.click("#suggest .it");
     await page.waitForTimeout(900);
@@ -295,6 +338,85 @@ async function run() {
     await page.click("#lang");
     await page.waitForTimeout(400);
     ok((await page.textContent("#dead-l")) === "Masquer les lignées éteintes", "the switch is in French too");
+    await ctx.close();
+  }
+  /* ---------------- Play: the family over the years (Cory, 17 Oct 2026) ---------------- */
+  {
+    console.log("\n== desktop, play");
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await ctx.newPage();
+    watch(page, "play");
+    await page.goto(BASE);
+    await unlock(page);
+    await page.waitForTimeout(600);
+    await page.click("#vt-map");
+    await page.waitForTimeout(1500);
+    ok(await page.isVisible("#playchip"), "the map offers Play");
+    await page.click("#playchip");
+    await page.waitForTimeout(400);
+    ok(await page.isVisible("#playbar") && await page.isHidden("#playchip") && (await page.$$("#mappins .pin")).length === 0,
+      "Play opens its bar, in place of the map's pins");
+    ok(/green ring/.test(await page.textContent("#playbar .pbcaps")), "the first Play explains the rings once");
+    const y1 = +(await page.textContent("#pbyear"));
+    await page.waitForTimeout(1800);
+    const y2 = +(await page.textContent("#pbyear"));
+    ok(y1 >= 1494 && y1 <= 1496 && y2 > y1, "it starts the year before the first record and the years run (" + y1 + " → " + y2 + ")");
+    ok((await page.$$("#playfaces .pf")).length >= 1, "faces come onto the map");
+    await page.click("#pbplay");
+    await page.waitForTimeout(300);
+    const y3 = await page.textContent("#pbyear");
+    await page.waitForTimeout(900);
+    ok(y3 === await page.textContent("#pbyear") && (await page.getAttribute("#pbplay", "aria-label")) === "Play", "pause stops the years");
+    const s1 = await page.textContent("#pbspeed");
+    await page.click("#pbspeed");
+    ok(s1 === "2 yr/s" && (await page.textContent("#pbspeed")) === "5 yr/s", "the speed steps from 2 to 5 years a second");
+    const drawn = await page.evaluate(() => { const c = document.getElementById("pbhist"), d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i]) n++; return n; });
+    ok(drawn > 100, "the timeline draws the births, moves and deaths (" + drawn + " px)");
+    ok((await page.$$("#pbmarks .pbm.h")).length === 2 && (await page.$$("#pbmarks .pbm.f")).length >= 3, "the history notes and the family's own are marked on the timeline");
+    await shot(page, "pl1-play.png");
+    /* a mark: back to just before it, playing, and its note comes up with its source */
+    await page.click('#pbmarks .pbm.h[data-t="1600"]');
+    await page.waitForFunction(() => /1600 · A test event in 1600/.test(document.querySelector("#playbar .pbcaps").textContent), null, { timeout: 5000 }).catch(() => {});
+    const cap = await page.textContent("#playbar .pbcaps");
+    ok(/1600 · A test event in 1600/.test(cap) && (await page.getAttribute("#playbar .pcap.hist a", "href")) === "https://example.org/a",
+      "a history mark plays up to its note, which links its source");
+    /* the family's own note for a new country */
+    await page.waitForFunction(() => /First of the family in the United States: Branch1 Testmann, Gamma City/.test(document.querySelector("#playbar .pbcaps").textContent), null, { timeout: 25000 }).catch(() => {});
+    ok(/First of the family in the United States: Branch1 Testmann, Gamma City/.test(await page.textContent("#playbar .pbcaps")), "the family's first record in a new country gets its note");
+    /* the end: the living family, today */
+    await page.evaluate(() => { const r = document.getElementById("pbrange"); r.value = +r.max - 1; r.dispatchEvent(new Event("input", { bubbles: true })); r.dispatchEvent(new Event("change", { bubbles: true })); });
+    await page.waitForFunction(() => /Today:/.test(document.querySelector("#playbar .pbcaps").textContent), null, { timeout: 6000 }).catch(() => {});
+    ok(/Today: 8 living family members on the map, in one country\./.test(await page.textContent("#playbar .pbcaps")) && (await page.textContent("#pbcount")) === "8 people",
+      "it ends today, on the living family (" + (await page.textContent("#pbcount")) + ")");
+    ok((await page.getAttribute("#pbplay", "aria-label")) === "Play again from the start", "at the end the button offers to play again");
+    await shot(page, "pl2-end.png");
+    /* a face: that person's journey, and Play steps aside */
+    /* faces in a crowd overlap: tap one whose middle is not under another */
+    const hit = await page.evaluate(() => {
+      for (const el of document.querySelectorAll("#playfaces .pf")) {
+        const r = el.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+        const top = document.elementFromPoint(x, y);
+        if (top && el.contains(top)) return { x, y, who: el.getAttribute("aria-label").split(",")[0] };
+      }
+      return null;
+    });
+    const who = hit ? hit.who : "";
+    if (hit) await page.mouse.click(hit.x, hit.y);
+    await page.waitForTimeout(700);
+    ok(who && await page.isHidden("#playbar") && await page.isVisible("#mapsheet") && (await page.textContent("#msh-h")) === who,
+      "tapping a face opens that person's journey (" + who + ")");
+    /* back to everyone, Play again, Escape */
+    await page.click("#mapback");
+    await page.waitForTimeout(500);
+    await page.click("#playchip");
+    await page.waitForTimeout(400);
+    ok(await page.isVisible("#playbar"), "Play opens again");
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(500);
+    ok(await page.isHidden("#playbar") && (await page.$$("#mappins .pin")).length > 0, "Escape closes Play and the pins come back");
+    await page.click("#lang");
+    await page.waitForTimeout(400);
+    ok((await page.textContent("#playchip span")) === "Faire défiler les années", "Play is in French too");
     await ctx.close();
   }
   /* ---------------- desktop ---------------- */
@@ -999,6 +1121,32 @@ async function runReal() {
         await shot(page, label + "-" + lang + "-who-" + slug + ".png");
       }
     }
+    await ctx.close();
+  }
+  /* Play on the real pins (17 Oct 2026): the bar and the camera at a run of years, wide and on a phone, and a few
+     seconds of playing through the emigration years, one picture a second, for a person to look at */
+  for (const [label, opts] of [["wide", { viewport: { width: 1440, height: 900 } }], ["phone", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 }]]) {
+    const ctx = await browser.newContext(opts);
+    const page = await ctx.newPage();
+    page.on("pageerror", e => errors.push(label + " play: " + e.message));
+    await page.goto(BASE);
+    await unlock(page);
+    await page.waitForTimeout(1200);
+    await page.evaluate(() => document.querySelector('[data-view="map"]').click());
+    await page.waitForTimeout(2500);
+    await page.evaluate(() => document.getElementById("playchip").click());
+    await page.waitForTimeout(1200);
+    const seek = y => page.evaluate(v => { const r = document.getElementById("pbrange"); r.value = v; r.dispatchEvent(new Event("input", { bubbles: true })); r.dispatchEvent(new Event("change", { bubbles: true })); }, y);
+    await page.evaluate(() => document.getElementById("pbplay").click());   /* pause: each picture is one year */
+    for (const y of [1500, 1600, 1700, 1760, 1800, 1850, 1880, 1900, 1950, 2000]) {
+      await seek(y);
+      await page.waitForTimeout(700);
+      await shot(page, label + "-play-" + y + ".png");
+    }
+    ok(+(await page.textContent("#pbyear")) === 2000, label + ": Play moves to any year from its slider");
+    await seek(1838);
+    await page.evaluate(() => { document.getElementById("pbspeed").click(); document.getElementById("pbplay").click(); });   /* 5 years a second */
+    for (let i = 1; i <= 8; i++) { await page.waitForTimeout(1000); await shot(page, label + "-play-run-" + i + ".png"); }
     await ctx.close();
   }
   console.log("\npage errors: " + (errors.length ? "\n  " + errors.join("\n  ") : "none"));

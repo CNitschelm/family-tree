@@ -24,6 +24,7 @@
  *   research  → when site.research is true: a made-up research file for the demo's own invented people
  *               (tools/research.js's format; card ids from <data>), sealed under the demo's password and
  *               inlined in RESFILES. With site.research false the Research tab is hidden.
+ *   (Play's history notes, HISTFILE, are the family build's own: the demo always gets "" and asks for nothing.)
  *   links     → optional: a made-up {"<card id>": <percent 0–100>} file, the "how sure" figure the tree shows on the
  *               line down to each child (the family page reads media/links.bin, R-0481). Sealed under the demo's
  *               password and inlined in PUBFILE. Without it the demo shows no figures and asks for no file.
@@ -151,6 +152,9 @@ function build(template, cfg, dir, opts = {}) {
   if (cfg.site.research && !cfg.research) die("site.research is on, so the demo needs a research file (\"research\" in demo.json) — or set site.research to false");
   if (cfg.site.research) file(cfg.research);
   if (!/const PUBFILE = "[^"\n]*";/.test(html)) die("template has no PUBFILE line");
+  /* 8. Play's history notes are the family's own places: the demo has none, so its Play asks for no file */
+  if (!/const HISTFILE = "[^"\n]*";/.test(html)) die("template has no HISTFILE line");
+  html = html.replace(/const HISTFILE = "[^"\n]*";/, () => 'const HISTFILE = "";');
   if (cfg.links) file(cfg.links);
   return { html, defaults };
 }

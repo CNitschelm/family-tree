@@ -159,6 +159,8 @@ section("Build template");
     let threw3 = false; try { const c4 = JSON.parse(JSON.stringify(cfg)); c4.site.research = true; BD.build(html, c4, tmp); } catch (_) { threw3 = true; }
     ok(threw3, "a demo with the Research view on but no research file of its own stops the demo build");
     ok(/const MAPFILE = "data:application\/json;base64,/.test(r.html), "the demo carries its map layers inline (it is one file)");
+    ok(r.html.includes('const HISTFILE = "";') && /const HISTFILE = "media\/history\.bin";/.test(html),
+      "Play's history notes are the family's own: the demo gets none and asks for no file");
   } catch (e) { ok(false, "tools/build-demo.js still builds from this file — " + e.message); }
   finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 }
@@ -226,7 +228,7 @@ section("Map layers (load on open)");
     "needMapData() runs only through needMap()");
   /* the function each call sits in: the nearest "function NAME(" before it */
   const callers = [...code.matchAll(/\bneedMap\(\)/g)].map(m => { const fns = [...code.slice(0, m.index).matchAll(/\nfunction (\w+)\(/g)]; return fns.length ? fns[fns.length - 1][1] : ""; });
-  ok(callers.length === 2 && callers.sort().join() === "buildPins,showJourney", "needMap() is called only where the map draws (" + callers.join(", ") + ")");
+  ok(callers.length === 3 && callers.sort().join() === "buildPins,playOpen,showJourney", "needMap() is called only where the map draws (" + callers.join(", ") + ")");
   ok(/fetch\(MAPFILE, \{cache: mapTries\+\+ \? "no-cache" : "force-cache"\}\)/.test(code), "a second try for the map file asks the server, not the stored error");
   if (info) {
     const layers = JSON.parse(fs.readFileSync(path.join(ROOT, info.name), "utf8"));
@@ -446,6 +448,7 @@ function visCount() {
 }
 function subtreeSize(n) { let c = 0; (function w(x) { c++; x.children.forEach(w); })(n); return c; }
 function depth(n) { let d = 0, a = n; while (a.parent) { d++; a = a.parent; } return d; }
+function liveSize(n) { let c = 0; (function w(x) { if (x.live) c++; x.children.forEach(w); })(n); return c; }
 
 /* ---------- 5. Data invariants ---------- */
 section("Data invariants");
@@ -629,31 +632,44 @@ ok(legacyN > 5 && legacyN < 20, "legacy shows the trunk (" + legacyN + ")");
 
 activeFilters.delete("legacy"); activeFilters.add("east"); setOpenFromFilters();
 const eastHead = BRANCH_HEADS.east;
-const expectEast = subtreeSize(eastHead) + depth(eastHead);
+/* with the switch on, a branch whose line reaches a living person shows its living lines (Cory, 17 Oct 2026) */
+const expectEast = (eastHead.live ? liveSize(eastHead) : subtreeSize(eastHead)) + depth(eastHead);
 ok(visCount() === expectEast,
-  "east-only = branch + direct line only, no sibling heads (" + visCount() + " = " + expectEast + ")");
+  "east-only = branch + direct line only, no sibling heads (" + visCount() + " = " + expectEast + ", its living lines)");
+setHide(false); setOpenFromFilters();
+ok(visCount() === subtreeSize(eastHead) + depth(eastHead),
+  "east-only with the switch off = the whole branch + direct line (" + visCount() + ")");
+setHide(true); setOpenFromFilters();
 
 /* every branch in BRANCHES, the trunk included — derived, so a new branch is covered the day it is added */
 BRANCHES.forEach(b => activeFilters.add(b.key));
-setOpenFromFilters();
 /* Since 3 Oct 2026 (scope rule: the whole male line) a line can carry brothers and sisters who are
  * on no branch: a branch view shows its direct line narrowly, and the parent's pill shows "the rest of
- * this generation". So with every filter on, every LINE and every BRANCH must be shown in full, and
- * whatever is left out must hang off a shown card, one pill click away — nothing unreachable. */
-{
+ * this generation". So with every filter on and "Hide dead lines" off, every LINE and every BRANCH must be
+ * shown in full; with the switch on (Cory, 17 Oct 2026) every line, every LIVING card of a branch, and every
+ * card of a branch with no living line (R-0444), and no other card on a dead line. Either way, whatever is
+ * left out must hang off a shown card, one pill click away — nothing unreachable. */
+[false, true].forEach(hide => {
+  setHide(hide); setOpenFromFilters();
   const shown = new Set(); (function w(n) { shown.add(n); visChildren(n).forEach(w); })(root);
   const heads = Object.values(BRANCH_HEADS).filter(Boolean);
   const trunkHead = allNodes.find(n => n.p.anchor === "trunk");
   const lines = new Set(); heads.concat(trunkHead ? [trunkHead] : []).forEach(h => { let a = h; while (a) { lines.add(a); a = a.parent; } });
   const inBranch = n => { let a = n; while (a) { if (heads.includes(a)) return true; a = a.parent; } return false; };
-  const missing = allNodes.filter(n => !shown.has(n) && (lines.has(n) || inBranch(n)));
+  const inDeadBranch = n => { let a = n; while (a) { if (heads.includes(a) && !a.live) return true; a = a.parent; } return false; };
+  const want = n => lines.has(n) || (inBranch(n) && (!hide || n.live || inDeadBranch(n)));
+  const missing = allNodes.filter(n => !shown.has(n) && want(n));
+  const extra = hide ? [...shown].filter(n => !n.live && !lines.has(n) && !inDeadBranch(n)) : [];
   const offRoots = allNodes.filter(n => !shown.has(n) && n.parent && shown.has(n.parent));
   const offTotal = offRoots.reduce((a, n) => a + subtreeSize(n), 0);
-  ok(!missing.length && shown.size === visCount() && shown.size + offTotal === allNodes.length,
-    "legacy + all branches = every line and every branch in full (" + BRANCHES.length + " filters, " + shown.size +
-    " cards); the other " + offTotal + " are brothers and sisters off the lines, a pill click away" +
-    (missing.length ? " — MISSING: " + missing.map(n => n.p.id).join(", ") : ""));
-}
+  ok(!missing.length && !extra.length && shown.size === visCount() && shown.size + offTotal === allNodes.length,
+    (hide ? "switch on: legacy + all branches = every line, the living lines of every branch, and in full every branch with no living line ("
+          : "switch off: legacy + all branches = every line and every branch in full (") + BRANCHES.length + " filters, " + shown.size +
+    " cards); the other " + offTotal + " hang off a shown card, a pill click away" +
+    (missing.length ? " — MISSING: " + missing.map(n => n.p.id).join(", ") : "") +
+    (extra.length ? " — SHOWN ON A DEAD LINE: " + extra.map(n => n.p.id).join(", ") : ""));
+});
+setHide(true);
 
 BRANCHES.forEach(b => activeFilters.delete(b.key));
 setOpenFromFilters();
@@ -692,10 +708,41 @@ ok(visCount() === legacyN, "reset restores default view");
     "switched on, one click opens the live children first; the pill then offers the rest");
   const deadOne = allNodes.find(n => !n.live && n.children.length);
   ok(deadOne && firstKids(deadOne).length === deadOne.children.length, "a dead line, once opened, opens in full");
+  /* Cory, 17 Oct 2026, of dead cards the Schweitzer tile showed with the switch on: "someone like this should be
+   * hidden when it is enabled". A picked branch shows its living lines; a card's pill offers the dead ones. */
   const schw = BRANCH_HEADS.schw;
   activeFilters.clear(); activeFilters.add("schw"); setOpenFromFilters();
-  ok(schw && visCount() === subtreeSize(schw) + depth(schw) && [...shownOf()].some(n => !n.live),
-    "a branch picked by its tile is shown in full, dead lines and all (the Schweitzer tile: " + visCount() + " cards)");
+  const sw = shownOf();
+  ok(schw && schw.live && [...sw].every(n => n.live) && visCount() === liveSize(schw) + depth(schw) &&
+     [...sw].some(n => n.open && n.children.some(c => !sw.has(c))),
+    "switch on, a branch picked by its tile shows its living lines only, the dead ones a pill away (the Schweitzer tile: " +
+    visCount() + " of " + (subtreeSize(schw) + depth(schw)) + " cards)");
+  setHide(false); setOpenFromFilters();
+  ok(visCount() === subtreeSize(schw) + depth(schw), "switched off, the same tile shows the whole branch (" + visCount() + " cards)");
+  setHide(true);
+  /* Cory, 17 Oct 2026: picked on their own, branches where no one is living turn the switch off, with a note that
+   * says why; with a living branch beside them (Show all) they show in full with the switch on (checked above) */
+  const deadPicks = Object.entries(BRANCH_HEADS).filter(([k, h]) => h && !h.live);
+  if (deadPicks.length) {
+    const [dk, dh] = deadPicks[0], deadAutoOff = get("deadAutoOff"), T2 = get("T");
+    const inSub = () => { const sh = shownOf(); let all = true, any = false; (function w(x) { if (sh.has(x)) any = true; else all = false; x.children.forEach(w); })(dh); return { all, any }; };
+    activeFilters.clear(); activeFilters.add("legacy"); activeFilters.add(dk); setHide(true);
+    const note = deadAutoOff(); setOpenFromFilters();
+    ok(get("hideDead") === false && note && note.includes(T2(dk)) && inSub().all,
+      "Origins + a branch where no one is living (" + dk + "): the switch turns itself off and a note names the branch; the branch shows in full");
+    setHide(true); setOpenFromFilters();
+    ok(!inSub().any && get("deadAutoOff")() !== null, "switched back on by hand, it hides that branch (and a second pick would turn it off again)");
+    setHide(true);
+    if (deadPicks.length > 1) {
+      activeFilters.clear(); deadPicks.forEach(([k]) => activeFilters.add(k));
+      const n2 = deadAutoOff();
+      ok(n2 && deadPicks.every(([k]) => n2.includes(T2(k))) && n2 === T2("dead_auto_n").replace("%s", get("listJoin")(deadPicks.map(([k]) => T2(k)))),
+        "several such branches: one note names them all (" + n2 + ")");
+      setHide(true);
+    }
+    activeFilters.clear(); activeFilters.add("legacy"); activeFilters.add("schw");
+    ok(deadAutoOff() === null && get("hideDead") === true, "a living branch beside them: the switch stays on");
+  } else ok(true, "no branch without a living line to check (every branch reaches a living person)");
   setHide(false); initView();
   ok(get("hideDead") === true && visCount() === legacyN, "Start over turns the switch back on");
 }
@@ -765,6 +812,20 @@ if (dupName) {
 }
 const surname = norm(root.p.name.split(" ").pop());
 ok(searchMatches(surname).length === 8, "results capped at 8");
+/* Cory, 17 Oct 2026: living people are tagged, and come first among equally good matches, so someone typing their
+ * own name finds it inside the first eight */
+{
+  const livingP = get("livingP"), liveTag = get("liveTag");
+  const res = searchMatches(surname);
+  const tier = res[0] ? res[0].r : 0;
+  const liveInTier = allNodes.filter(n => livingP(n.p) && norm(n.p.name).split(/\s+/).some(w => w.startsWith(surname))).length;
+  const ordered = res.every((x, i) => i === 0 || res[i - 1].r < x.r || livingP(res[i - 1].n.p) >= livingP(x.n.p));
+  ok(ordered && (tier !== 1 || liveInTier < 8 || res.every(x => livingP(x.n.p))),
+    "living people come first among equally good matches (" + res.filter(x => livingP(x.n.p)).length + " of 8 for the surname)");
+  const lv = allNodes.find(n => /^b\.\s*\d/.test(n.p.years || "")), dd = allNodes.find(n => /\d{4}\s*[–-]\s*\d{4}/.test(n.p.years || ""));
+  ok(lv && dd && liveTag(lv).includes(">" + T("living_tag") + "<") && liveTag(dd) === "",
+    "a living person's suggestion carries the Living tag; a dead one's does not");
+}
 
 /* partial, out-of-order, middle-name-skipping queries must still land the person:
    "<first> <first 3 of surname>" has to find "<first> <middle> <surname>" */
@@ -853,8 +914,8 @@ ok(gazKeys.every(k => {
 ok(gazKeys.every(k => GAZ[k].n && GAZ[k].n_fr), "gazetteer names bilingual");
 ok(gazKeys.every(k => GAZ[k].c !== undefined && GAZ[k].c_fr !== undefined),
   "gazetteer contexts bilingual");
-ok(/function goRegion\(k\)\{[^}]*selPerson = null;/.test(js),
-  "Go to on the map lets go of a picked person, so the place shows everyone there");
+ok(/function goRegion\(k\)\{\n  if\(playOn\(\)\)\{[^\n]*return; \}[^\n]*\n[^}]*selPerson = null;/.test(js),
+  "Go to on the map lets go of a picked person, so the place shows everyone there (during Play it only moves the camera)");
 ok(!/gaz:\s*\{|"lat":/.test(html.replace(/const ENC = \{[\s\S]*?\};/, "")),
   "no gazetteer leaks outside the ciphertext");
 
@@ -958,6 +1019,106 @@ ok(allNodes.every(n => !n.p.mn || n.p.mn_fr), "person map notes bilingual");
                 "map_living", "map_deceased", "map_est", "map_none",
                 "map_births", "map_nobirth"];
   ok(need.every(k => I18N.en[k] && I18N.fr[k]), "map strings present in en and fr");
+}
+
+/* ---------- Play: the family over the years (Cory, 17 Oct 2026) ----------
+ * The model is run here on the real pins, the way the page runs it when Play opens: nothing about Play is stored,
+ * so a new pin is in the next playback ("this feature should update automatically as new pins come in"). */
+section("Play");
+{
+  const pctx = { console };
+  vm.createContext(pctx);
+  try {
+    vm.runInContext([
+      "const GAZ = " + JSON.stringify(DATA.gaz || {}) + ";",
+      grab("const MON =", "\n"), grab("const D2R", "\n"), grab("function prjX(", "function invLat("),
+      grab("const R_EARTH", "const COMPASS"), grab("const CC = {", "\n};") + "\n};", grab("const isBirth", "\n"),
+      grab("const livingP", "\n"), grab("/* ---- play model: pure functions", "/* ---- end of the play model ---- */")
+    ].join("\n"), pctx);
+  } catch (e) { ok(false, "the play model loads on its own (" + e.message + ")"); }
+  const pg = expr => vm.runInContext(expr, pctx);
+  const now = 2026.8, sp = 2;
+  const livingP = pg("livingP"), M = pg("playModel")(allNodes, n => n.p.pl || [], n => livingP(n.p), now);
+  const G = DATA.gaz || {};
+  const yearOf = r => r.y;
+  /* worked out again here, independently: each person's dated, located rows (no alternative readings), up to a
+     death or burial, with a run at one place as one stop */
+  const expect = new Map();
+  allNodes.forEach(n => {
+    const ks = [];
+    for (const r of (n.p.pl || [])) {
+      if (r.x || !r.y || !G[r.k]) continue;
+      if (!ks.length || ks[ks.length - 1].k !== r.k) ks.push({ k: r.k, y: r.y });
+      if (r.t === "death" || r.t === "burial") break;
+    }
+    if (ks.length) expect.set(n, ks);
+  });
+  ok(M.tracks.length === expect.size && M.tracks.length > 200,
+    "every person with a dated pin is in the playback (" + M.tracks.length + " people, " + M.events.length + " events)");
+  const badStops = M.tracks.filter(tr => { const e = expect.get(tr.n); return !e || e.length !== tr.stops.length || e.some((x, i) => x.k !== tr.stops[i].k); });
+  ok(!badStops.length, "each person visits exactly their pins' places, in order" + (badStops.length ? " — not: " + badStops.slice(0, 5).map(tr => tr.n.p.id).join(", ") : ""));
+  const badT = M.tracks.filter(tr => tr.stops.some((s, i) => (i && s.t < tr.stops[i - 1].t) || s.t < expect.get(tr.n)[i].y || s.t > expect.get(tr.n)[i].y + 1.2));
+  ok(!badT.length, "times run forward, each inside its record's year" + (badT.length ? " — not: " + badT.slice(0, 5).map(tr => tr.n.p.id).join(", ") : ""));
+  const ends = M.tracks.map(tr => {
+    const rows = (tr.n.p.pl || []).filter(r => !r.x && r.y && G[r.k]), dr = rows.find(r => r.t === "death" || r.t === "burial");
+    const dy = /[–-]\s*\d{4}\s*$/.test(tr.n.p.years || ""), live = livingP(tr.n.p);
+    const want = live && !dr ? null : dr || dy ? "died" : "faded";
+    return { tr, want };
+  }).filter(x => x.tr.endKind !== x.want);
+  ok(!ends.length, "a recorded death or a death year ends a life with the soft ring; living people stay to today; an unknown date only fades" +
+    (ends.length ? " — not: " + ends.slice(0, 5).map(x => x.tr.n.p.id + " " + x.tr.endKind + "≠" + x.want).join(", ") : ""));
+  ok(M.events.every((e, i) => !i || e.t >= M.events[i - 1].t) && M.t0 === Math.floor(M.events[0].t) - 1 && M.t1 >= now,
+    "events run in time order, from the year before the first record (" + M.t0 + ") to today");
+  const H = pg("playHist")(M.events, M.t0, M.t1, 5), sum = k => H.reduce((a, b) => a + b[k], 0);
+  ok(["born", "move", "died"].every(k => sum(k) === M.events.filter(e => e.kind === k).length) && sum("born") > 100,
+    "the timeline's histogram counts every birth, move and death (" + sum("born") + " / " + sum("move") + " / " + sum("died") + ")");
+  const cs = M.miles.filter(x => x.kind === "country").map(x => x.cc);
+  ok(M.miles[0] && M.miles[0].kind === "first" && M.miles[0].e === M.events[0] && new Set(cs).size === cs.length &&
+     M.miles.every((x, i) => !i || x.t >= M.miles[i - 1].t),
+    "the family's notes start at the first record and name each new country once (" + cs.join(", ") + ")");
+  /* the camera works from the pins only: at the start it holds the first record's place, and every arrival
+     (a birth, a first record, a move) is inside what it holds two seconds of play before it happens */
+  const box = pg("playBox"), LOOK = pg("PLAY_LOOK"), LINGER = pg("PLAY_LINGER");
+  const e0 = M.events[0], b0 = box(M.tracks, M.t0, 0, 0) || box(M.tracks, e0.t, 0, 0);
+  ok(b0 && Math.abs(b0.x0 - pg("prjX")(G[e0.k].lon)) < 1e-9 && b0.x0 === b0.x1, "at the start the camera holds the first record's place, and nothing else");
+  const missed = M.events.filter(e => (e.kind === "born" || e.kind === "first" || e.kind === "move") && (() => {
+    const b = box(M.tracks, e.t - 2 * sp, LOOK * sp, LINGER * sp), x = pg("prjX")(G[e.k].lon), y = pg("prjY")(G[e.k].lat);
+    return !b || x < b.x0 - 1e-12 || x > b.x1 + 1e-12 || y < b.y0 - 1e-12 || y > b.y1 + 1e-12;
+  })());
+  ok(!missed.length, "every arrival is in the camera's view two seconds before it happens" + (missed.length ? " — not: " + missed.length : ""));
+  const at = pg("playAt"), tr = M.tracks.find(x => x.stops.length > 1 && x.end !== null);
+  if (tr) {
+    const mid = tr.stops[1].t - .01;
+    ok(at(tr, tr.t0 - .01, sp) === null && at(tr, mid, sp) && at(tr, mid, sp).move && at(tr, mid, sp).move.to === tr.stops[1].k &&
+       at(tr, tr.end + 10 * sp, sp) === null, "a face appears at its first record, travels to its next place, and is gone after its fade");
+  }
+  ok(/function playBuild\(\)\{\n  PLAY\.model = playModel\(allNodes\.filter\(passes\), rowsOf,/.test(js) && /function refreshMap\(refit\)\{\n  if\(playOn\(\)\)\{ playBuild\(\);/.test(js),
+    "the page builds Play from the pins the map's filters show, each time it opens and when the filters change");
+  /* Cory, 17 Oct 2026: "no dont do that becuase it should be consistent" — one steady speed, no fast-forward */
+  ok(/PLAY\.t = Math\.min\(m\.t1, PLAY\.t \+ dt \* PLAY\.speed\);/.test(js) && pg("PLAY_SPEEDS").join() === "1,2,5,10",
+    "time runs at the one speed chosen in the bar (1, 2, 5 or 10 years a second), with no fast-forward");
+  const playKeys = Object.keys(I18N.en).filter(k => /^play_/.test(k));
+  ok(playKeys.length >= 25 && playKeys.every(k => typeof I18N.fr[k] === "string" && I18N.fr[k].trim()) && ["play_m_country", "play_m_bornin", "play_end"].every(k => I18N.fr[k] !== I18N.en[k]),
+    "every Play string is in English and French (" + playKeys.length + ")");
+}
+/* the history notes: one sealed file, the general history of the places, each with the page it comes from */
+{
+  const f = path.join(ROOT, "media", "history.bin");
+  let notes = null;
+  try {
+    const out = P.openMediaFile(ENC, PW, fs.readFileSync(f));
+    const zlib = require("zlib"), m = /^h:(\d+)/.exec(out);
+    if (m) {
+      const key = P.keyFor(PW, ENC.salt, ENC.iter), b = P.openBlob(key, fs.readFileSync(f));
+      notes = JSON.parse(zlib.inflateRawSync(b.bytes).toString("utf8"));
+    }
+  } catch (e) { /* reported below */ }
+  ok(Array.isArray(notes) && notes.length >= 10, "media/history.bin opens with the payload key (" + (notes ? notes.length : 0) + " notes)");
+  if (notes) {
+    const yrs = x => (String(x).match(/\b1[0-9]{3}\b|\b20[0-9]{2}\b/g) || []).sort().join();
+    ok(notes.every((n, i) => Number.isInteger(n.y) && n.en && n.fr && yrs(n.en) === yrs(n.fr) && /^https:\/\//.test(n.url) && n.src && (!i || n.y >= notes[i - 1].y)),
+      "each note is in English and French with the same years, in order, with the page it comes from");
+  }
 }
 
 /* ---------- 13. Commit hygiene ----------
