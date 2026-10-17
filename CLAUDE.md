@@ -96,7 +96,8 @@ camera follows the pins only, with a look-ahead, eased and speed-capped; time ru
 fast-forward); deaths are a soft rose ring and a fade, an unknown date of death only a fade. Its history notes are
 `history.json` (private: each note with its page and supporting words) → `node tools/history.js build` →
 `media/history.bin` (commit it). The demo build gets no notes. People on dead lines with no portrait are counted in a
-crowd's "+N", not drawn ("the map gets way too busy", R-0576), except one alone at a place, who keeps a face (R-0578).
+crowd's "+N" only when the crowd has no room ("the map gets way too busy", R-0576); with room a crowd is a list of
+everyone, each named, or as many faces as it holds, and a face always shows (R-0578, R-0584).
 Each crowd's place is named under it and the map's town names keep off faces and names (R-0581).
 At Cory's own first record the year stands still for a coronation he asked for (trumpets, a synthesized fanfare, a
 crown, confetti, one royal caption: R-0577, R-0579; his face grows in size from his large portrait, so it stays sharp:

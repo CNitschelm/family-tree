@@ -392,15 +392,27 @@ async function run() {
     const drawn = await page.evaluate(() => { const c = document.getElementById("pbhist"), d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i]) n++; return n; });
     ok(drawn > 100, "the timeline draws the births, moves and deaths (" + drawn + " px)");
     ok((await page.$$("#pbmarks .pbm.h")).length === 2 && (await page.$$("#pbmarks .pbm.f")).length >= 3, "the history notes and the family's own are marked on the timeline");
-    /* Cory, 17 Oct 2026: "Anyone that doesn't have a living relative && has no photo should be in +X" — in 1745 the
-       nine sons are all on dead lines with no portrait: the eight at home are one +8, with no face; the ninth, alone
-       on his island, keeps his ("in this special case, its ok to show just the person, they dont overlap anyone") */
+    /* in 1745 the nine sons are all on dead lines with no portrait. Seen from afar their home crowd has no room (a
+       crowd in the Netherlands is close by), so they wait in a +N, but one face always shows (Cory, 17 Oct 2026: "never
+       show JUST the +x"); the ninth, alone on his island, has his face */
     await page.evaluate(() => { const r = document.getElementById("pbrange"); r.value = 1745; r.dispatchEvent(new Event("input", { bubbles: true })); r.dispatchEvent(new Event("change", { bubbles: true })); });
     await page.waitForTimeout(500);
-    const folded = await page.evaluate(() => ({ sons: [...document.querySelectorAll("#playfaces .pf")].filter(e => e.style.display !== "none" && /^Child/.test(e.getAttribute("aria-label"))).map(e => e.getAttribute("aria-label").split(",")[0]),
+    const sons = () => page.evaluate(() => ({ sons: [...document.querySelectorAll("#playfaces .pf")].filter(e => e.style.display !== "none" && /^Child/.test(e.getAttribute("aria-label"))).map(e => e.getAttribute("aria-label").split(",")[0]).sort(),
+      named: [...document.querySelectorAll("#playfaces .pf .pl")].filter(e => getComputedStyle(e).display !== "none" && /^Child[1-8] /.test(e.textContent)).length,
       more: [...document.querySelectorAll("#playfaces .pfmore")].filter(e => e.style.display !== "none").map(e => e.textContent + (e.classList.contains("solo") ? " solo" : "")) }));
-    ok(folded.sons.join() === "Child9 Testmann" && folded.more.includes("+8 solo") && !folded.more.includes("+1 solo") && (await page.textContent("#pbcount")) === "9 people",
-      "people on dead lines with no portrait are counted in a +N, not drawn; one alone at a place keeps a face, never a +1 (" + JSON.stringify(folded) + ")");
+    const folded = await sons();
+    ok(folded.sons.includes("Child9 Testmann") && folded.sons.length >= 2 && folded.sons.length < 9 && folded.more.length && !folded.more.some(x => /solo/.test(x)) &&
+       (await page.textContent("#pbcount")) === "9 people",
+      "with no room, people on dead lines with no portrait wait in a +N, and a crowd always shows a face (" + JSON.stringify(folded) + ")");
+    /* close in on their home: now there is room, and the crowd is a list of all eight, each named (Cory, 17 Oct 2026:
+       "there is definitely enough room to show all people / names") */
+    await page.click('#goto [data-mr="alsace"]');
+    await page.waitForTimeout(1600);
+    const roomy = await sons();
+    ok(roomy.sons.length === 9 && roomy.named === 8, "with room, the crowd is a list: everyone drawn, each named (" + JSON.stringify(roomy) + ")");
+    await shot(page, "pl0-list.png");
+    await page.click("#pbfollow").catch(() => {});   /* the camera back to Play */
+    await page.waitForTimeout(400);
     await shot(page, "pl1-play.png");
     /* a mark: back to just before it, playing, and its note comes up with its source */
     await page.click('#pbmarks .pbm.h[data-t="1600"]');
@@ -1205,9 +1217,9 @@ async function runReal() {
       await seek(y);
       await page.waitForTimeout(700);
       await shot(page, label + "-play-" + y + ".png");
-      if (await page.evaluate(() => [...document.querySelectorAll("#playfaces .pfmore.solo")].some(e => e.style.display !== "none" && e.textContent === "+1"))) lone.push(y);
+      if (await page.evaluate(() => [...document.querySelectorAll("#playfaces .pfmore.solo")].some(e => e.style.display !== "none"))) lone.push(y);
     }
-    ok(!lone.length, label + ": never a +1 with no face — one person alone has a face" + (lone.length ? " (not in " + lone.join(", ") + ")" : ""));
+    ok(!lone.length, label + ": never a +N with no face beside it" + (lone.length ? " (not in " + lone.join(", ") + ")" : ""));
     ok(+(await page.textContent("#pbyear")) === 2026, label + ": Play moves to any year from its slider");
     await seek(1838);
     await page.evaluate(() => { document.getElementById("pbspeed").click(); document.getElementById("pbplay").click(); });   /* 5 years a second */

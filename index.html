@@ -5454,24 +5454,76 @@ function playFaces(dt){
     if(host){ host.items.push(...arr); host.sx += x * arr.length; host.sy += y * arr.length; host.n += arr.length; }
     else groups.push({k, x, y, items:arr.slice(), sx:x * arr.length, sy:y * arr.length, n:arr.length});
   });
+  /* A crowd is a sunflower of faces round its place, the first to arrive in the middle. Who is drawn depends on the
+     room round it (Cory, 17 Oct 2026, of a crowd alone on a zoomed-in map: "there is definitely enough room to show all
+     people / names"): with room, a list of everyone, each named; with less, every face it can hold; with none, people
+     on dead lines with no portrait wait in its +N ("the map gets way too busy"), and a face always shows ("never show
+     JUST the +x"). The smallest crowds choose first; a crowd keeps its form until it really no longer fits. */
   groups.forEach(c => {
-    const cx = c.sx / c.n, cy = c.sy / c.n;
+    c.cx = c.sx / c.n; c.cy = c.sy / c.n;
     c.items.sort((a, b) => a.since - b.since || a.tr.n.id - b.tr.n.id);
     c.items.forEach(st => { st.g = c; });
-    const vis = c.items.filter(st => !st.fold);
-    vis.forEach((st, i) => { const r = gap * Math.sqrt(i), a = i * 2.39996323; st.x = cx + Math.cos(a) * r; st.y = cy + Math.sin(a) * r; st.hide = i >= CAP; });
-    c.items.forEach(st => { if(st.fold){ st.x = cx; st.y = cy; st.hide = true; } });
-    c.shown = Math.min(CAP, vis.length);
-    c.more = c.items.length - c.shown; c.cx = cx; c.cy = cy; c.r = gap * Math.sqrt(c.shown);
+    c.shown = Math.min(CAP, c.items.filter(st => !st.fold).length);
+    const e = gap * Math.sqrt(Math.max(0, c.shown - 1)) + size / 2;
+    c.box = [c.cx - e, c.cy - e, 2 * e, 2 * e];
   });
-  /* Cory, 17 Oct 2026, of a "+1" with no face over Hawaii: "in this special case, its ok to show just the person, they
-     dont overlap anyone". Where no one is drawn, one person alone keeps their face unless it would sit on a crowd;
-     a +N with no face that would sit on a crowd joins that crowd's +N. */
-  const near = c => groups.find(o => o !== c && o.shown && Math.hypot(o.cx - c.cx, o.cy - c.cy) < gap * Math.sqrt(o.shown - 1) + size);
-  groups.forEach(c => { if(!c.shown && c.items.length === 1 && !near(c)){ const st = c.items[0]; st.fold = st.hide = false; c.shown = 1; c.more = 0; c.r = gap; } });
-  groups.forEach(c => { if(!c.shown && c.more){ const o = near(c); if(o){ o.more += c.more; c.more = 0; } } });
+  const MW = mapEl.clientWidth, MH = mapEl.clientHeight, ins = playInsets(), was = PLAY.modes || new Map(), modes = new Map();
+  const over = (a, b) => a[0] < b[0] + b[2] && a[0] + a[2] > b[0] && a[1] < b[1] + b[3] && a[1] + a[3] > b[1];
+  const fits = (c, box, mode) => {
+    const pad = was.get(c.k) === mode ? 0 : 10, b = [box[0] - pad, box[1] - pad, box[2] + 2 * pad, box[3] + 2 * pad];
+    return b[0] >= 4 && b[1] >= ins.top + 4 && b[0] + b[2] <= MW - 4 && b[1] + b[3] <= MH - ins.bottom - 4 && !groups.some(o => o !== c && over(b, o.box));
+  };
+  const nameW = st => st.tr.n.p.name.length * 6.3 + 14, rowH = size + 4, RMAX = small ? 8 : 24;
+  const byRoom = groups.slice().sort((a, b) => a.items.length - b.items.length);
+  byRoom.forEach(c => {   /* a list: one column, two past six people on a wide screen, names outward */
+    const n = c.items.length;
+    if(n > RMAX || (PLAY.party && c.items.some(st => st.tr === PLAY.hero))) return;   /* his coronation is in a crowd */
+    const cols = !small && n > 6 ? 2 : 1, rows = Math.ceil(n / cols), y0 = c.cy - (rows - 1) * rowH / 2, hgt = (rows - 1) * rowH + size + 16;   /* and its place's name below */
+    let box, slots;
+    if(cols === 1){
+      const wn = Math.max(...c.items.map(nameW)), right = c.cx + size / 2 + 5 + wn <= MW - 6;   /* names on the left near the right edge */
+      box = [right ? c.cx - size / 2 : c.cx - size / 2 - 5 - wn, y0 - size / 2, size + 5 + wn, hgt];
+      slots = c.items.map((st, i) => ({x:c.cx, y:y0 + i * rowH, l:!right}));
+    } else {   /* even places on the right, odd on the left, so a newcomer moves no one across */
+      const xr = c.cx + size / 2 + 1, xl = c.cx - size / 2 - 1;
+      const x0 = xl - size / 2 - 5 - Math.max(...c.items.filter((st, i) => i % 2).map(nameW)), x1 = xr + size / 2 + 5 + Math.max(...c.items.filter((st, i) => !(i % 2)).map(nameW));
+      box = [x0, y0 - size / 2, x1 - x0, hgt];
+      slots = c.items.map((st, i) => ({x:i % 2 ? xl : xr, y:y0 + (i >> 1) * rowH, l:!!(i % 2)}));
+    }
+    /* near an edge, the top or the bar below, a list may slide up to half its size away from its place; the place's
+       name stays under it */
+    const pad = was.get(c.k) === "list" ? 0 : 10, lo = ins.top + 4 + pad, hi = MH - ins.bottom - 4 - pad, le = 4 + pad, ri = MW - 4 - pad;
+    const dy = box[1] < lo ? lo - box[1] : box[1] + hgt > hi ? hi - box[1] - hgt : 0;
+    const dx = box[0] < le ? le - box[0] : box[0] + box[2] > ri ? ri - box[0] - box[2] : 0;
+    if(Math.abs(dy) > hgt / 2 || Math.abs(dx) > box[2] / 2 || !fits(c, [box[0] + dx, box[1] + dy, box[2], hgt], "list")) return;
+    box[0] += dx; box[1] += dy; slots.forEach(o => { o.x += dx; o.y += dy; });
+    c.box = box; c.list = slots; c.lx = c.cx + dx; modes.set(c.k, "list");
+  });
+  byRoom.forEach(c => {   /* every face the crowd can hold, those on dead lines with no portrait too */
+    const n = Math.min(CAP, c.items.length);
+    if(c.list || n <= c.shown) return;
+    const e = gap * Math.sqrt(n - 1) + size / 2, box = [c.cx - e, c.cy - e, 2 * e, 2 * e];
+    if(!fits(c, box, "all")) return;
+    c.box = box; c.all = true; c.shown = n; modes.set(c.k, "all");
+  });
+  PLAY.modes = modes;
+  groups.forEach(c => {
+    if(c.list){
+      c.items.forEach((st, i) => { const s = c.list[i]; st.x = s.x; st.y = s.y; st.fold = st.hide = false; st.slot = s; });
+      c.shown = c.items.length; c.more = 0; c.r = gap;
+      return;
+    }
+    const vis = c.all ? c.items.filter(st => !st.fold).concat(c.items.filter(st => st.fold)) : c.items.filter(st => !st.fold);
+    vis.forEach((st, i) => { const r = gap * Math.sqrt(i), a = i * 2.39996323; st.x = c.cx + Math.cos(a) * r; st.y = c.cy + Math.sin(a) * r; st.hide = i >= CAP; st.fold = false; });
+    c.items.forEach(st => { if(st.fold){ st.x = c.cx; st.y = c.cy; st.hide = true; } });
+    c.more = c.items.length - c.shown; c.r = gap * Math.sqrt(c.shown);
+  });
+  /* a crowd with no face shows its first person, unless it sits on another crowd, whose +N it then joins */
+  const near = c => groups.find(o => o !== c && o.shown && !o.list && Math.hypot(o.cx - c.cx, o.cy - c.cy) < gap * Math.sqrt(o.shown - 1) + size);
+  groups.forEach(c => { if(!c.list && !c.shown && c.more){ const o = near(c); if(o){ o.more += c.more; c.more = 0; } } });
+  groups.forEach(c => { if(!c.list && !c.shown && c.more){ const st = c.items[0]; st.fold = st.hide = false; st.x = c.cx; st.y = c.cy; c.shown = 1; c.more--; c.r = gap; } });
   movers.forEach(st => { if(st.fold) st.hide = true; });   /* their trail still draws the move */
-  PLAY.crowd = groups.reduce((a, c) => Math.max(a, c.r), 0) + size / 2;   /* the camera keeps this much room round the pins */
+  PLAY.crowd = groups.reduce((a, c) => Math.max(a, gap * Math.sqrt(Math.min(CAP, c.items.length))), 0) + size / 2;   /* the camera keeps room round the pins for every face a crowd can hold, whatever it shows now, so the two never chase each other */
   /* faces that have left the map */
   PLAY.faces.forEach((f, tr) => { if(!live.has(tr)){ f.el.remove(); PLAY.faces.delete(tr); } });
   const k = PLAY.snap || REDUCED ? 1 : 1 - Math.exp(-dt / .09);
@@ -5481,7 +5533,13 @@ function playFaces(dt){
     const o = c.shown ? c.r * .8 + size * .35 : 0, w = Math.max(24, 12 + 6.5 * String(c.more).length + 6.5);
     c.bx = c.cx + o; c.by = c.cy - o; chips.push([c.bx - w / 2, c.by - 10, w, 20]);
   });
-  const boxes = [], marks = [];
+  const boxes = [], marks = [], faceAt = [];
+  let named = 0;
+  groups.forEach(c => { if(!c.list) c.items.forEach(st => { if(!st.hide && !st.fold) faceAt.push([st.x - size / 2, st.y - size / 2, size, size]); }); });   /* a name never covers a face */
+  groups.forEach(c => { if(c.list) c.items.forEach(st => {   /* a list's names first: the others keep off them */
+    const wpx = nameW(st);
+    boxes.push([st.x - size / 2, st.y - size / 2, size, size], [st.slot.l ? st.x - size / 2 - 5 - wpx : st.x + size / 2 + 5, st.y - 9, wpx, 18]);
+  }); });
   const order = movers.concat([...live.values()].filter(st => !st.move));   /* names: the travellers first */
   order.forEach(st => {
     const tr = st.tr;
@@ -5534,14 +5592,15 @@ function playFaces(dt){
     el.style.filter = gray ? `grayscale(${gray.toFixed(2)})` : "";
     if(f.ring !== ring){ f.ring = ring; f.halo.className = "halo" + (ring ? " " + ring : ""); }
     f.halo.style.transform = `scale(${rs.toFixed(3)})`; f.halo.style.opacity = ro.toFixed(3);
-    /* a name while someone arrives or travels, where it does not cover another */
+    /* in a list, everyone's name; elsewhere a name while someone arrives or travels, where it does not cover another */
     let on = false, left = false;
-    if(!st.hide && st.end < 0 && (st.move || (pop > .45 && pop < 1.8)) && boxes.length < NAMES && !(tr === PLAY.hero && PLAY.party)){
+    if(st.slot){ on = !st.hide && st.end < 0 && !(tr === PLAY.hero && PLAY.party); left = st.slot.l; }
+    else if(!st.hide && st.end < 0 && (st.move || (pop > .45 && pop < 1.8)) && named < NAMES && !(tr === PLAY.hero && PLAY.party)){
       const wpx = tr.n.p.name.length * 6.3 + 14;
       left = f.x + size / 2 + 3 + wpx > mapEl.clientWidth - 6;   /* near the right edge the name goes on the left */
       const bx = [left ? f.x - size / 2 - 3 - wpx : f.x + size / 2 + 3, f.y - 9, wpx, 18];
       const hit = o => bx[0] < o[0] + o[2] && bx[0] + bx[2] > o[0] && bx[1] < o[1] + o[3] && bx[1] + bx[3] > o[1];
-      if(!boxes.some(hit) && !chips.some(hit)){ boxes.push(bx); on = true; }
+      if(!boxes.some(hit) && !chips.some(hit) && !faceAt.some(hit)){ boxes.push(bx); on = true; named++; }
     }
     if(on !== f.lblOn){ f.lblOn = on; f.lbl.style.display = on ? "block" : ""; }
     if(on && left !== f.lblL){ f.lblL = left; f.lbl.classList.toggle("l", left); }
@@ -5560,7 +5619,7 @@ function playFaces(dt){
   /* the map's own town names keep off the faces, their names and the +N chips, and each crowd's place is named under
      it (Cory, 17 Oct 2026, of a city nearby written under his face: "looks wrong. i am in bangkok") */
   PLAY.marks = marks.concat(boxes, chips);
-  PLAY.places = groups.filter(c => c.shown || c.more).map(c => ({n:gName(c.k), x:c.cx, y:(c.bot !== undefined ? c.bot : c.cy + 9) + 9}));
+  PLAY.places = groups.filter(c => c.shown).map(c => ({n:gName(c.k), x:c.lx !== undefined ? c.lx : c.cx, y:(c.bot !== undefined ? c.bot : c.cy + 9) + 9}));
   return busy;
 }
 /* the trails, on the canvas under the faces: every finished move a faint line, so the routes build up, and the
