@@ -44,7 +44,8 @@ const gaz = {
   alpha: { n: "Alphaville", n_fr: "Alphaville", c: "Haut-Rhin, France", c_fr: "Haut-Rhin, France", lat: 48.04, lon: 7.13, k: "town" },
   beta: { n: "Betaburg", n_fr: "Betaburg", c: "Bas-Rhin, France", c_fr: "Bas-Rhin, France", lat: 48.58, lon: 7.75, k: "town" },
   gamma: { n: "Gamma City", n_fr: "Gamma City", c: "Ohio, United States", c_fr: "Ohio, États-Unis", lat: 41.5, lon: -81.69, k: "city" },
-  delta: { n: "Deltadam", n_fr: "Deltadam", c: "Lowland coast, Netherlands", c_fr: "Côte basse, Pays-Bas", lat: 52.37, lon: 4.9, k: "city" }
+  delta: { n: "Deltadam", n_fr: "Deltadam", c: "Lowland coast, Netherlands", c_fr: "Côte basse, Pays-Bas", lat: 52.37, lon: 4.9, k: "city" },
+  epsilon: { n: "Epsilon Atoll", n_fr: "Atoll Epsilon", c: "Pacific Ocean", c_fr: "Océan Pacifique", lat: 21.3, lon: -157.86, k: "island" }
 };
 function person(name, years, g, extra) {
   const p = Object.assign({ id: id(), name, years, g, note: name + " was a test person.", note_fr: name + " était une personne de test.", src: [{ l: "Test register, act 1" }],
@@ -59,7 +60,10 @@ g5.unions = [{ s: "Ottilie Probe", sy: "1650", c: BR.map(([key, bid], i) => {
   const h = person("Branch" + (i + 1) + " Testmann", (1670 + i) + "–" + (1730 + i), i % 2 ? "f" : "m", { anchor: key, branch: bid,
     pl: [{ k: i % 2 ? "beta" : "gamma", t: "birth", c: "doc", y: 1670 + i }, { k: "delta", t: "residence", c: "inf", y: 1700 + i, w: "Inferred from a test.", w_fr: "Déduit d’un test." }] });
   /* the last branch has no living daughter: a line where no one is living, for the dead-lines switch (17 Oct 2026) */
-  h.unions = [{ s: "Spouse" + (i + 1) + " Probe", sy: String(1695 + i), c: [person("Child" + (i + 1) + " Testmann", String(1700 + i) + "–" + (1760 + i), "m")]
+  const son = person("Child" + (i + 1) + " Testmann", String(1700 + i) + "–" + (1760 + i), "m");
+  /* and its son ends his days on an island far from everyone: alone on the map in Play (17 Oct 2026) */
+  if (i === BR.length - 1) son.pl.push({ k: "epsilon", t: "residence", c: "doc", y: 1740 });
+  h.unions = [{ s: "Spouse" + (i + 1) + " Probe", sy: String(1695 + i), c: [son]
     .concat(i === BR.length - 1 ? [] : [person("Daughter" + (i + 1) + " Testmann", "b. " + (1950 + i), "f")]) }];
   return h;
 }) }];
@@ -388,13 +392,14 @@ async function run() {
     ok(drawn > 100, "the timeline draws the births, moves and deaths (" + drawn + " px)");
     ok((await page.$$("#pbmarks .pbm.h")).length === 2 && (await page.$$("#pbmarks .pbm.f")).length >= 3, "the history notes and the family's own are marked on the timeline");
     /* Cory, 17 Oct 2026: "Anyone that doesn't have a living relative && has no photo should be in +X" — in 1745 the
-       nine sons are all on dead lines with no portrait: no face for any of them, and one +9 at their place */
+       nine sons are all on dead lines with no portrait: the eight at home are one +8, with no face; the ninth, alone
+       on his island, keeps his ("in this special case, its ok to show just the person, they dont overlap anyone") */
     await page.evaluate(() => { const r = document.getElementById("pbrange"); r.value = 1745; r.dispatchEvent(new Event("input", { bubbles: true })); r.dispatchEvent(new Event("change", { bubbles: true })); });
     await page.waitForTimeout(500);
-    const folded = await page.evaluate(() => ({ sons: [...document.querySelectorAll("#playfaces .pf")].filter(e => /^Child/.test(e.getAttribute("aria-label"))).length,
+    const folded = await page.evaluate(() => ({ sons: [...document.querySelectorAll("#playfaces .pf")].filter(e => e.style.display !== "none" && /^Child/.test(e.getAttribute("aria-label"))).map(e => e.getAttribute("aria-label").split(",")[0]),
       more: [...document.querySelectorAll("#playfaces .pfmore")].filter(e => e.style.display !== "none").map(e => e.textContent + (e.classList.contains("solo") ? " solo" : "")) }));
-    ok(folded.sons === 0 && folded.more.includes("+9 solo") && (await page.textContent("#pbcount")) === "9 people",
-      "people on dead lines with no portrait are counted in a +N, not drawn (" + JSON.stringify(folded) + ")");
+    ok(folded.sons.join() === "Child9 Testmann" && folded.more.includes("+8 solo") && !folded.more.includes("+1 solo") && (await page.textContent("#pbcount")) === "9 people",
+      "people on dead lines with no portrait are counted in a +N, not drawn; one alone at a place keeps a face, never a +1 (" + JSON.stringify(folded) + ")");
     await shot(page, "pl1-play.png");
     /* a mark: back to just before it, playing, and its note comes up with its source */
     await page.click('#pbmarks .pbm.h[data-t="1600"]');
@@ -448,6 +453,8 @@ async function run() {
       "at the crowned person's birth the year stands still and the trumpets come in (" + yA + ", " + yB + ")");
     ok(/Hear ye, hear ye! Daughter1 Testmann is born in Alphaville/.test(await page.textContent("#playbar .pbcaps")) && !!(await page.$("#playbar .pcap.royal")),
       "a royal note announces the birth");
+    await page.waitForTimeout(700);
+    ok((await page.$$("#playbar .pcap.royal")).length === 1, "and only that one (Cory, 17 Oct 2026: \"just keep the one above it\")");
     await page.waitForSelector("#playparty", { state: "detached", timeout: 9000 }).catch(() => {});
     await page.waitForTimeout(1200);
     const crowned = await page.evaluate(() => [...document.querySelectorAll("#playfaces .pf.crowned")].map(e => e.getAttribute("aria-label").split(",")[0]));
@@ -1181,11 +1188,14 @@ async function runReal() {
     await page.waitForTimeout(1200);
     const seek = y => page.evaluate(v => { const r = document.getElementById("pbrange"); r.value = v; r.dispatchEvent(new Event("input", { bubbles: true })); r.dispatchEvent(new Event("change", { bubbles: true })); }, y);
     await page.evaluate(() => document.getElementById("pbplay").click());   /* pause: each picture is one year */
-    for (const y of [1500, 1600, 1700, 1760, 1800, 1850, 1880, 1900, 1950, 2000]) {
+    const lone = [];
+    for (const y of [1500, 1600, 1700, 1760, 1800, 1850, 1880, 1900, 1905, 1950, 2000]) {
       await seek(y);
       await page.waitForTimeout(700);
       await shot(page, label + "-play-" + y + ".png");
+      if (await page.evaluate(() => [...document.querySelectorAll("#playfaces .pfmore.solo")].some(e => e.style.display !== "none" && e.textContent === "+1"))) lone.push(y);
     }
+    ok(!lone.length, label + ": never a +1 with no face — one person alone has a face" + (lone.length ? " (not in " + lone.join(", ") + ")" : ""));
     ok(+(await page.textContent("#pbyear")) === 2000, label + ": Play moves to any year from its slider");
     await seek(1838);
     await page.evaluate(() => { document.getElementById("pbspeed").click(); document.getElementById("pbplay").click(); });   /* 5 years a second */

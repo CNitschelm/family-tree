@@ -96,9 +96,10 @@ camera follows the pins only, with a look-ahead, eased and speed-capped; time ru
 fast-forward); deaths are a soft rose ring and a fade, an unknown date of death only a fade. Its history notes are
 `history.json` (private: each note with its page and supporting words) → `node tools/history.js build` →
 `media/history.bin` (commit it). The demo build gets no notes. People on dead lines with no portrait are counted in a
-crowd's "+N", not drawn ("the map gets way too busy", R-0576). At Cory's own first record the year stands still for a
-coronation he asked for (trumpets, a synthesized fanfare, a crown, confetti, R-0577); `PLAY_HERO` holds his card id
-and the demo build blanks it; a joke closes the playback. index.html: the PLAY block in the map section;
+crowd's "+N", not drawn ("the map gets way too busy", R-0576), except one alone at a place, who keeps a face (R-0578).
+At Cory's own first record the year stands still for a coronation he asked for (trumpets, a synthesized fanfare, a
+crown, confetti, one royal caption: R-0577, R-0579); `PLAY_HERO` holds his card id and the demo build blanks it; a
+joke closes the playback. index.html: the PLAY block in the map section;
 tests/run.js "Play"; tests/browser.js "play" and, with `--real`, pictures of it on the real pins.
 
 **Family papers: save every file (Cory, 16 Oct 2026).** When a session refers to anything a relative sent (an email
