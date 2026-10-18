@@ -16,7 +16,8 @@
  *       (the person, then each union's children): {k: the object's keys in order, f: the fields kept
  *       out, u: the same for each union}. ENC gains x and xn (that JSON's byte length). The page
  *       starts downloading it at once and merges it in when it lands.
- *   The demo is one file: v2 with every picture inline (split:false), no extras.
+ *   The public demo (tools/build-demo.js) is sealed the same way since 18 Oct 2026, its files beside its page;
+ *   until then it was one file, v2 with every picture inline (split:false), which no build uses now.
  *
  * The FULL data — what data.json holds, what every ledger hash is taken over — is identical in
  * every format: openEnc() puts it back exactly, key order included, and sealData() proves that
@@ -219,7 +220,7 @@ function openEnc(enc, pw, readMedia, opts = {}) {
 }
 
 /* data -> { line, enc, media: Map(id -> file bytes) }. split:false keeps everything in the page
-   (the single-file demo); the JSON is compressed either way. Proves the round trip before returning. */
+   (v2, as the demo was until 18 Oct 2026); the JSON is compressed either way. Proves the round trip before returning. */
 function sealData(data, pw, { salt, iter, split = true, iv } = {}) {
   if (!salt || !iter) throw new Error("sealData needs the salt (base64) and the iteration count");
   const key = keyFor(pw, salt, iter);

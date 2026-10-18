@@ -158,7 +158,55 @@ section("Build template");
     ok(threw2, "a public-password build without its lock-screen words stops the demo build");
     let threw3 = false; try { const c4 = JSON.parse(JSON.stringify(cfg)); c4.site.research = true; BD.build(html, c4, tmp); } catch (_) { threw3 = true; }
     ok(threw3, "a demo with the Research view on but no research file of its own stops the demo build");
-    ok(/const MAPFILE = "data:application\/json;base64,/.test(r.html), "the demo carries its map layers inline (it is one file)");
+    /* the demo is a folder like the family site (18 Oct 2026): before, it was one 2.4 MB file a phone had to fetch whole
+       before anything worked ("It took at least four seconds to work"). The page holds the cards; the rest is beside it. */
+    const MF = require(path.join(ROOT, "tools", "mapfile.js"));
+    const mapName = (r.html.match(/const MAPFILE = "([^"]*)";/) || [])[1] || "";
+    ok(/^map\/[0-9a-f]{16}\.json$/.test(mapName) && r.files.has(mapName) && MF.hashName(r.files.get(mapName)) === mapName &&
+       MF.validate(JSON.parse(r.files.get(mapName).toString("utf8"))).lbl.split("\t").length === 2,
+      "the demo's map layers are a file beside the page (map/<hash>.json, its own place names), fetched on the first Map open");
+    const fx = { id: "c001", name: "Alpha Test", years: "1800–1870", g: "m", anchor: "trunk", note: "A made-up card.", note_fr: "Une fiche inventée.",
+      img: "data:image/jpeg;base64," + Buffer.from("a small made-up portrait").toString("base64"),
+      imgL: "data:image/jpeg;base64," + Buffer.from("a large made-up portrait, kept out of the page").toString("base64"),
+      profile: { headline: "Test", headline_fr: "Test", bio: ["A made-up bio, kept out of the page."], bio_fr: ["Une bio inventée."],
+        docs: [{ img: "data:image/jpeg;base64," + Buffer.from("a made-up record").toString("base64"), cap: "A record", cap_fr: "Un acte", tr: "Text", tr_fr: "Texte" }] },
+      unions: [{ s: "", c: [{ id: "c002", name: "Beta Test", years: "b. 1990", g: "f", anchor: tBr[1].key, branch: tBr[1].id }] }] };
+    fs.writeFileSync(path.join(tmp, "d.json"), JSON.stringify(fx));
+    fs.writeFileSync(path.join(tmp, "k.json"), JSON.stringify({ c002: 90 }));
+    const cfgE = Object.assign(JSON.parse(JSON.stringify(cfg)), { data: "d.json", links: "k.json", password: "x", iter: 1000 });
+    const b2 = BD.build(html, cfgE, tmp);
+    const e2 = await BD.encrypt(b2.html, cfgE, tmp, { files: b2.files });
+    const P3 = require(path.join(ROOT, "tools", "payload.js"));
+    const enc2 = P3.readEnc(e2.html);
+    let back = null; try { back = P3.openEnc(enc2, "x", id => e2.files.get("media/" + id + ".bin")); } catch (_) {}
+    ok(enc2.v === 3 && !!enc2.x && e2.files.has("media/" + enc2.x + ".bin") && [...e2.files.keys()].filter(f => /^media\/[0-9a-f]{24}\.bin$/.test(f)).length === 3 &&
+       JSON.stringify(back) === JSON.stringify(fx) && (() => { const c = P3.openEnc(enc2, "x", null, { core: true }); return P3.REF_RE.test(c.imgL) && !c.profile.docs && !c.note; })(),
+      "the demo's payload is sealed as the family's (v3): cards in the page; bios, notes and every bio picture in media/ beside it; it reads back whole");
+    ok(!/const (?:MAPFILE|PUBFILE|HISTFILE) = "data:/.test(e2.html) && !/const RESFILES = [^\n]*"data:/.test(e2.html) && /const PUBFILE = "media\/links\.bin";/.test(e2.html) && e2.files.has("media/links.bin"),
+      "the demo fetches no data: address (a server's connect-src 'self' refuses one); its line figures are media/links.bin beside it");
+    let vOk = true; try { BD.verify(e2.html, b2.defaults, cfgE, e2.files); } catch (e) { vOk = e.message; }
+    ok(vOk === true, "the folder build passes the builder's own checks" + (vOk === true ? "" : " — " + vOk));
+    const refuses = (what, h, f) => { try { BD.verify(h, b2.defaults, cfgE, f); return false; } catch (_) { return true; } };
+    const noX = new Map(e2.files); noX.delete("media/" + enc2.x + ".bin");
+    const outside = new Map(e2.files); outside.set("../x.bin", Buffer.from("x"));
+    ok(refuses("data", e2.html.replace(/const MAPFILE = "[^"]*";/, 'const MAPFILE = "data:application/json;base64,e30=";'), e2.files) &&
+       refuses("missing", e2.html, noX) && refuses("outside", e2.html, outside) &&
+       refuses("font", e2.html.replace("</title>", '</title><link rel="stylesheet" href="https://fonts.example.org/css">'), e2.files) &&
+       refuses("quoted", e2.html.replace("</title>", "</title><link rel='stylesheet' href='//fonts.example.org/css'>"), e2.files) &&
+       refuses("import", e2.html.replace("</title>", '</title><style>@import "https://fonts.example.org/css";</style>'), e2.files) &&
+       refuses("img", e2.html.replace("</title>", '</title><img src=https://pictures.example.org/a.jpg alt="">'), e2.files),
+      "the builder refuses a page that fetches a data: address, names a file it does not write, writes outside media/ and map/, or loads from another site (a stylesheet in either quotes, an @import, a picture)");
+    let urlPic = false;
+    try { fs.writeFileSync(path.join(tmp, "u.json"), JSON.stringify(Object.assign({}, fx, { img: "https://pictures.example.org/a.jpg" }))); await BD.encrypt(b2.html, Object.assign({}, cfgE, { data: "u.json" }), tmp, { files: b2.files }); } catch (_) { urlPic = true; }
+    ok(urlPic, "the builder refuses a demo whose data gives a picture as an address instead of the picture itself");
+    const outDir = path.join(tmp, "out");
+    fs.mkdirSync(path.join(outDir, "media"), { recursive: true }); fs.mkdirSync(path.join(outDir, "map"), { recursive: true });
+    fs.writeFileSync(path.join(outDir, "media", "0123456789abcdef01234567.bin"), "old"); fs.writeFileSync(path.join(outDir, "map", "0123456789abcdef.json"), "{}");
+    fs.writeFileSync(path.join(outDir, ".htaccess"), "# the site's own");
+    const wr = BD.writeFolder(outDir, "index.html", e2.html, e2.files);
+    ok(fs.readFileSync(path.join(outDir, "index.html"), "utf8") === e2.html && [...e2.files].every(([f, b]) => fs.readFileSync(path.join(outDir, f)).equals(b)) &&
+       wr.removed.length === 2 && !fs.existsSync(path.join(outDir, "media", "0123456789abcdef01234567.bin")) && fs.existsSync(path.join(outDir, ".htaccess")),
+      "the demo folder is written whole, and files the new page no longer names leave media/ and map/ (nothing else is touched)");
     ok(r.html.includes('const HISTFILE = "";') && /const HISTFILE = "media\/history\.bin";/.test(html),
       "Play's history notes are the family's own: the demo gets none and asks for no file");
     ok(r.html.includes('const PLAY_HERO = "";') && /const PLAY_HERO = "c\d{3}";/.test(html), "the coronation is the family build's own: the demo crowns nobody");
@@ -465,6 +513,34 @@ ok(allNodes.every(n => n.p.name && typeof n.p.name === "string"), "every person 
   ok(new Set(ids).size === ids.length, "card ids are unique (" + ids.length + ")");
 }
 ok(/^\d{4}-\d{2}-\d{2}$/.test(SYNCED), "SYNCED is YYYY-MM-DD (" + SYNCED + ")");
+/* the footer says the date with the month's name, never in numbers only (Cory, 18 Oct 2026): "4 Oct 2026", and in French
+   "4 oct. 2026", the way the Research view writes its "Updated" dates (rDate); SYNCED itself stays YYYY-MM-DD */
+{
+  let rd = null;
+  try { vm.runInNewContext(grab("const MON_FR", "const MONL_FR") + grab("function rDate(", "const rChip") + "\nvar RES = null;", ctx); rd = get("rDate"); } catch (_) {}
+  const say = lang => { get("LANG = " + JSON.stringify(lang)); try { return rd(SYNCED); } finally { get('LANG = "en"'); } };
+  const [y, m, d] = (SYNCED || "").split("-").map(Number);
+  const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const MONFR = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
+  ok(!!rd && say("en") === d + " " + MON[m - 1] + " " + y && say("fr") === (d === 1 ? "1er" : d) + " " + MONFR[m - 1] + " " + y,
+    "the sync date reads with its month's name (" + (rd ? say("en") + " / " + say("fr") : "no rDate") + ")");
+  ok(/st\.textContent = ds\.textContent = T\("synced"\)\s*\+\s*" "\s*\+\s*rDate\(SYNCED\)/.test(code) && !/T\("synced"\)\s*\+\s*" "\s*\+\s*SYNCED\b/.test(code),
+    "the footer and the menu show that date, not SYNCED's digits");
+}
+/* the Play bar's speed button (WCAG 2.5.3, label in name; 18 Oct 2026): its spoken name starts with the words on it,
+   "10 yr/s", in both languages, and says "1 year", never "1 years" */
+{
+  const speeds = ((js.match(/const PLAY_SPEEDS = \[([^\]]*)\]/) || [])[1] || "").split(",").map(Number).filter(Boolean);
+  const bad = [];
+  ["en", "fr"].forEach(l => speeds.forEach(n => {
+    const L = I18N[l], shown = n === 1 ? L.play_spd1 : String(L.play_spd).replace("%n", n);
+    const name = String(n === 1 ? L.play_speed1 : L.play_speed).replace("%v", shown).replace("%n", n);
+    if (!name.startsWith(shown) || /%/.test(name) || /\b1 (years|ans)\b/.test(name) || name.length <= shown.length + 5) bad.push(l + " " + n + ": " + name);
+  }));
+  ok(speeds.length >= 3 && !bad.length, "the speed button's spoken name starts with its visible text, in English and French (" + (bad[0] || I18N.en.play_speed) + ")");
+  ok(/pbSpeed\.setAttribute\("aria-label", T\(PLAY\.speed === 1 \? "play_speed1" : "play_speed"\)\.replace\("%v", spd\)/.test(code),
+    "the bar names the button from those strings and the text it shows");
+}
 /* anchors: branch navigation ids live INSIDE the encrypted data */
 ok(["trunk", "fr", "east", "west", "schw"].every(a => allNodes.some(n => n.p.anchor === a)),
   "all 5 navigation anchors present in encrypted data");

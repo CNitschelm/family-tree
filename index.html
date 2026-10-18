@@ -385,7 +385,7 @@ html.dark{--sea:#121A1F; --land:#222A2E; --coast:#3D474C; --bord:#39434A; --stat
   border:1.5px solid var(--panel);box-sizing:border-box;
 }
 #mappins .pin .lbl{
-  position:absolute;top:calc(100% + 3px);left:50%;transform:translateX(-50%);white-space:nowrap;
+  position:absolute;top:calc(100% + 3px);left:50%;transform:translateX(-50%);white-space:nowrap;z-index:2;   /* over the count and the stop's number, as when it came last in the markup */
   font-size:10.5px;font-weight:600;color:var(--ink);background:color-mix(in srgb, var(--paper) 78%, transparent);
   padding:1px 5px;border-radius:4px;pointer-events:none;
 }
@@ -399,7 +399,7 @@ html.dark{--sea:#121A1F; --land:#222A2E; --coast:#3D474C; --bord:#39434A; --stat
   border:1px solid var(--rule);white-space:nowrap}
 #mappins .pin.hi .dot{border-color:var(--sel);box-shadow:0 0 0 5px rgba(14,124,123,.22),0 3px 10px rgba(14,124,123,.45)}
 #mappins .pin .step{
-  position:absolute;top:-9px;left:calc(50% - var(--half,15px) - 11px);min-width:23px;height:23px;padding:0 5px;
+  position:absolute;top:-9px;left:calc(50% - var(--half,15px) - 11px);min-width:23px;height:23px;padding:0 5px;z-index:1;
   border-radius:12px;background:var(--you);color:var(--onbrand);box-sizing:border-box;
   font-size:12.5px;font-weight:800;line-height:20px;text-align:center;border:2px solid var(--panel);
   box-shadow:0 1px 4px rgba(31,42,51,.35);
@@ -1360,7 +1360,7 @@ const I18N = {
   en:{search:"Search a name…", search_long:"Search the Nitschelm tree…", search_label:"Search a name", legacy:"Origins", fr:"France", east:"US East", west:"Oregon", ohio:"Ohio", doubs:"Besançon", colmar:"Colmar", paris:"Paris", schw:"Schweitzer", nl:"Netherlands",
       fit:"Fit to screen", zoom_in:"Zoom in", zoom_out:"Zoom out", start_over:"Start over", hide:"− hide", more_kids:"more", nomatch:"No match", living_tag:"Living", and:"and",
       play_btn:"Play the years", play_label:"The family over the years", play_play:"Play", play_pause:"Pause", play_again:"Play again from the start",
-      play_year:"Year", play_speed:"Speed: %n years a second. Change speed", play_spd:"%n yr/s", play_spd1:"1 yr/s",
+      play_year:"Year", play_speed:"%v (%n years a second). Change speed", play_speed1:"%v (1 year a second). Change speed", play_spd:"%n yr/s", play_spd1:"1 yr/s",
       play_follow:"Follow the family again", play_close:"Close the playback", play_people:"%n people", play_person:"1 person",
       play_lg_born:"Born", play_lg_move:"Moved", play_lg_died:"Died", play_source:"Source",
       play_help:"A green ring is a recorded birth or baptism; a plain ring, the first record of someone whose birthplace we don’t have. A face glides when the next record is somewhere else and fades at a death; one that fades with no ring has no known date of death. Between records, people stay where they were last recorded.",
@@ -1560,7 +1560,7 @@ const I18N = {
   fr:{search:"Rechercher un nom…", search_long:"Rechercher dans l'arbre Nitschelm…", search_label:"Rechercher un nom", legacy:"Origines", fr:"France", east:"USA Est", west:"Oregon", ohio:"Ohio", doubs:"Besançon", colmar:"Colmar", paris:"Paris", schw:"Schweitzer", nl:"Pays-Bas",
       fit:"Ajuster à l'écran", zoom_in:"Zoom avant", zoom_out:"Zoom arrière", start_over:"Recommencer", hide:"− masquer", more_kids:"de plus", nomatch:"Aucun résultat", living_tag:"En vie", and:"et",
       play_btn:"Faire défiler les années", play_label:"La famille au fil des années", play_play:"Lecture", play_pause:"Pause", play_again:"Rejouer depuis le début",
-      play_year:"Année", play_speed:"Vitesse : %n ans par seconde. Changer la vitesse", play_spd:"%n ans/s", play_spd1:"1 an/s",
+      play_year:"Année", play_speed:"%v (%n ans par seconde). Changer la vitesse", play_speed1:"%v (1 an par seconde). Changer la vitesse", play_spd:"%n ans/s", play_spd1:"1 an/s",
       play_follow:"Suivre à nouveau la famille", play_close:"Fermer la lecture", play_people:"%n personnes", play_person:"1 personne",
       play_lg_born:"Naissances", play_lg_move:"Déplacements", play_lg_died:"Décès", play_source:"Source",
       play_help:"Un cercle vert marque une naissance ou un baptême enregistrés ; un cercle simple, le premier acte d’une personne dont on ignore le lieu de naissance. Un visage se déplace quand l’acte suivant est ailleurs et s’efface à un décès ; celui qui s’efface sans cercle n’a pas de date de décès connue. Entre deux actes, chacun reste là où il a été enregistré en dernier.",
@@ -3745,7 +3745,7 @@ function applyLang(){
   langB.title = T("lang_switch"); langB.setAttribute("aria-label", other + " — " + T("lang_switch"));
   applyTheme();
   const st = document.getElementById("synctxt"), ds = document.getElementById("dsync");
-  st.textContent = ds.textContent = T("synced")+" "+SYNCED;
+  st.textContent = ds.textContent = T("synced")+" "+rDate(SYNCED);   /* "4 Oct 2026", "4 oct. 2026": the month by name, as Research writes dates (18 Oct 2026) */
   st.title = ds.title = T("synced_note"); /* the upstream family site occasionally serves an older copy of itself */
   const gens = new Set(allNodes.map(n=>n.gen)).size;
   let minY = 9999;
@@ -4586,13 +4586,15 @@ function makePin(o){
   d.className = "pin" + (o.sq ? " sq" : "") + (o.est ? " est" : "") + (o.step ? " jn" : "");
   const sz = o.big || 30;
   d.style.setProperty("--half", (sz/2) + "px");
+  /* the words in the order the name says them, a space apart (WCAG 2.5.3, label in name; 18 Oct 2026): the stop's
+     number, the place or person, how many. Each sits where its CSS puts it, so the order does not move them. */
   d.innerHTML =
     `<div class="dot" style="--sz:${sz}px">` +
       `<img src="${o.img || AV}" alt="" loading="lazy">` +
     `</div>` +
-    (o.count > 1 ? `<span class="cnt">${o.count}</span>` : "") +
-    (o.step ? `<span class="step">${o.step}</span>` : "") +
-    (o.label ? `<span class="lbl${o.side ? " s-" + o.side : ""}">${esc(o.label)}</span>` : "");
+    (o.step ? ` <span class="step">${o.step}</span>` : "") +
+    (o.label ? ` <span class="lbl${o.side ? " s-" + o.side : ""}">${esc(o.label)}</span>` : "") +
+    (o.count > 1 ? ` <span class="cnt">${o.count}</span>` : "");
   d._onTap = o.onTap;
   /* a keyboard reaches every marker: a button named after the person (or the place, with how many) */
   d.tabIndex = 0; d.setAttribute("role", "button");
@@ -5857,8 +5859,10 @@ function playBar(){
   if(!PLAY.drag) pbRange.value = t;
   pbRange.setAttribute("aria-valuetext", String(Math.floor(t)));
   pbFollow.hidden = PLAY.follow;
-  pbSpeed.textContent = PLAY.speed === 1 ? T("play_spd1") : T("play_spd").replace("%n", PLAY.speed);
-  pbSpeed.setAttribute("aria-label", T("play_speed").replace("%n", PLAY.speed)); pbSpeed.title = pbSpeed.getAttribute("aria-label");
+  const spd = PLAY.speed === 1 ? T("play_spd1") : T("play_spd").replace("%n", PLAY.speed);
+  pbSpeed.textContent = spd;
+  /* the spoken name starts with the words on the button (WCAG 2.5.3, label in name; 18 Oct 2026) */
+  pbSpeed.setAttribute("aria-label", T(PLAY.speed === 1 ? "play_speed1" : "play_speed").replace("%v", spd).replace("%n", PLAY.speed)); pbSpeed.title = pbSpeed.getAttribute("aria-label");
   playDrawHist();
 }
 /* the histogram: births, moves and deaths per five years (ten on a narrow screen), what is played in full colour */

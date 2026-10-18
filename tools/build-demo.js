@@ -15,19 +15,26 @@
  *               a file in with {{include:<file>}}. Every slot in the template needs a value,
  *               and every value needs a slot: a new slot fails the build until it is decided.
  *   synced, dataNote → the SYNCED date and the comment above it
- *   maplbl    → the reference place names, one "<rank><lon><lat>~<name>~<ISO2>" record per line. Since
- *               3 Oct 2026 the family page fetches its map layers from map/<hash>.json on the first Map
- *               open; the demo is one file, so it carries the same layers (with these names) inline, as a
- *               data: address in MAPFILE — still decoded only when the Map is opened.
- *   data, password, salt, iter → the payload: <data> encrypted as tools/crypt.js does (v2, compressed),
- *               except that every picture stays inline: the demo is one file
+ *   maplbl    → the reference place names, one "<rank><lon><lat>~<name>~<ISO2>" record per line. The map's
+ *               layers are the template's coastlines and borders with these names, written as map/<hash>.json
+ *               beside the page and fetched on the first Map open, as the family page fetches its own.
+ *   data, password, salt, iter → the payload: <data> sealed as tools/crypt.js seals the family's (tools/payload.js
+ *               v3): the page holds what the tree's cards show, and everything else (bios, notes, places, every
+ *               bio picture and record) is in media/<id>.bin files beside it. Without a salt in demo.json the
+ *               salt of the page already in the output folder is kept, so a rebuild of the same data writes the
+ *               same media files.
  *   research  → when site.research is true: a made-up research file for the demo's own invented people
- *               (tools/research.js's format; card ids from <data>), sealed under the demo's password and
- *               inlined in RESFILES. With site.research false the Research tab is hidden.
+ *               (tools/research.js's format; card ids from <data>), sealed under the demo's password as
+ *               media/research.bin and media/research-cards.bin. With site.research false the Research tab is hidden.
  *   (Play's history notes, HISTFILE, and its coronation, PLAY_HERO, are the family build's own: the demo gets "" for both.)
  *   links     → optional: a made-up {"<card id>": <percent 0–100>} file, the "how sure" figure the tree shows on the
- *               line down to each child (the family page reads media/links.bin, R-0481). Sealed under the demo's
- *               password and inlined in PUBFILE. Without it the demo shows no figures and asks for no file.
+ *               line down to each child (the family page reads media/links.bin, R-0481), sealed the same way as
+ *               media/links.bin. Without it the demo shows no figures and asks for no file.
+ *
+ * The output is a folder laid out like the family site (since 18 Oct 2026; before, the demo was one 2.4 MB file
+ * that a phone had to download whole before anything worked): index.html, media/ and map/. Every address the page
+ * fetches is a file in that folder, never a data: address and never another site. The build writes the files
+ * first and the page last, and takes out of media/ and map/ the files the new page no longer names.
  *
  * The demo's config and data are NOT in this repo (it is public and GitHub Pages serves every
  * file in it); they live with the site that publishes the demo. This file carries no names and
@@ -137,7 +144,8 @@ function build(template, cfg, dir, opts = {}) {
   if (!html.includes('const SYNCED = "' + cfg.synced + '";')) die("could not set SYNCED");
 
   /* 6. the map's layers: the template's coastlines and borders with the demo's reference place names
-     (one record per line in the file), inline as a data: address — the demo is one file */
+     (one record per line in the file), as a file of their own beside the page, named by its hash as
+     tools/mapfile.js names the family's, and fetched the first time the Map opens */
   const recs = file(cfg.maplbl).split(/\r?\n/).filter(Boolean);
   if (!recs.every(r => /^[0-6][A-Za-z0-9+/]+~[^~\t]+~[A-Z]{2}$/.test(r))) die("maplbl: a record is malformed");
   const mf = html.match(/const MAPFILE = "([^"]*)";/);
@@ -145,8 +153,10 @@ function build(template, cfg, dir, opts = {}) {
   let layers;
   try { layers = JSON.parse(fs.readFileSync(path.join(root, mf[1]), "utf8")); } catch (e) { die("cannot read the template's map file " + mf[1] + ": " + e.message); }
   layers.lbl = recs.join("\t");
-  require("./mapfile.js").validate(layers);
-  html = html.replace(mf[0], () => "const MAPFILE = " + js("data:application/json;base64," + require("./mapfile.js").serialise(layers).toString("base64")) + ";");
+  const MF = require("./mapfile.js");
+  const mapBuf = MF.serialise(MF.validate(layers)), mapName = MF.hashName(mapBuf);
+  const files = new Map([[mapName, mapBuf]]);
+  html = html.replace(mf[0], () => "const MAPFILE = " + js(mapName) + ";");
   /* 7. Research: the demo decides (site.research); on, it needs its own made-up research file */
   if (!/const RESFILES = \{[^\n]*\};/.test(html)) die("template has no RESFILES line");
   if (cfg.site.research && !cfg.research) die("site.research is on, so the demo needs a research file (\"research\" in demo.json) — or set site.research to false");
@@ -159,22 +169,32 @@ function build(template, cfg, dir, opts = {}) {
   if (!/const PLAY_HERO = "[^"\n]*";/.test(html)) die("template has no PLAY_HERO line");
   html = html.replace(/const PLAY_HERO = "[^"\n]*";/, () => 'const PLAY_HERO = "";');
   if (cfg.links) file(cfg.links);
-  return { html, defaults };
+  return { html, defaults, files };
 }
 
-async function encrypt(html, cfg, dir) {
+async function encrypt(html, cfg, dir, opts = {}) {
+  const P = require("./payload.js"), zlib = require("zlib");
+  const files = new Map(opts.files || []);
+  const media = name => P.MEDIA_DIR + "/" + name;
   const data = JSON.parse(fs.readFileSync(path.join(dir, cfg.data), "utf8"));
   /* the payload must fit the branches: every head anchored once, every card's branch listed */
   const all = []; (function walk(p, br) { const b = p.branch || br; all.push({ p, b }); (p.unions || []).forEach(u => (u.c || []).forEach(c => walk(c, b))); })(data, "legacy");
   if (!all.some(x => x.p.anchor === "trunk")) die("data: no card carries the anchor \"trunk\"");
   cfg.branches.filter(b => !b.trunk).forEach(b => { if (all.filter(x => x.p.anchor === b.key).length !== 1) die("data: branch \"" + b.key + "\" is not exactly one anchor"); });
   all.forEach(x => { if (!cfg.branches.some(b => b.id === x.b)) die("data: a card's branch \"" + x.b + "\" is not in branches"); });
-  const salt = cfg.salt || Buffer.from(webcrypto.getRandomValues(new Uint8Array(16))).toString("base64");
+  /* every picture travels with the demo: a portrait or record given as an address would be fetched from another site */
+  all.forEach(x => [x.p.img, x.p.imgL, ...(((x.p.profile || {}).docs) || []).map(d => d && d.img)].forEach(v => {
+    if (v !== undefined && v !== null && v !== "" && !/^data:image\/[a-z+.-]+;base64,/i.test(String(v))) die("data: " + x.p.id + " has a picture that is not a data: image (" + String(v).slice(0, 40) + ")");
+  }));
+  const salt = cfg.salt || opts.salt || Buffer.from(webcrypto.getRandomValues(new Uint8Array(16))).toString("base64");
   const iter = cfg.iter || 600000;
-  /* tools/payload.js: v2, compressed; split:false keeps every picture inline — the demo is one file */
-  const sealed = require("./payload.js").sealData(data, cfg.password, { salt, iter, split: false });
+  /* tools/payload.js v3, as the family page: the cards in the page, the rest in media/ (the file names are keyed
+     hashes of what is in them, so the same data under the same salt writes the same files) */
+  const sealed = P.sealData(data, cfg.password, { salt, iter });
+  for (const [id, f] of sealed.media) files.set(media(id + ".bin"), f);
   if (!/const ENC = \{[^\n]*\};/.test(html)) die("template has no ENC line");
   html = html.replace(/const ENC = \{[^\n]*\};/, () => sealed.line);
+  if (!/const RESFILES = \{[^\n]*\};/.test(html)) die("template has no RESFILES line");
   if (cfg.site.research) {
     /* the demo's research, checked like the family's (its people must be the demo's cards), sealed the same way */
     const RJ = require("./research.js");
@@ -182,11 +202,12 @@ async function encrypt(html, cfg, dir) {
     const v = RJ.validate(R, { cards: all.map(x => ({ id: x.p.id, name: x.p.name, years: x.p.years })), branches: cfg.branches.map(b => b.key), quiet: true });
     if (v.errors.length) die("research: " + v.errors.slice(0, 5).join("; "));
     const f = RJ.sealed(R, cfg.password, sealed.enc);
-    const uri = b => "data:application/octet-stream;base64," + b.toString("base64");
-    html = html.replace(/const RESFILES = \{[^\n]*\};/, () => "const RESFILES = " + JSON.stringify({ data: uri(f.data), cards: uri(f.cards) }) + ";");
+    const names = { data: media("research.bin"), cards: media("research-cards.bin") };
+    files.set(names.data, f.data); files.set(names.cards, f.cards);
+    html = html.replace(/const RESFILES = \{[^\n]*\};/, () => "const RESFILES = " + JSON.stringify(names) + ";");
   }
   /* the line figures: the demo's own made-up file, sealed as tools/linkconf.js seals media/links.bin; or none
-     at all (an empty PUBFILE asks for nothing, so the one-file demo makes no request that could fail) */
+     at all (an empty PUBFILE asks for nothing, so the demo makes no request that could only fail) */
   let pub = "";
   if (cfg.links) {
     const L = JSON.parse(fs.readFileSync(path.join(dir, cfg.links), "utf8"));
@@ -196,22 +217,50 @@ async function encrypt(html, cfg, dir) {
       if (!Number.isInteger(pct) || pct < 0 || pct > 100) die("links: " + id + " needs a whole percent from 0 to 100");
       l[id] = { p: pct };
     });
-    const P = require("./payload.js"), zlib = require("zlib");
     const json = Buffer.from(JSON.stringify({ v: 1, l }), "utf8");
     const key = P.keyFor(cfg.password, sealed.enc.salt, sealed.enc.iter);
-    const f = P.sealBlob(key, "k:" + json.length, zlib.deflateRawSync(json, { level: 9 }), Buffer.concat([Buffer.from("links\0"), json])).file;
-    pub = "data:application/octet-stream;base64," + f.toString("base64");
+    pub = media("links.bin");
+    files.set(pub, P.sealBlob(key, "k:" + json.length, zlib.deflateRawSync(json, { level: 9 }), Buffer.concat([Buffer.from("links\0"), json])).file);
   }
   html = html.replace(/const PUBFILE = "[^"\n]*";/, () => "const PUBFILE = " + JSON.stringify(pub) + ";");
-  return { html, iv: sealed.enc.iv, people: count(data) };
+  return { html, files, iv: sealed.enc.iv, people: count(data) };
 }
 function count(p) { let n = 1; (p.unions || []).forEach(u => (u.c || []).forEach(c => { n += count(c); })); return n; }
 
+/* the files beside the page: media/<name> and map/<name> only, no way out of the folder */
+const FILE_RE = /^(?:media|map)\/[A-Za-z0-9_-]+(?:\.[A-Za-z0-9]+)?$/;
 /* what must hold for any output — checked before anything is written */
-function verify(out, defaults, cfg) {
+function verify(out, defaults, cfg, files) {
   const m = out.match(/<script>([\s\S]*)<\/script>/);
   if (!m) die("output has no script");
   try { new Function(m[1]); } catch (e) { die("output script does not parse: " + e.message); }
+  /* everything the page asks for is in its own folder: every file it names is one this build writes (the owner file
+     is fetched only on a device holding the owner's key, which no demo visitor has), and nothing comes from another
+     site or from a data: address (a fetch() of one is refused by a connect-src 'self' policy, as the demo's server sends) */
+  files = files || new Map();
+  [...files.keys()].forEach(f => { if (!FILE_RE.test(f)) die("the build would write " + f + ", outside media/ and map/"); });
+  const one = (name, re) => { const x = m[1].match(re); if (!x) die("output has no " + name + " line"); return x[1]; };
+  const want = [["MAPFILE", one("MAPFILE", /const MAPFILE = "([^"\n]*)";/)], ["PUBFILE", one("PUBFILE", /const PUBFILE = "([^"\n]*)";/)],
+    ["HISTFILE", one("HISTFILE", /const HISTFILE = "([^"\n]*)";/)]];
+  if (cfg.site.research) Object.entries(JSON.parse(one("RESFILES", /const RESFILES = (\{[^\n]*\});/).replace(/(\w+):"/g, '"$1":"'))).forEach(([k, v]) => want.push(["RESFILES." + k, v]));
+  const enc = require("./payload.js").readEnc(out);
+  if (enc.x) want.push(["ENC.x", "media/" + enc.x + ".bin"]);
+  want.forEach(([k, v]) => { if (v && !files.has(v)) die(k + " names " + v.slice(0, 60) + ", which is not a file this build writes beside the page"); });
+  const conf = one("CONFFILE", /const CONFFILE = "([^"\n]*)";/);
+  if (!FILE_RE.test(conf)) die("CONFFILE is not a file in the page's own folder");
+  /* and nothing the markup or its styles load comes from elsewhere: a stylesheet, script, font or picture from another
+     site (a scheme or // in a src, srcset, a <link>'s href, url() or @import), or a script file at all; links a reader
+     follows (<a href>) are not loads */
+  const markup = out.slice(0, out.indexOf("<script>")) + out.slice(out.lastIndexOf("</script>"));
+  const away = /^\s*["']?\s*(?:[a-z][a-z0-9+.-]*:|\/\/)/i, dataUri = /^\s*["']?\s*data:/i;
+  const loads = [];
+  for (const t of markup.matchAll(/<(link|img|source|video|audio|iframe|embed|object|input|track)\b[^>]*>/gi))
+    for (const a of t[0].matchAll(/\b(href|src|srcset|data|poster)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi)) loads.push(a[2]);
+  for (const u of markup.matchAll(/url\(([^)]*)\)/gi)) loads.push(u[1]);
+  for (const u of markup.matchAll(/@import\s+(?:url\()?\s*("[^"]*"|'[^']*'|[^\s;)]+)/gi)) loads.push(u[1]);
+  const bad = loads.find(v => away.test(v) && !dataUri.test(v));
+  if (bad || /<script\b[^>]*\bsrc\s*=/i.test(out))
+    die("the page loads something from another site (" + (bad || "a script file").slice(0, 60) + "): the demo carries its own");
   /* nothing of the family build may survive in the demo: not its title, not its site link */
   Object.entries(defaults).forEach(([k, d]) => {
     const t = d.replace(/<[^>]+>/g, "").trim();
@@ -235,6 +284,30 @@ function verify(out, defaults, cfg) {
     die("the family's name \"" + surname + "\" appears in the demo output — give that string a demo value in demo.json");
 }
 
+/* the files first, each read back, then the page, so a page is never there before what it names; then out of media/
+   and map/ go the files the new page no longer names (only those two folders: the rest of the folder, such as the
+   site's own .htaccess and icon, is not the build's) */
+function writeFolder(root, page, html, files) {
+  let written = 0, kept = 0;
+  for (const [rel, buf] of files) {
+    const p = path.join(root, rel);
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    let same = false; try { same = fs.readFileSync(p).equals(buf); } catch (_) {}
+    if (same) { kept++; continue; }
+    fs.writeFileSync(p, buf);
+    if (!fs.readFileSync(p).equals(buf)) die("the write of " + rel + " did not land");
+    written++;
+  }
+  fs.writeFileSync(path.join(root, page), html);
+  if (fs.readFileSync(path.join(root, page), "utf8") !== html) die("the written page does not read back identical");
+  const removed = [];
+  for (const sub of ["media", "map"]) {
+    let names = []; try { names = fs.readdirSync(path.join(root, sub)); } catch (_) { continue; }
+    names.filter(n => !files.has(sub + "/" + n) && /\.(bin|json)$/.test(n)).forEach(n => { fs.unlinkSync(path.join(root, sub, n)); removed.push(sub + "/" + n); });
+  }
+  return { written, kept, removed };
+}
+
 if (require.main === module) {
   (async () => {
     const args = process.argv.slice(2);
@@ -245,15 +318,22 @@ if (require.main === module) {
     if (!fs.existsSync(cfgPath)) die("no demo.json in " + dir);
     const cfg = JSON.parse(fs.readFileSync(cfgPath, "utf8"));
     const template = readFresh(opt("--template") || path.join(__dirname, "..", "index.html"));
-    const { html, defaults } = build(template, cfg, dir);
-    const enc = await encrypt(html, cfg, dir);
-    verify(enc.html, defaults, cfg);
     const out = opt("--out") || path.join(dir, cfg.out || "index.html");
-    fs.writeFileSync(out, enc.html);
-    const back = fs.readFileSync(out, "utf8");
-    if (back !== enc.html) die("the written file does not read back identical");
-    console.log("demo built: " + out + " — " + Buffer.byteLength(enc.html) + " bytes, " + enc.people + " people, iv " + enc.iv);
+    /* the demo goes into the site that publishes it, never into this repo: here the clean-up would take the family's own media/ */
+    if (path.resolve(path.dirname(out)) === path.resolve(__dirname, "..")) die("the output folder is this repo; build the demo into its own folder");
+    /* --out names the page, not its folder: given a folder, the files would land beside it, in its parent */
+    if (fs.existsSync(out) && fs.statSync(out).isDirectory()) die("--out names the page's file (<folder>/index.html), and " + out + " is a folder");
+    /* the salt of the page already there, so the same data writes the same media files (demo.json may fix one) */
+    let salt = null;
+    try { salt = require("./payload.js").readEnc(fs.readFileSync(out, "utf8")).salt || null; } catch (_) { /* no page there yet */ }
+    const { html, defaults, files } = build(template, cfg, dir);
+    const enc = await encrypt(html, cfg, dir, { files, salt });
+    verify(enc.html, defaults, cfg, enc.files);
+    const w = writeFolder(path.dirname(out), path.basename(out), enc.html, enc.files);
+    console.log("demo built: " + out + " — " + Buffer.byteLength(enc.html) + " bytes, " + enc.people + " people, iv " + enc.iv +
+      "; beside it " + enc.files.size + " files, " + [...enc.files.values()].reduce((a, b) => a + b.length, 0) + " bytes (" +
+      w.written + " written, " + w.kept + " unchanged" + (w.removed.length ? ", " + w.removed.length + " no longer used taken out" : "") + ")");
   })().catch(e => { console.error("build-demo: " + (e instanceof BuildError ? e.message : (e.stack || e.message))); process.exit(1); });
 }
 
-module.exports = { build, encrypt, verify, SLOT };
+module.exports = { build, encrypt, verify, writeFolder, SLOT, FILE_RE };

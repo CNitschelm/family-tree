@@ -206,6 +206,9 @@ if (!REAL) {
   fs.writeFileSync(path.join(OUT, "media", "history.bin"), P.sealBlob(P.keyFor(PW, SALT, ITER), "h:" + json.length, zlib.deflateRawSync(json), Buffer.concat([Buffer.from("history\0"), json])).file);
 }
 
+/* the public demo's server (corynitschelm.com) sends this policy: fetch() may reach only the page's own site, so a
+   demo that fetched data: addresses would show a blank map and no research there (it did until 18 Oct 2026) */
+const DEMO_CSP = "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self'; form-action 'self'; frame-ancestors 'self'; base-uri 'self'; object-src 'none'";
 /* ---------- a server like GitHub Pages: gzip, ETags and 304s, and a log of what was asked for ---------- */
 const types = { ".html": "text/html; charset=utf-8", ".json": "application/json", ".bin": "application/octet-stream" };
 const reqLog = [];
@@ -216,12 +219,14 @@ const server = http.createServer((req, res) => {
   const u = decodeURIComponent(req.url.split("?")[0]);
   if (FAIL.has(u)) { reqLog.push({ u, s: 404 }); res.writeHead(404, { "Content-Type": "text/plain", "Cache-Control": "max-age=600" }); return res.end("missing"); }
   const send = () => {
-    const f = path.join(OUT, u === "/" ? "index.html" : u.replace(/^\//, ""));
+    const f = path.join(OUT, u.replace(/^\//, "").replace(/(^|\/)$/, "$1index.html"));   /* a folder: its index.html */
     if (!f.startsWith(OUT) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { reqLog.push({ u, s: 404 }); res.writeHead(404); return res.end(); }
     const body = fs.readFileSync(f), etag = '"' + crypto.createHash("sha1").update(body).digest("hex").slice(0, 16) + '"';
     if (req.headers["if-none-match"] === etag) { reqLog.push({ u, s: 304 }); res.writeHead(304, { ETag: etag, "Cache-Control": "max-age=600" }); return res.end(); }
     reqLog.push({ u, s: 200 });
-    res.writeHead(200, { "Content-Type": types[path.extname(f)] || "application/octet-stream", "Content-Encoding": "gzip", ETag: etag, "Cache-Control": "max-age=600" });
+    const head = { "Content-Type": types[path.extname(f)] || "application/octet-stream", "Content-Encoding": "gzip", ETag: etag, "Cache-Control": "max-age=600" };
+    if (u.startsWith("/demo/")) head["Content-Security-Policy"] = DEMO_CSP;   /* the demo's folder: the policy its server sends */
+    res.writeHead(200, head);
     res.end(zlib.gzipSync(body));
   };
   if (DELAY.has(u)) setTimeout(send, DELAY.get(u)); else send();
@@ -239,6 +244,45 @@ const MAPURL = "/" + mapName;
 const where = page => page.evaluate(() => ({ res: document.body.classList.contains("resmode"), map: document.body.classList.contains("mapmode"), hash: location.hash }));
 /* relative luminance of a computed CSS colour */
 const lum = c => { const m = (c.match(/[\d.]+/g) || []).slice(0, 3).map(Number).map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return m.length === 3 ? 0.2126 * m[0] + 0.7152 * m[1] + 0.0722 * m[2] : NaN; };
+
+/* WCAG 2.5.3, label in name (18 Oct 2026): a control's spoken name holds the words it shows. This is axe 4.14's
+   label-content-name-mismatch, ported (axe is not a dependency here): it looks at widgets whose role takes its name from
+   their content (button, link, tab, menuitem, option, gridcell, treeitem) and that carry aria-label or aria-labelledby.
+   The text shown is every text node visible on screen, joined in document order with nothing between them (a <br> is a
+   space), so "1" next to "Alphaville" reads "1Alphaville". Both are lowercased, NFKD-normalised, stripped of anything in
+   parentheses, every character that is not a letter or a number becomes a space, and they are split into words: the words
+   shown must appear in the name as one unbroken run. Text that is a single non-digit character, "aa", "abc", or only
+   symbols is left to a person (axe: needs review), as are switches, checkboxes and radios (their name may be a value). */
+const nameMismatches = page => page.evaluate(() => {
+  const SEG = typeof Intl.Segmenter === "function" ? new Intl.Segmenter(undefined, { granularity: "word" }) : null;
+  const words = s => {
+    s = String(s || "").toLowerCase().normalize("NFKD");
+    let was; do { was = s; s = s.replace(/\([^()]*\)/g, ""); } while (s !== was);
+    s = s.replace(/[^\p{L}\p{N}]/gu, " ").replace(/\s+/g, " ").trim();
+    return SEG ? [...SEG.segment(s)].map(x => x.segment.trim()).filter(Boolean) : s.split(/\s+/).filter(Boolean);
+  };
+  const sanitize = s => String(s || "").replace(/ /g, " ").replace(/\s{2,}/g, " ").trim();
+  const readable = s => { s = sanitize(s); return !!s && !(s.length === 1 && /\D/.test(s)) && !["aa", "abc"].includes(s.toLowerCase()) &&
+    !!s.replace(/[\p{P}\p{S}\p{Extended_Pictographic}]/gu, "").trim(); };
+  const onScreen = el => el.checkVisibility ? el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }) : !!el.getClientRects().length;
+  const shown = el => { let t = ""; (function walk(n) { n.childNodes.forEach(c => {
+    if (c.nodeType === 3) { if (onScreen(c.parentElement)) t += c.nodeValue; }
+    else if (c.nodeType === 1) { if (c.tagName === "BR") t += " "; else walk(c); } }); })(el); return sanitize(t); };
+  const ROLES = new Set(["button", "link", "tab", "menuitem", "option", "gridcell", "treeitem"]);
+  const roleOf = el => el.getAttribute("role") || (el.tagName === "BUTTON" ? "button" : el.tagName === "A" && el.hasAttribute("href") ? "link" : "");
+  const out = [];
+  document.querySelectorAll("[aria-label], [aria-labelledby]").forEach(el => {
+    if (!ROLES.has(roleOf(el)) || !onScreen(el)) return;
+    const by = sanitize((el.getAttribute("aria-labelledby") || "").split(/\s+/).filter(Boolean).map(id => (document.getElementById(id) || {}).textContent || "").join(" "));
+    const name = (by || sanitize(el.getAttribute("aria-label"))).toLowerCase(), text = shown(el).toLowerCase();
+    if (!text || !name || !readable(name) || !readable(text)) return;
+    const w = words(text), n = words(name);
+    if (!w.length) return;
+    for (let i = 0; i + w.length <= n.length; i++) if (w.every((x, j) => x === n[i + j])) return;
+    out.push(JSON.stringify(shown(el)).slice(0, 40) + " is not in " + JSON.stringify(by || el.getAttribute("aria-label")).slice(0, 70));
+  });
+  return out;
+});
 
 async function unlock(page, opts) {
   await page.waitForSelector("#lockpw", { state: "visible" });
@@ -491,6 +535,60 @@ async function run() {
     await page.click("#lang");
     await page.waitForTimeout(400);
     ok((await page.textContent("#playchip span")) === "Faire défiler les années", "Play is in French too");
+    await ctx.close();
+  }
+  /* ---------------- every control's name holds its words, and the footer's date has its month's name (18 Oct 2026) ----------------
+     The Play bar's speed button showed "10 yr/s" but was named "Speed: 10 years a second"; the map's markers showed
+     "26" and "Alphaville +1" (or "1" and "Alphaville") in an order their names did not follow. The footer said "Data synced
+     2026-10-04": Cory wants the month by name ("4 Oct 2026"; "4 oct. 2026" in French). */
+  for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 800 } }], ["phone", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }]]) {
+    console.log("\n== " + label + ", label in name and the footer's date");
+    const ctx = await browser.newContext(opts);
+    const page = await ctx.newPage();
+    watch(page, "names " + label);
+    await page.goto(BASE);
+    await unlock(page);
+    await page.waitForTimeout(600);
+    const phone = label === "phone", view = v => phone ? page.tap('#dock [data-view="' + v + '"]') : page.click(v === "map" ? "#vt-map" : v === "research" ? "#vt-res" : "#vt-tree");
+    for (const lang of ["en", "fr"]) {
+      if (lang === "fr") { await page.evaluate(() => document.getElementById("lang").click()); await page.waitForTimeout(500); }
+      const want = await page.evaluate(lang => { const [y, m, d] = SYNCED.split("-").map(Number);
+        const mon = lang === "fr" ? ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."] : ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        return (lang === "fr" ? "Données synchronisées " : "Data synced ") + (lang === "fr" && d === 1 ? "1er" : d) + " " + mon[m - 1] + " " + y; }, lang);
+      const foot = await page.evaluate(() => [document.getElementById("synctxt").textContent, document.getElementById("dsync").textContent]);
+      ok(foot[0] === want && foot[1] === want, label + " " + lang + ": the footer and the menu say " + JSON.stringify(foot[0]) + " (" + want + ")");
+      const bad = [];
+      const sweep = async where => { (await nameMismatches(page)).forEach(m => bad.push(where + ": " + m)); };
+      await view("tree"); await page.waitForTimeout(500);
+      await page.evaluate(() => { const p = [...document.querySelectorAll(".node [data-pill]")].find(x => x.getBoundingClientRect().width > 0); if (p) p.click(); });
+      await page.waitForTimeout(400); await sweep("tree");
+      await page.evaluate(() => [...document.querySelectorAll(".node [data-bio]")].find(x => x.getBoundingClientRect().width > 0).click());
+      await page.waitForSelector("#pbody .pmapbtn"); await sweep("bio");
+      await page.evaluate(() => document.querySelector("#pbody .pmapbtn").click());
+      await page.waitForFunction(() => document.querySelectorAll("#mappins .pin.jn").length > 0, null, { timeout: 10000 });
+      await page.waitForTimeout(400); await sweep("a journey on the map");
+      await page.keyboard.press("Escape"); await page.waitForTimeout(300);
+      await view("tree"); await page.waitForTimeout(300); await view("map"); await page.waitForTimeout(1200);
+      if (await page.isVisible("#playchip")) {
+        await sweep("the map");
+        await page.click("#playchip"); await page.waitForTimeout(600);
+        for (let i = 0; i < 4; i++) {
+          const spd = await page.evaluate(() => { const b = document.getElementById("pbspeed"); return [b.textContent, b.getAttribute("aria-label"), b.title]; });
+          if (!spd[1].startsWith(spd[0]) || spd[2] !== spd[1]) bad.push("Play: the speed button shows " + JSON.stringify(spd[0]) + " but is named " + JSON.stringify(spd[1]));
+          await sweep("Play at " + spd[0]);
+          await page.click("#pbspeed"); await page.waitForTimeout(150);
+        }
+        await page.click("#pbplay"); await page.waitForTimeout(200); await sweep("Play, paused");
+        await page.click("#pbclose"); await page.waitForTimeout(400);
+      } else bad.push("the map offered no Play button");
+      await view("research"); await page.evaluate(() => { location.hash = "#research"; });   /* the topic list, whatever screen was left open */
+      await page.waitForSelector("#resview .rinv", { timeout: 10000 }); await sweep("Research");
+      await page.evaluate(() => document.querySelector("#resview .rinv").click()); await page.waitForTimeout(500);
+      await page.evaluate(() => { const b = document.querySelector('#resview [data-ra="src"]'); if (b) b.click(); }); await page.waitForTimeout(400);
+      await sweep("Research, a source");
+      await view("tree"); await page.waitForTimeout(400);
+      ok(!bad.length, label + " " + lang + ": every control's spoken name holds the words it shows (tree, bio, map, a journey, Play at each speed, Research)" + (bad.length ? " — " + bad.slice(0, 4).join("; ") : ""));
+    }
     await ctx.close();
   }
   /* ---------------- desktop ---------------- */
@@ -1045,6 +1143,72 @@ async function run() {
     ok(st.legend, "Filters explains the dashed line");
     await shot(page, "v1-daughter-line.png");
     await ctx.close();
+  }
+  /* ---------------- the public demo: a folder like the family site (18 Oct 2026) ----------------
+     Cory: "It took at least four seconds to work." The demo was one 2.4 MB file a phone fetched whole before anything
+     showed. tools/build-demo.js now writes it as the family site is laid out: index.html with the cards, and beside it
+     media/ (bios, pictures, the Research view's files, the line figures) and map/ (the map's layers). Built here from the
+     invented family and research, served under the demo server's policy (connect-src 'self'), opened on a phone. */
+  {
+    console.log("\n== the demo, built as a folder");
+    const BD = require(path.join(ROOT, "tools", "build-demo.js")), vm = require("vm");
+    const DIR = path.join(OUT, "demo-src"), DEMO = path.join(OUT, "demo");
+    fs.mkdirSync(DIR, { recursive: true }); fs.mkdirSync(DEMO, { recursive: true });
+    const tjs = page0.match(/<script>([\s\S]*)<\/script>/)[1];
+    const lit = (re, name) => vm.runInNewContext(tjs.match(re)[0].replace(/^const /, "var ") + "\n" + name);
+    const SITE = lit(/const SITE = \{[\s\S]*?\n\};/, "SITE");
+    fs.writeFileSync(path.join(DIR, "data.json"), JSON.stringify(root));
+    fs.writeFileSync(path.join(DIR, "research.json"), JSON.stringify(Object.assign({}, R, { decide: undefined })));
+    fs.writeFileSync(path.join(DIR, "links.json"), JSON.stringify({ [idOf["Quintus Testmann"]]: 50, [idOf["Sextus Testmann"]]: 95 }));
+    fs.writeFileSync(path.join(DIR, "lbl.txt"), "0AA~Alphaville~FR\n1CC~Gamma City~US\n");
+    const slots = {}; [...page0.matchAll(/<!--build:([a-z0-9_-]+)-->/g)].forEach(m => { slots[m[1]] = m[1] === "head" ? "<title>Test Demo</title>" : m[1] === "title" ? "Test Demo" : ""; });
+    const cfg = { site: Object.assign({}, SITE, { store: "ftbdemo-", autoPw: PW, research: true }), branches: lit(/const BRANCHES = \[[\s\S]*?\n\];/, "BRANCHES"),
+      regions: lit(/const REGIONS = \{[\s\S]*?\n\};/, "REGIONS"), slots, synced: "2026-09-27", dataNote: "test demo build", maplbl: "lbl.txt",
+      data: "data.json", research: "research.json", links: "links.json", password: PW, salt: SALT, iter: ITER,
+      i18n: { en: { intro_title: "Test demo", search_long: "Search the test tree", pwopening: "Opening the demo", pwdemo: "Password: test" },
+              fr: { intro_title: "Démo de test", search_long: "Rechercher", pwopening: "Ouverture de la démo", pwdemo: "Mot de passe : test" } } };
+    const b = BD.build(page0, cfg, DIR);
+    const e = await BD.encrypt(b.html, cfg, DIR, { files: b.files });
+    BD.verify(e.html, b.defaults, cfg, e.files);
+    BD.writeFolder(DEMO, "index.html", e.html, e.files);
+    const wrote = new Set(["/demo/", "/demo/index.html", ...[...e.files.keys()].map(f => "/demo/" + f)]);
+    const dEnc = P.readEnc(e.html), cardsOnly = P.openEnc(dEnc, PW, null, { core: true });
+    ok(dEnc.v === 3 && e.files.has("media/" + dEnc.x + ".bin") && !cardsOnly.profile.bio && !JSON.stringify(cardsOnly).includes("oldest test person"),
+      "the demo's page carries the cards only: its bios are in media/" + dEnc.x + ".bin beside it");
+    for (const [label, opts] of [["phone", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }], ["desktop", { viewport: { width: 1280, height: 800 } }]]) {
+      const ctx = await browser.newContext(opts);
+      await ctx.addInitScript(() => { window.__csp = []; document.addEventListener("securitypolicyviolation", ev => window.__csp.push(ev.violatedDirective + " " + ev.blockedURI)); });
+      const page = await ctx.newPage();
+      watch(page, "demo " + label);
+      const fetched = [];
+      page.on("request", r => { if (!/^(data|blob):/.test(r.url())) fetched.push(r.url().replace(BASE.replace(/\/$/, ""), "").split("?")[0]); });
+      await reset();
+      await page.goto(BASE + "demo/");
+      await page.waitForFunction(() => document.getElementById("intro").style.display === "flex" && !!document.querySelector("#istart .istc"), null, { timeout: 15000 });
+      ok(true, label + ": the demo opens itself and shows its welcome, with the start buttons (the bios came from media/)");
+      const foot = await page.evaluate(() => document.getElementById("synctxt").textContent);
+      ok(foot === "Data synced 27 Sep 2026", label + ": the demo's footer gives its date with the month's name (" + foot + ")");
+      await page.click("#introgo");
+      await page.waitForTimeout(300);
+      const t = await page.evaluate(() => { const b = [...document.querySelectorAll(".node")].find(x => (x.querySelector(".nm") || {}).textContent === "Probus Testmann");
+        const t0 = performance.now(); b.querySelector("[data-bio]").click();
+        return { ms: performance.now() - t0, shown: document.getElementById("profile").style.display === "flex", text: !document.querySelector("#pbody .pload") && /oldest test person/.test(document.getElementById("pbody").textContent) }; });
+      ok(t.shown && t.text, label + ": a card's Bio shows its text at once, in the same task as the tap (" + Math.round(t.ms) + " ms)");
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(300);
+      if (label === "phone") await page.tap('#dock [data-view="map"]'); else await page.click("#vt-map");
+      await page.waitForFunction(() => document.querySelectorAll("#mappins .pin").length > 0, null, { timeout: 15000 });
+      ok(true, label + ": the map draws its pins from the folder's map file");
+      if (label === "phone") await page.tap('#dock [data-view="research"]'); else await page.click("#vt-res");
+      await page.waitForFunction(() => /The mill years/.test(document.getElementById("resview").textContent), null, { timeout: 15000 });
+      ok(true, label + ": Research shows the demo's own topics, from media/research.bin");
+      const csp = await page.evaluate(() => window.__csp);
+      ok(!csp.length, label + ": nothing the page does breaks the server's policy (connect-src 'self')" + (csp.length ? " — " + csp.slice(0, 3).join("; ") : ""));
+      const stray = fetched.filter(u => !wrote.has(u));
+      ok(fetched.length > 3 && !stray.length, label + ": every request is a file of the demo's own folder (" + fetched.length + " requests)" + (stray.length ? " — not: " + stray.slice(0, 4).join(", ") : ""));
+      ok(fetched.filter(u => u === "/" + mapName.replace(/^\//, "") || /history\.bin|owner\.bin/.test(u)).length === 0, label + ": no family file is asked for (the family map, history notes, owner view)");
+      await ctx.close();
+    }
   }
   /* ---------------- phone ---------------- */
   {
