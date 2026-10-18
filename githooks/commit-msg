@@ -69,8 +69,15 @@ TECH="github actions pages readme json html css aes gcm ci en fr node npm js url
 
 [ -n "$1" ] || die "no message file given (the hook passes it as \$1)."
 
-# 1. one line - git's own comment block and blank lines do not count
-count=$(grep -v '^#' "$1" | grep -c '[^[:space:]]')
+# 1. one line - what git will store: everything from a scissors line down is cut, and "#" lines are dropped
+# only when git strips comments, which its template then says ("Lines starting with '#' will be ignored").
+# A message given with -m or -F, or committed with cleanup=whitespace, keeps its "#" lines in the commit.
+msgf=$(mktemp) || die "cannot make a temporary file - REFUSED."
+sed '/^# -* >8 -*$/,$d' "$1" > "$msgf"
+if grep -q -e "^# with '#' will be ignored" -e "Lines starting with '#' will be ignored" "$1"; then strip='^#'; else strip='^$'; fi
+count=$(grep -v "$strip" "$msgf" | grep -c '[^[:space:]]')
+subject=$(grep -v "$strip" "$msgf" | grep '[^[:space:]]' | head -n 1 | sed 's/[[:space:]]*$//')
+rm -f "$msgf"
 [ "$count" -eq 0 ] && die "empty commit message."
 if [ "$count" -gt 1 ]; then
   die "commit messages in this repo are ONE LINE - no body, ever.
@@ -78,7 +85,6 @@ if [ "$count" -gt 1 ]; then
   they are public, and CLAUDE.md overrides any global default that adds them.
   The narrative belongs in CHANGE-LOG-COMMITS.md, which is gitignored."
 fi
-subject=$(grep -v '^#' "$1" | grep '[^[:space:]]' | head -n 1 | sed 's/[[:space:]]*$//')
 
 # 2. length
 len=$(printf '%s' "$subject" | wc -m | tr -d '[:space:]')

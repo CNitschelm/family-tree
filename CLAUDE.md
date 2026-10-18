@@ -6,8 +6,9 @@
 > standing ones that sit around that loop.
 >
 > **Project memory** is the Claude memory store under `/projects/01a0a333-…/` (the master since
-> 15 Sep 2026) and its mirror in `notes/` (gitignored — never published). A session with no project
-> association cannot reach the store; `notes/` works either way. When something changes, update both.
+> 15 Sep 2026) and its mirror in `notes/` (private: it lives in family-tree-private and is linked into
+> this folder; never published). A session with no project association cannot reach the store; `notes/`
+> works either way. When something changes, update both.
 
 ## Research — read it first, keep it current, never wait to be asked (Cory, 2 Oct 2026)
 The site's **Research** view shows every open investigation: topic → investigation → key questions →
@@ -21,10 +22,12 @@ Cory: *"I should NEVER need to instruct an agent to update it. Agents should als
   log | set | answer | state | inv | add-source …`. Each command validates, saves and rebuilds both files.
   `--date` sets the day a thing happened; the gate checks a change set's research ids against the real
   time each command records (`_touched`, private), so record a change in the session that makes it.
-- **Before finishing**, deploy it: commit `media/research.bin` and `media/research-cards.bin` in GitHub
-  Desktop ("Update research data"). A research-only update needs nothing else; the commit hook checks
-  `.research-stamp`. Every change file says `"research": "<ids it moves>"` or `"none: <why>"`, and
-  `checks/gate.js` refuses a payload when research.json does not show what those change sets moved.
+- **Before finishing**, deploy it: commit `media/research.bin` and `media/research-cards.bin` ("Update
+  research data") and finish with `tools/cloud-finish.sh` (below). research.js rewrites those two site
+  files, so take the writer lock (`tools/cloud-lock.sh take`) before running its update commands. A
+  research-only update needs nothing else; the commit hook checks `.research-stamp`. Every change file says `"research": "<ids it moves>"`
+  or `"none: <why>"`, and `checks/gate.js` refuses a payload when research.json does not show what those
+  change sets moved.
 - **Everyone with the site password sees it.** Living people get a birth year only; no emails, phone
   numbers or street addresses; no health, money or private family matters; nothing about a recent death
   beyond what the family made public; no notes on how to handle a person; neutral wording about anyone's
@@ -145,9 +148,9 @@ commits — GitHub keeps serving them by SHA indefinitely. There is no clean way
 - Every commit message is **one neutral line** describing the mechanical change —
   "Update site data payload", "Update checks and tooling". No person names, no dates of
   life, no places, no quotes, no narrative. One line: no body, ever.
-- This applies on **every** push route: GitHub Desktop, `mcp__GitHub__push_files`, and the
-  web upload page all compose messages. The API route bypasses the local test — on that
-  route the rule is the only guard.
+- This applies on **every** push route: cloud sessions, GitHub Desktop, `mcp__GitHub__push_files`,
+  and the web upload page all compose messages. The API route bypasses the local test — on that
+  route the rule is the only guard. The airlock refuses a queued commit whose message breaks it.
 - The narrative goes in `CHANGE-LOG-COMMITS.md` (gitignored) — append an entry in the same
   session, in the same shape: date, files touched, the full story. That file is the real
   changelog; write it as fully as you like.
@@ -170,10 +173,31 @@ commits — GitHub keeps serving them by SHA indefinitely. There is no clean way
   are public, a force-push would not unpublish them, and this is settled. Do not re-raise it.
 
 ## Run this first, every session
+Sessions run in the cloud, in the environment "Family tree" (since October 2026); the PC's folder is kept
+as an archive and is not worked in.
 ```
-node tools/doctor.js                       # local state: stale data.json, git locks, unpushed commits
-node tools/lock.js take "<who>" "<what>"   # one writer at a time
+bash tools/cloud-setup.sh                                # clones, links, full history, decrypt, doctor
+bash tools/cloud-lock.sh take "<who>" "<what>"           # one writer at a time, across sessions (pushed)
+. ~/.ft-env && node tools/doctor.js                      # local state: stale data.json, git locks, unpushed commits
+  ... the work, following OPERATING.md ...
+bash tools/cloud-finish.sh "<one neutral line>" "<who>"  # the state first, then the site into the queue
 ```
+**Three clones, one folder.** `family-tree/` (this repo), `family-tree-private/` (the working state:
+research.json, history.json, ledger/, notes/, working/, evidence/, OPEN-ITEMS.md, the changelogs,
+bio-research-notes.md and the other private files) and `family-tree-sources/` sit side by side. A routine
+has only the two private repos attached and clones this one read-only, so it cannot push here.
+`cloud-setup.sh` links each entry of `family-tree-private/.private-paths` into this folder (the
+deny-by-default `.gitignore` ignores the links) and writes `~/.ft-env`, which every new shell reads:
+`FT_RESEARCH` points into family-tree-private, so research.js's rewrites land there, and `cloud-lock.sh
+take` adds `FT_WHO`, so change.js and the gate know the holder (it also brings this clone up to the newest
+queued work first). Edit a private file at its real path
+(`family-tree-private/OPEN-ITEMS.md`): a tool that saves by rename would replace the link with a copy that
+is lost with the machine (`cloud-finish.sh` stops on that). A new private file goes into family-tree-private
+and its name into `.private-paths`. Nothing on the machine survives the session: **end every session that
+changed anything with `cloud-finish.sh`**, and during long work push the running notes in
+`family-tree-private/_work/` now and then (`FT_PUBLISH=notes bash tools/cloud-finish.sh "Save research notes"`).
+Never run `git clean -x` here.
+
 Then follow the loop in `OPERATING.md`. The two guards that matter most:
 
 - **`tools/change.js` is the only way an edit reaches `data.json`.** It refuses a fact or grade change
@@ -187,17 +211,29 @@ Then follow the loop in `OPERATING.md`. The two guards that matter most:
 **`encrypt` refuses a `data.json` that did not come from the `index.html` on disk** (`.data-stamp`).
 Do not reach for `--force`, and never pass `--newsalt` (it locks out every family device).
 *This exists because on 15 Aug 2026 the `data.json` in this repo was a week and 1.4 MB behind the
-payload, and nothing detected it.* Deploy = GitHub Desktop: commit → push. Verify with the GitHub MCP
-`list_commits`, then the live bytes (below).
+payload, and nothing detected it.*
+
+**Deploy = commit (the hook checks the gate), then `tools/cloud-finish.sh`.** It pushes the state to
+family-tree-private first, then puts the site's commits in the **queue**, family-tree-private's branch
+`site-queue`. The **airlock** (the private repo family-tree-airlock, which no session or routine has
+attached) checks every queued commit every two hours: only the payload line of `index.html`, `stats.json`
+and `media/*.bin` may change; the payload must open with the site key; no message may carry a payload name;
+`tests/run.js` and `tests/research.js` must pass. Then it publishes the queue to this repo's main. Its
+verdict is in family-tree-private's branch `airlock-status`; a refusal emails Cory and stops every later
+session at setup (PUBLISH BLOCKED). An interactive session clears it with him (OPERATING.md, "A refused
+queue"): it rebuilds the queue on public main without the refused commits or, when the airlock was wrong,
+fixes the airlock and runs it with `force`. A change to the site's code, tests, tools or documents is
+never published by the airlock: an interactive session with Cory there pushes it with
+`FT_PUBLISH=direct bash tools/cloud-finish.sh …`, only while the queue is empty, with the writer lock held.
+Verify with the airlock's verdict, then the live bytes (below).
 
 ### Deploying is not done when the push succeeds
 The **`verify-deploy` workflow** now proves this automatically on every push to `main`: it polls
 the live site for up to ten minutes and fails if the served payload's `ENC.iv` never matches the
 committed one. It prints only IVs and byte counts — Actions logs are public. On failure, read its
 output before touching anything; it distinguishes "GitHub's runners" from "our file" and tells you
-to re-run first. **Check that run before assuming a deploy landed.** Two mount facts it exists to
-survive: this sandbox has no push credentials (pushing happens in GitHub Desktop), and it cannot
-unlink, so `.git/*.lock` files accumulate and block every git write until cleared.
+to re-run first. **Check that run before assuming a deploy landed.** It matters most now that the
+airlock publishes scheduled runs' work with nobody watching.
 
 A green `list_commits` only proves the commit reached `main`. **Always verify the live site actually changed.** Fetch `https://family.corynitschelm.com/` (the old `cnitschelm.github.io/family-tree/` link redirects there) and compare `index.html`'s byte length and payload head against the local file. Three commits once sat undeployed for a day while the site quietly served an old payload and every local check was green.
 
@@ -242,7 +278,8 @@ Check https://www.githubstatus.com/api/v2/summary.json **before** theorising. On
 
 ## Useful technique notes
 - **Archives d'Alsace (archives68/67):** every media has a direct full-res JPEG at `https://archives68.alsace.eu/images/<media-uuid>.jpg`. Don't fight the canvas viewer — draw into a `<canvas>` harness with `ctx.drawImage(img, sx,sy,sw,sh, 0,0,cw,ch)` and screenshot that. Harvest uuids by driving the "Média" input and reading `location.href`, or by scraping the thumbnail rail's DOM attributes. Fetch the catalogue page first (`Caractéristiques physiques` / `Présentation du contenu`) to learn what a register actually covers.
-- **archives68 page list without a browser (8 Oct 2026):** `python3 working/i18-plan/a68list.py <ark>` prints every media's index, uuid and JPEG URL, via the viewer's endpoint `https://archives68.alsace.eu/visualizer/api?arkName=<ark>&uuid=<uuid>` (15 media per call; plain curl from the PC works).
+- **archives68 page list without a browser (8 Oct 2026):** `python3 working/i18-plan/a68list.py <ark>` prints every media's index, uuid and JPEG URL, via the viewer's endpoint `https://archives68.alsace.eu/visualizer/api?arkName=<ark>&uuid=<uuid>` (15 media per call; plain curl works, from the cloud too).
+- **Identify honestly when fetching.** Never send a browser's user-agent string from curl or a script. A site that refuses an honest client (Find a Grave, FamilySearch, Geneanet, the Bas-Rhin archives, Cloudflare-protected newspapers) is read in a real browser through Claude in Chrome on Cory's PC when it is on, or becomes an action card; otherwise record the gap.
 - Bot-blocked to WebFetch (FindAGrave, Wikimedia Commons, WikiTree, archives68): use the Claude-in-Chrome tools instead.
 - Pre-1682 Protestant Alsace uses the **Julian** calendar — check weekday claims against it.
 - Kurrent traps: K≈R, N≈M/H, C≈L, H has an S-like swirl.

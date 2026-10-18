@@ -42,8 +42,17 @@ const die = m => { console.error("\ncommit-msg: " + m + "\n"); process.exit(1); 
 const msgPath = process.argv[2];
 if (!msgPath) die("no message file given (the hook passes it as $1).");
 const raw = fs.readFileSync(msgPath, "utf8");
-const lines = raw.split(/\r?\n/)
-  .filter(l => !l.startsWith("#"))          // git's own comment block
+/* What git will store: everything from a scissors line down is cut; "#" lines are dropped only when git
+ * strips comments, which its editor template then says ("Lines starting with '#' will be ignored"). A
+ * message given with -m or -F, or committed with cleanup=whitespace, keeps its "#" lines in the commit, so
+ * there they are lines like any other, and a second line is a body (18 Oct 2026: "-m '# <a name>'" passed
+ * this guard). */
+let all = raw.split(/\r?\n/);
+const cut = all.findIndex(l => /^# -+ >8 -+$/.test(l));
+if (cut >= 0) all = all.slice(0, cut);
+const strip = /^# with '#' will be ignored|Lines starting with '#' will be ignored/m.test(raw);
+const lines = all
+  .filter(l => !(strip && l.startsWith("#")))
   .map(l => l.replace(/\s+$/, ""));
 while (lines.length && !lines[lines.length - 1]) lines.pop();
 while (lines.length && !lines[0]) lines.shift();

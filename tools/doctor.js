@@ -94,15 +94,23 @@ if (exists("index.html.new")) {
     "Compare the two, then: rm -f index.html.new");
 }
 
-/* ---- 4. commits that exist only here ---- */
+/* ---- 4. commits that exist only here ----
+ * A cloud session's site commits go into the queue (family-tree-private's branch site-queue, which
+ * tools/cloud-setup.sh fetches as refs/remotes/queue/site-queue); the airlock publishes them. */
 const branch = git(["rev-parse", "--abbrev-ref", "HEAD"]);
 const ahead = git(["rev-list", "--count", "@{upstream}..HEAD"]);
 const behind = git(["rev-list", "--count", "HEAD..@{upstream}"]);
-if (ahead && +ahead > 0) {
-  add("WARN", ahead + " commit(s) not pushed",
-    "They are on " + (branch || "this branch") + " locally only, so the live site cannot be showing them. " +
-    "This sandbox holds no push credentials — pushing happens in GitHub Desktop.",
-    "Push in GitHub Desktop (Ctrl+P), then confirm the live site actually changed.");
+const queue = git(["rev-parse", "-q", "--verify", "refs/remotes/queue/site-queue"]);
+const unqueued = queue ? git(["rev-list", "--count", queue + "..HEAD"]) : ahead;
+if (ahead && +ahead > 0 && unqueued !== null && +unqueued === 0) {
+  add("INFO", ahead + " commit(s) queued, not public yet",
+    "They are in the queue (family-tree-private's branch site-queue). The airlock checks them and publishes " +
+    "them within about two hours; its verdict is in family-tree-private's branch airlock-status.", null);
+} else if (ahead && +ahead > 0) {
+  add("WARN", (unqueued || ahead) + " commit(s) neither pushed nor queued",
+    "They are on " + (branch || "this branch") + " locally only, so the live site cannot be showing them.",
+    "In a cloud session: bash tools/cloud-finish.sh \"<one neutral line>\" \"<who>\" (it queues them for the airlock). " +
+    "On the PC: push in GitHub Desktop. Then confirm the live site actually changed.");
 }
 if (behind && +behind > 0) {
   add("WARN", behind + " commit(s) on the remote that are not here",

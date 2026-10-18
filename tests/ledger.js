@@ -24,6 +24,7 @@ const SRC = path.join(__dirname, '..');
 const T = fs.mkdtempSync(path.join(os.tmpdir(), 'ledger-test-'));
 const ARCH = path.join(T, 'archive-repo');
 process.env.FT_ARCHIVE = ARCH;     // for the tools loaded in this process, as for those spawned below
+delete process.env.FT_PASSWORD;    // the tools prefer it to .password: this test uses its own password only
 let pass = 0, failN = 0;
 const ok = (c, m) => { if (c) { pass++; console.log('  ok  ' + m); } else { failN++; console.log('  FAIL ' + m); } };
 

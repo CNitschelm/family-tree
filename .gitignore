@@ -33,6 +33,7 @@
 !/tests/browser.js
 !/tests/research.js
 !/tools/*.js
+!/tools/*.sh
 !/githooks/*
 
 # Adding a file to the site? Add an explicit "!" line for it here, and only after
