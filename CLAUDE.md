@@ -45,12 +45,21 @@ Cory: *"I should NEVER need to instruct an agent to update it. Agents should als
   reads the records, records every result here, adds a proven Nitschelm of the line under R-0437, brings anything else
   that would change the tree back as a new card, and, when online steps are left, opens the next research card.
   A session that makes a source Claude-alone-online should give it a research card in the same session.
+- **Research cards may start themselves (Cory, 19 Oct 2026, R-0587):** the decision runner may start one research card a
+  run without his tap, only when this run read this week's usage (its own session's rate-limit event, seven-day
+  utilization) and it is under 50%, and only for continuation work Claude does alone online: reading and scanning records,
+  going on down the line. Never a yes/no card or one whose outcome is a question to him; usage missing, unreadable or at
+  50% or more means the card waits for the tap. Its report names the card it started and the usage it read.
+- **Public search forms (Cory, 19 Oct 2026, R-0588):** Begin research may fill in and submit a public, read-only search
+  form that needs no account and sends nothing to anyone. Sign-ins, contact forms, orders, payments and human-verification
+  challenges stay his.
 
 ## Standing priorities (Cory, 31 Jul 2026 — applies to every task here)
 1. **Thoroughness and accuracy first.** Never trade correctness for a shortcut.
 2. **Then token efficiency.**
 3. **Time is last.** A task that takes hours is fine if it saves tokens or improves accuracy.
 4. **Use subagents whenever they serve those priorities** — fan out for research, document capture, and verification. Prefer one well-briefed agent over many shallow ones; give each the full technique notes so it doesn't rediscover them.
+5. **Obvious code fixes are made, then reported (Cory, 19 Oct 2026, R-0589).** A failing self-test with an obvious code fix gets fixed and reported, not asked. Never the airlock, `checks/gate.js`, the privacy tests or the commit hook, and never a change to what is published or deleted. Code still publishes only by `FT_PUBLISH=direct` with Cory there.
 
 ## Scope rule — the root's whole male line (Cory, 3 Oct 2026)
 Cory wants **the true extent of the line**: every Nitschelm, in any spelling, descended in the male line from
