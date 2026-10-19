@@ -53,6 +53,12 @@ Cory: *"I should NEVER need to instruct an agent to update it. Agents should als
 - **Public search forms (Cory, 19 Oct 2026, R-0588):** Begin research may fill in and submit a public, read-only search
   form that needs no account and sends nothing to anyone. Sign-ins, contact forms, orders, payments and human-verification
   challenges stay his.
+- **At your computer (Cory, 19 Oct 2026, R-0591):** a step that needs his hands (a sign-in such as FamilySearch, a robot
+  check, a password) is never left as a gap: it goes on one list, collection `atcomputer` of his decisions page (its "At
+  your computer" section), and he works it in a Claude chat at his main computer. An open item from a generation's work
+  holds the next generation, as an open question does (R-0590). Scheduled jobs never use the main laptop's browser; a step
+  that needs a computer but not him runs on the always-on old laptop. How items are made and worked:
+  `notes/at_your_computer.md` (private).
 
 ## Standing priorities (Cory, 31 Jul 2026 — applies to every task here)
 1. **Thoroughness and accuracy first.** Never trade correctness for a shortcut.
