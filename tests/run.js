@@ -257,6 +257,48 @@ section("Floating controls");
   ok(/<h2 id="msh-h" tabindex="-1">/.test(js) && /class="sb" tabindex="0" role="region"/.test(js), "the map sheet has a level-2 heading and a list the keyboard can scroll");
   ok(/role="switch"[^>]*aria-checked=/.test(chrome) && /data-view="tree" aria-pressed=/.test(chrome), "switch and toggles expose their state");
   ok(/<div id="filters"[\s\S]*class="tiles"/.test(chrome) && /\.tile\[aria-pressed="true"\]/.test(html), "branch tiles are generated into the Filters panel, one generic rule");
+  /* the site audit of 20 Oct 2026 */
+  {
+    /* the cards' badges: their white 8px text on each badge colour, in both themes (the dark theme's brighter
+       branch colours gave 2.6:1) */
+    const block = sel => { const i = html.indexOf(sel + "{"), o = {}; if (i >= 0) for (const m of html.slice(i, html.indexOf("}", i)).matchAll(/--([\w-]+):\s*(#[0-9A-Fa-f]{6})\b/g)) o[m[1]] = m[2]; return o; };
+    const light = block(":root"), dark = Object.assign({}, light, block("html.dark"));
+    const L = h => { const c = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255).map(v => v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+    const ratio = (a, b) => { const x = L(a), y = L(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+    const rule = (html.match(/\.node \.badge\{[^}]*\}/) || [""])[0], ink = ((rule.match(/(?:^|[;{])color:(#[0-9A-Fa-f]{3,6})\b/) || [])[1] || "").replace(/^#(.)(.)(.)$/, "#$1$1$2$2$3$3");
+    const line = (js.match(/const badge = p\.tag==="author" \?[^\n]*/) || [""])[0];
+    const bgs = [...line.matchAll(/class="badge" style="background:([^"]+)"/g)].map(m => m[1]);
+    const res = bgs.map(b => { const v = /^var\(--([\w-]+)\)$/.exec(b), lt = v ? light[v[1]] : b, dk = v ? dark[v[1]] : b;
+      return { b, lt: lt && ink ? ratio(ink, lt) : 0, dk: dk && ink ? ratio(ink, dk) : 0 }; });
+    ok(/^#[0-9A-Fa-f]{6}$/.test(ink) && bgs.length === 3 && res.every(r => r.lt >= 4.5 && r.dk >= 4.5),
+      "every card badge's text is 4.5:1 or better on its colour, in light and dark (" + res.map(r => r.b + " " + r.lt.toFixed(2) + "/" + r.dk.toFixed(2)).join(", ") + ")");
+    /* the map's controls and the phone's Go to menu: inside one named region, shown only on the map, in their old
+       order and with no position of its own (so the menu still opens above the top bar) */
+    ok(/<div class="maponly" role="region" data-i18n-aria="map_ctl">\n<div id="row2">[\s\S]*?<\/div>\n<div id="gomenu"[^>]*><\/div>\n<\/div>\n<nav id="dock"/.test(chrome) &&
+       /map_ctl:"Map controls"/.test(js) && /map_ctl:"Commandes de la carte"/.test(js) && /body:not\(\.mapmode\) \.maponly\{display:none !important\}/.test(html),
+      "the map's controls and the phone's Go to menu sit in one named region (Map controls), shown only on the map");
+    /* Research: a phone's investigation is a page of its own, so every heading under its title takes its level from it */
+    const rd = js.slice(js.indexOf("function rDetail("), js.indexOf("\nfunction ", js.indexOf("function rDetail(") + 10));
+    const ps = js.slice(js.indexOf("function rPhSrc("), js.indexOf("\nfunction ", js.indexOf("function rPhSrc(") + 10));
+    ok(rd.length > 500 && /const L = phone \? 1 : 2;/.test(rd) && !/<h[1-6][\s>]/.test(rd) && /rPeople\(iv, L \+ 1\)/.test(rd) && /<h\$\{L \+ 2\} class="rqq">/.test(rd) &&
+       /<h1 id="rs-h"/.test(ps) && /rSrcFacts\(s, 2\)/.test(ps),
+      "Research headings step one level at a time under the title, on a phone's own pages too");
+    /* the search lists: both boxes are comboboxes over a listbox of options (the arrows' pick is told to assistive
+       tech and kept in sight), the header's "No match" is said aloud, and neither box acts on an input method's Enter */
+    ok(/<input id="search"[^>]* role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggest">\n\s*<div id="suggest"><\/div><div id="sugstat" class="vh" aria-live="polite"><\/div>/.test(chrome) &&
+       /<input id="introsearch"[^>]* role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="introsug"><div id="introsug" role="listbox" aria-labelledby="int-try"><\/div>/.test(html) &&
+       /role="option" id="sug-o\$\{i\}" aria-selected="\$\{i===sugIdx\}"/.test(js) && /role="option" id="isug-o\$\{i\}" aria-selected="\$\{i===idx\}"/.test(js) &&
+       /function keepInView\(list, row\)/.test(js) && (js.match(/comboState\((?:searchEl, sugEl, "sug-o"|box, sug, "isug-o")/g) || []).length >= 5 &&
+       /sugStat\.textContent = T\("nomatch"\)/.test(js) && /else if\(e\.key==="Enter" && !e\.isComposing\)\{ e\.preventDefault\(\); tryFind\(\); \}/.test(js),
+      "both search boxes are comboboxes over a listbox of options, the header's No match is said aloud, and neither acts on an input method's Enter");
+    /* the Living tag on a suggestion: its ink on its own tint (the tint is --live mixed into the panel) */
+    const lv = (html.match(/:root\{--live:(#[0-9A-Fa-f]{6});--live-ink:(#[0-9A-Fa-f]{6})\} html\.dark\{--live:(#[0-9A-Fa-f]{6});--live-ink:(#[0-9A-Fa-f]{6})\}/) || []).slice(1);
+    const lvRule = (html.match(/\n\.lv\{[^}]*\}/) || [""])[0], tint = +((lvRule.match(/background:color-mix\(in srgb,var\(--live\) (\d+)%,var\(--panel\)\)/) || [])[1]) / 100;
+    const mix = (a, b, p) => "#" + [1, 3, 5].map(i => Math.round(parseInt(a.slice(i, i + 2), 16) * p + parseInt(b.slice(i, i + 2), 16) * (1 - p)).toString(16).padStart(2, "0")).join("");
+    const lvRes = lv.length === 4 && tint > 0 && light.panel && dark.panel ? [ratio(lv[1], mix(lv[0], light.panel, tint)), ratio(lv[3], mix(lv[2], dark.panel, tint))] : [0, 0];
+    ok(/color:var\(--live-ink\)/.test(lvRule) && /#introsug \.isit span \.lv\{color:var\(--live-ink\)/.test(html) && lvRes.every(r => r >= 4.5),
+      "the Living tag's text is 4.5:1 or better on its tint, in light and dark (" + lvRes.map(r => r.toFixed(2)).join("/") + ")");
+  }
 }
 
 /* ---------- 2d. The map's layers load on open (3 Oct 2026) ----------
@@ -1182,6 +1224,13 @@ section("Play");
   /* Cory, 17 Oct 2026: "no dont do that becuase it should be consistent" — one steady speed, no fast-forward */
   ok(/PLAY\.t = Math\.min\(m\.t1, PLAY\.t \+ dt \* PLAY\.speed\);/.test(js) && pg("PLAY_SPEEDS").join() === "1,2,5,10",
     "time runs at the one speed chosen in the bar (1, 2, 5 or 10 years a second), with no fast-forward");
+  /* site audit, 20 Oct 2026: at 5 and 10 years a second a note was pushed off in under a second. Now at most two are
+     up, none is pushed off before PCAP_MIN seconds, and notes close together join one as lines (tests/browser.js
+     times a burst of them on screen) */
+  ok(+((js.match(/const PCAP_MIN = ([\d.]+), PCAP_LINES = (\d+);/) || [])[1]) >= 2.5 && !/pbCaps\.children\.length > 2/.test(js) &&
+     /playCaption\(playMileText\(x\), null, 6\.5, "", "m"\)/.test(js) && /playCaption\(playHistText\(x\), x, 8, "", "h"\)/.test(js) &&
+     (js.match(/pbCaps\.innerHTML = ""/g) || []).length === 1,
+    "Play's notes stay up at least 2.5 s each, two at a time, and notes close together share one");
   /* the coronation (Cory, 17 Oct 2026): his card, a living man of the tree with a dated pin, crowned at his first record */
   const hid = (js.match(/const PLAY_HERO = "([^"]*)";/) || [])[1], htr = M.tracks.find(t => t.n.p.id === hid);
   ok(hid && htr && livingP(htr.n.p) && htr.end === null && /if\(hero && prev < hero\.t0 && PLAY\.t >= hero\.t0\)\{ PLAY\.t = hero\.t0;/.test(js) &&

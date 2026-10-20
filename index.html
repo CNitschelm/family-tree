@@ -16,6 +16,9 @@
   --paper:#F5F6F2; --panel:#FFFFFF; --ink:#1F2A33; --ink-soft:#5B6770; --rule:#C9CEC6;
   --fr:#3E6B4F; --us-east:#34558B; --us-west:#B0432F;--us-ohio:#8A6A1F; --fr-doubs:#2F6B72; --colmar:#A33D6A; --fr-paris:#66701C; --schw:#6E4B7A; --nl:#C2601A; --you:#B8860B; --sel:#0E7C7B;
   --onbrand:#FFFFFF;   /* text sitting ON a brand colour: white in both themes, deliberately */
+  /* the cards' small badges carry white 8px text, so their colours stay these darker shades in both themes
+     (4.5:1 or better; the dark theme's brighter --fr and --us-east gave 2.6:1, 20 Oct 2026) */
+  --tag-fr:#3E6B4F; --tag-us:#34558B; --tag-mem:#6B7075;
 }
 html.dark{
   --paper:#15191C; --panel:#1E2428; --ink:#E7EBEA; --ink-soft:#98A3A6; --rule:#3B4448;
@@ -33,8 +36,9 @@ body{background:var(--paper);color:var(--ink);font-family:'Archivo',system-ui,sa
 #suggest .it.act{background:var(--paper)}
 #suggest .none{padding:7px 12px;font-size:12px;color:var(--ink-soft)}
 /* "Living" on a search suggestion (Cory, 17 Oct 2026: so someone typing their own name finds themselves among the many) */
-:root{--live:#2C7A4B} html.dark{--live:#74C493}
-.lv{display:inline-block;margin-right:7px;padding:1px 7px;border-radius:999px;font-size:10.5px;font-weight:600;letter-spacing:.02em;line-height:1.5;color:var(--live);background:color-mix(in srgb,var(--live) 13%,var(--panel));vertical-align:1px}
+/* --live-ink: the "Living" pill's text, 4.5:1 or better on its own tint (the brighter --live gave 4.43:1 in light; site audit, 20 Oct 2026) */
+:root{--live:#2C7A4B;--live-ink:#256A41} html.dark{--live:#74C493;--live-ink:#74C493}
+.lv{display:inline-block;margin-right:7px;padding:1px 7px;border-radius:999px;font-size:10.5px;font-weight:600;letter-spacing:.02em;line-height:1.5;color:var(--live-ink);background:color-mix(in srgb,var(--live) 13%,var(--panel));vertical-align:1px}
 .tsrcq{margin-top:4px;font-size:10px;font-style:italic;opacity:.85;line-height:1.5}
 /* genogram convention: circular portraits = women, rounded squares = men */
 .node .av.g-f,#profile .phead img.g-f{border-radius:50%}
@@ -61,7 +65,7 @@ body{background:var(--paper);color:var(--ink);font-family:'Archivo',system-ui,sa
 #introsug{position:absolute;top:calc(100% + 4px);left:0;right:0;max-height:210px;overflow:auto;background:var(--panel);border:1px solid var(--rule);border-radius:10px;box-shadow:0 8px 22px rgba(31,42,51,.22);display:none;z-index:5}
 #introsug .isit{padding:11px 14px;font-size:14px;cursor:pointer;display:flex;justify-content:space-between;gap:10px;align-items:baseline}
 #introsug .isit span{color:var(--ink-soft);font-size:12px;flex-shrink:0}
-#introsug .isit span .lv{color:var(--live);font-size:10.5px}
+#introsug .isit span .lv{color:var(--live-ink);font-size:10.5px}
 #introsug .isit:hover,#introsug .isit.act{background:var(--paper)}
 #introhint{font-size:13px;color:var(--ink-soft)}
 #introhint:empty{display:none}
@@ -1112,6 +1116,7 @@ body.playing #playchip,body.playing #mappins,body.playing #maplegend,body.playin
 #playbar .pcap.hist{border-left:3px solid var(--ink-soft)}
 #playbar .pcap a{color:var(--sel-ink);font-weight:600;margin-left:8px;white-space:nowrap}
 #playbar .pcap.out{opacity:0}
+#playbar .pcap .pcl + .pcl{margin-top:3px;animation:pcapin .3s ease-out}
 @keyframes pcapin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 /* the coronation (17 Oct 2026): trumpets, a crown, confetti, over the map and under the bar */
 #playparty{position:absolute;inset:0;z-index:5;pointer-events:none;overflow:hidden}
@@ -1124,7 +1129,7 @@ body.playing #playchip,body.playing #mappins,body.playing #maplegend,body.playin
 #playfaces .pf.king img{border-color:#E2A92A;box-shadow:0 0 0 3px rgba(242,194,48,.55),0 0 22px 6px rgba(242,194,48,.65)}
 #playbar .pcap.royal{background:linear-gradient(180deg,#FFF6D8,#F6E2A6);color:#3B2A05;border:2px solid #C9971E;font-weight:600;font-size:14px;letter-spacing:.01em}
 html.dark #playbar .pcap.royal{background:linear-gradient(180deg,#4A3A10,#33280A);color:#FFE9A8;border-color:#D9A93F}
-@media (prefers-reduced-motion:reduce){#playbar .pcap{animation:none;transition:none}}
+@media (prefers-reduced-motion:reduce){#playbar .pcap,#playbar .pcap .pcl{animation:none;transition:none}}
 @media (max-width:840px), (pointer:coarse) and (max-height:520px){
   #playchip{flex:none;padding:0 14px 0 12px}
   #playbar{left:calc(12px + var(--sl));right:calc(12px + var(--sr));width:auto;transform:none;bottom:calc(84px + var(--sb));flex-wrap:wrap;gap:6px 8px;padding:8px}
@@ -1154,8 +1159,8 @@ html.dark #playbar .pcap.royal{background:linear-gradient(180deg,#4A3A10,#33280A
     <span class="dv" aria-hidden="true"></span>
     <div id="searchwrap">
       <span class="sic" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg></span>
-      <input id="search" type="search" placeholder="Search a name…" autocomplete="off" data-i18n-aria="search_label" aria-label="Search a name">
-      <div id="suggest"></div>
+      <input id="search" type="search" placeholder="Search a name…" autocomplete="off" data-i18n-aria="search_label" aria-label="Search a name" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggest">
+      <div id="suggest"></div><div id="sugstat" class="vh" aria-live="polite"></div>
     </div>
   </div>
   <nav id="tc" class="fl seg" data-i18n-label="view_label">
@@ -1171,7 +1176,10 @@ html.dark #playbar .pcap.royal{background:linear-gradient(180deg,#4A3A10,#33280A
     <button type="button" id="tourbtn" class="ib" data-i18n-label="tour_take"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.4c-.6.3-1 .8-1 1.5v.4"/><path d="M12 17h.01"/></svg></button>
   </div>
 </header>
-<!-- map only: where to go (left) and the way back out of one person's journey (centre) -->
+<!-- map only: where to go (left) and the way back out of one person's journey (centre). The wrapper is the named
+     region that puts them, and the phone's Go to menu, in the page's landmarks (site audit, 20 Oct 2026). It keeps
+     their order (Tab is unchanged) and sets no position, so #gomenu still opens above the top bar and the dock. -->
+<div class="maponly" role="region" data-i18n-aria="map_ctl">
 <div id="row2">
   <div id="goto" class="fl maponly" role="group" aria-labelledby="goto-h">
     <span class="glbl" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 21s-6.5-6.1-6.5-11A6.5 6.5 0 0 1 18.5 10c0 4.9-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg></span><span class="glbl" id="goto-h" data-i18n="map_region">Go to</span>
@@ -1181,6 +1189,7 @@ html.dark #playbar .pcap.royal{background:linear-gradient(180deg,#4A3A10,#33280A
   <button type="button" id="playchip" class="fl maponly"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M8 5.6v12.8L18.2 12z" fill="currentColor"/></svg><span data-i18n="play_btn">Play the years</span></button>
 </div>
 <div id="gomenu" class="fl" role="menu" aria-labelledby="gochip" hidden></div>
+</div>
 <nav id="dock" class="fl" data-i18n-label="view_label">
   <button type="button" data-view="tree" aria-pressed="true"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9" y="3" width="6" height="5" rx="1.2"/><rect x="3" y="16" width="6" height="5" rx="1.2"/><rect x="15" y="16" width="6" height="5" rx="1.2"/><path d="M12 8v4M6 16v-1.5A2.5 2.5 0 0 1 8.5 12h7a2.5 2.5 0 0 1 2.5 2.5V16"/></svg><span data-i18n="view_tree">Tree</span></button>
   <button type="button" data-view="map" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 4.5L3.5 6.8v12.7L9 17.2l6 2.3 5.5-2.3V4.5L15 6.8 9 4.5z"/><path d="M9 4.5v12.7M15 6.8v12.7"/></svg><span data-i18n="view_map">Map</span></button>
@@ -1227,7 +1236,7 @@ html.dark #playbar .pcap.royal{background:linear-gradient(180deg,#4A3A10,#33280A
     <h2 id="int-title"></h2>
     <p id="int-stats"></p>
     <div class="itry"><label id="int-try" for="introsearch"></label>
-      <div class="itryrow"><div class="itrybox"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><input id="introsearch" type="search" autocomplete="off" enterkeyhint="search"><div id="introsug"></div></div><button type="button" id="introfind"></button></div>
+      <div class="itryrow"><div class="itrybox"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><input id="introsearch" type="search" autocomplete="off" enterkeyhint="search" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="introsug"><div id="introsug" role="listbox" aria-labelledby="int-try"></div></div><button type="button" id="introfind"></button></div>
       <div id="introhint" aria-live="polite"></div></div>
     <div id="istart"></div>
     <div class="ihr"></div>
@@ -1409,7 +1418,7 @@ const I18N = {
       is3:"Switch to <b>Map</b> to see where everyone was born and lived, then pick a person to follow them from place to place.",
       is3_x:"Dashed rings and routes mark places that are inferred rather than documented. Filters chooses which branches you see, in the tree and on the map.",
       inext:"Next", iback:"Back", iskip:"Skip", idone:"Start exploring", istep:"%n of %t",
-      view_tree:"Tree", view_map:"Map", map_region:"Go to", map_people:"People", map_everyone:"Everyone",
+      view_tree:"Tree", view_map:"Map", map_region:"Go to", map_ctl:"Map controls", map_people:"People", map_everyone:"Everyone",
       map_alsace:"Alsace", map_france:"France", map_us:"USA", map_west:"Oregon", map_world:"Everywhere",
       map_living:"Living", map_deceased:"Deceased", map_est:"Show uncertain places", map_est_note:"Places we inferred or could only place roughly",
       map_births:"%n of these people were born here.", map_nobirth:"No birthplace recorded — this is the earliest place known for them.",
@@ -1610,7 +1619,7 @@ const I18N = {
       is3:"Passez à la <b>Carte</b> pour voir où chacun est né et a vécu, puis choisissez une personne pour la suivre de lieu en lieu.",
       is3_x:"Les cercles et trajets en pointillé marquent les lieux déduits plutôt qu’attestés. Filtres choisit les branches affichées, dans l’arbre comme sur la carte.",
       inext:"Suivant", iback:"Retour", iskip:"Passer", idone:"Commencer", istep:"%n sur %t",
-      view_tree:"Arbre", view_map:"Carte", map_region:"Aller à", map_people:"Personnes", map_everyone:"Tout le monde",
+      view_tree:"Arbre", view_map:"Carte", map_region:"Aller à", map_ctl:"Commandes de la carte", map_people:"Personnes", map_everyone:"Tout le monde",
       map_alsace:"Alsace", map_france:"France", map_us:"USA", map_west:"Oregon", map_world:"Partout",
       map_living:"Vivants", map_deceased:"Décédés", map_est:"Afficher les lieux incertains", map_est_note:"Lieux déduits ou situés approximativement",
       map_births:"%n de ces personnes sont nées ici.", map_nobirth:"Lieu de naissance inconnu — voici le premier lieu connu pour elle.",
@@ -2586,7 +2595,7 @@ function render(){
     const p = n.p;
     let sp = "";
     (p.unions||[]).forEach(u=>{ if(u.s) sp += `<div class="sp"><span class="mar">⚭</span> <b>${esc(u.s)}</b>${u.sy?" ("+esc(u.sy)+")":""}${u.div?" ÷":""}</div>`; });
-    const badge = p.tag==="author" ? `<span class="badge" style="background:var(--fr)">${T("author")}</span>` : p.tag==="emig" ? `<span class="badge" style="background:var(--us-east)">→ USA</span>` : p.tag==="mem" ? `<span class="badge" style="background:#7A7F84">✝</span>` : "";
+    const badge = p.tag==="author" ? `<span class="badge" style="background:var(--tag-fr)">${T("author")}</span>` : p.tag==="emig" ? `<span class="badge" style="background:var(--tag-us)">→ USA</span>` : p.tag==="mem" ? `<span class="badge" style="background:var(--tag-mem)">✝</span>` : "";
     /* Three states, because after a search `visSet` narrows the view to one line
        and an "open" ancestor can still be hiding every child but the one below it:
          closed            → +N        open the next generation
@@ -3638,7 +3647,7 @@ SIDEQ.addEventListener && SIDEQ.addEventListener("change", ()=>{ syncChrome(); }
 /* search: suggestions dropdown; the tree only moves once a person is chosen */
 const searchEl = document.getElementById("search");
 const sugEl = document.getElementById("suggest");
-let sugItems = [], sugIdx = 0, deb;
+let sugItems = [], sugIdx = 0, deb, sugQ = "";   /* sugQ: the words sugItems was made from */
 const norm = s => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,""); /* é→e, ü→u … */
 function searchMatches(q){
   /* every word must appear somewhere in the name, in any order and as a partial:
@@ -3667,13 +3676,32 @@ function searchMatches(q){
 /* the "Living" tag on a suggestion: living = dates "b. YYYY" or none, as for the dead-lines switch */
 const liveTag = n => livingP(n.p) ? `<span class="lv">${T("living_tag")}</span>` : "";
 function renderSuggest(){
-  if(!sugItems.length){ sugEl.innerHTML = `<div class="none">${T("nomatch")}</div>`; sugEl.style.display="block"; return; }
+  /* "No match" is a line, not a list: the list's role comes off, and the line is said aloud once */
+  if(!sugItems.length){ sugEl.innerHTML = `<div class="none">${T("nomatch")}</div>`; sugEl.removeAttribute("role"); sugEl.removeAttribute("aria-label");
+    sugEl.style.display="block"; sugStat.textContent = T("nomatch"); comboState(searchEl, sugEl, "sug-o", -1); return; }
   sugEl.innerHTML = sugItems.map((it,i)=>
-    `<div class="it${i===sugIdx?" act":""}" data-i="${i}"><span class="nm2">${esc(it.n.p.name)}${it.via?` <small><span class="mar">⚭</span> ${esc(it.via)}</small>`:""}</span><span class="yr">${liveTag(it.n)}${esc(fmtYears(it.n.p.years))}</span></div>`
+    `<div class="it${i===sugIdx?" act":""}" role="option" id="sug-o${i}" aria-selected="${i===sugIdx}" data-i="${i}"><span class="nm2">${esc(it.n.p.name)}${it.via?` <small><span class="mar">⚭</span> ${esc(it.via)}</small>`:""}</span><span class="yr">${liveTag(it.n)}${esc(fmtYears(it.n.p.years))}</span></div>`
   ).join("");
-  sugEl.style.display="block";
+  sugEl.setAttribute("role", "listbox"); sugEl.setAttribute("aria-label", T("search_label"));
+  sugEl.style.display="block"; sugStat.textContent = "";
+  comboState(searchEl, sugEl, "sug-o", sugIdx);
 }
-function hideSuggest(){ sugEl.style.display="none"; sugItems=[]; sugIdx=0; }
+function hideSuggest(){ sugEl.style.display="none"; sugItems=[]; sugIdx=0; sugQ=""; sugStat.textContent = ""; comboState(searchEl, sugEl, "sug-o", -1); }
+/* both search boxes are comboboxes: the box says whether its list is open (aria-expanded) and which name the arrows
+   picked (aria-activedescendant), the list is a listbox of options, and the picked row is kept in sight inside the
+   list, which scrolls on its own (site audit, 20 Oct 2026: the arrows could pick a row scrolled out of view) */
+function keepInView(list, row){
+  if(!row || list.scrollHeight <= list.clientHeight) return;
+  const top = row.offsetTop, bot = top + row.offsetHeight;
+  if(top < list.scrollTop) list.scrollTop = top;
+  else if(bot > list.scrollTop + list.clientHeight) list.scrollTop = bot - list.clientHeight;
+}
+function comboState(box, list, idPre, i){
+  box.setAttribute("aria-expanded", i >= 0 ? "true" : "false");
+  if(i >= 0){ box.setAttribute("aria-activedescendant", idPre + i); keepInView(list, document.getElementById(idPre + i)); }
+  else box.removeAttribute("aria-activedescendant");
+}
+const sugStat = document.getElementById("sugstat");
 function chooseSuggest(i){
   const it = sugItems[i]; if(!it) return;
   searchEl.value = "";     /* box resets; the highlight marks the person */
@@ -3687,15 +3715,24 @@ searchEl.addEventListener("input",e=>{
   deb=setTimeout(()=>{
     const q=e.target.value.trim();
     if(!q){ hideSuggest(); return; }
-    sugItems = searchMatches(q); sugIdx = 0;
+    sugItems = searchMatches(q); sugIdx = 0; sugQ = q;
     renderSuggest();
   },150);
 });
 searchEl.addEventListener("keydown",e=>{
+  /* Enter goes by the words in the box now. Within the 150 ms wait the list on screen was made from older words
+     (or there was none yet), and Enter opened the person those words found (site audit, 20 Oct 2026) */
+  if(e.key==="Enter" && !e.isComposing){
+    const q = searchEl.value.trim();
+    if(!q) return;
+    e.preventDefault();
+    if(q !== sugQ){ clearTimeout(deb); sugItems = searchMatches(q); sugIdx = 0; sugQ = q; }
+    if(sugItems.length) chooseSuggest(sugIdx); else renderSuggest();
+    return;
+  }
   if(sugEl.style.display!=="block") return;
   if(e.key==="ArrowDown"){ e.preventDefault(); if(sugItems.length){ sugIdx=(sugIdx+1)%sugItems.length; renderSuggest(); } }
   else if(e.key==="ArrowUp"){ e.preventDefault(); if(sugItems.length){ sugIdx=(sugIdx-1+sugItems.length)%sugItems.length; renderSuggest(); } }
-  else if(e.key==="Enter"){ e.preventDefault(); chooseSuggest(sugIdx); }
   else if(e.key==="Escape"){ hideSuggest(); }
 });
 sugEl.addEventListener("pointerdown",e=>{ e.preventDefault(); /* keep input focus */ });
@@ -3864,7 +3901,7 @@ function showIntro(){
   document.getElementById("introgo").textContent = T(document.body.classList.contains("mapmode") ? "intro_go_map" : document.body.classList.contains("resmode") ? "intro_go_res" : "intro_go");
   const box = document.getElementById("introsearch"), hint = document.getElementById("introhint");
   const sug = document.getElementById("introsug");
-  box.placeholder = T("itry_ph"); hint.textContent = ""; sug.style.display = "none"; box.value = "";
+  box.placeholder = T("itry_ph"); hint.textContent = ""; sug.style.display = "none"; box.value = ""; comboState(box, sug, "isug-o", -1);
   const done = (landed)=>{
     iv.style.display = "none"; try{ localStorage.setItem(SITE.store + "intro","1"); }catch(_){}
     if(showIntro.after){ const f = showIntro.after; showIntro.after = null; f(); }
@@ -3892,12 +3929,13 @@ function showIntro(){
   else { st.innerHTML = ""; st.classList.add("wait"); needExtras().then(()=>{ if(iv.style.display === "flex") fillStart(); else st.classList.remove("wait"); }, ()=>st.classList.remove("wait")); }
   st.onclick = e=>{ const b = e.target.closest(".istc"), n = b && allNodes.find(m => m.id === +b.dataset.id); if(n) land(n); };
   /* live name suggestions, same matcher as the header search */
-  let items = [], idx = 0, deb2;
+  let items = [], idx = 0, deb2, itemsQ = "";   /* itemsQ: the words items was made from */
   const paint = ()=>{
-    if(!items.length){ sug.style.display="none"; return; }
+    if(!items.length){ sug.style.display="none"; comboState(box, sug, "isug-o", -1); return; }
     sug.innerHTML = items.map((it,i)=>
-      `<div class="isit${i===idx?" act":""}" data-i="${i}">${esc(it.n.p.name)}<span>${liveTag(it.n)}${esc(fmtYears(it.n.p.years))}</span></div>`).join("");
+      `<div class="isit${i===idx?" act":""}" role="option" id="isug-o${i}" aria-selected="${i===idx}" data-i="${i}">${esc(it.n.p.name)}<span>${liveTag(it.n)}${esc(fmtYears(it.n.p.years))}</span></div>`).join("");
     sug.style.display = "block";
+    comboState(box, sug, "isug-o", idx);
   };
   const pick = i=>{ const it = items[i]; if(it) land(it.n); };
   /* handlers are assigned, not added: the welcome can be opened many times (the ? button, the menu),
@@ -3907,22 +3945,24 @@ function showIntro(){
     deb2 = setTimeout(()=>{
       const q = box.value.trim();
       hint.textContent = "";
-      items = q ? searchMatches(q) : []; idx = 0; paint();
+      items = q ? searchMatches(q) : []; idx = 0; itemsQ = q; paint();
     }, 120);
   };
   sug.onclick = e=>{ const it = e.target.closest(".isit"); if(it) pick(+it.dataset.i); };
   const tryFind = ()=>{
     const q = box.value.trim();
     if(!q){ box.focus(); return; }
-    const hits = items.length ? items : searchMatches(q);
-    if(!hits.length){ hint.textContent = T("itry_none"); return; }
-    land(hits[Math.min(idx, hits.length-1)].n);
+    /* the words in the box now, not the list from up to 120 ms ago (site audit, 20 Oct 2026); a pick made with
+       the arrows stands only while the words are the same */
+    if(q !== itemsQ){ clearTimeout(deb2); hint.textContent = ""; items = searchMatches(q); idx = 0; itemsQ = q; paint(); }
+    if(!items.length){ hint.textContent = T("itry_none"); return; }
+    land(items[Math.min(idx, items.length-1)].n);
   };
   document.getElementById("introfind").onclick = tryFind;
   box.onkeydown = e=>{
     if(e.key==="ArrowDown" && items.length){ e.preventDefault(); idx=(idx+1)%items.length; paint(); }
     else if(e.key==="ArrowUp" && items.length){ e.preventDefault(); idx=(idx-1+items.length)%items.length; paint(); }
-    else if(e.key==="Enter"){ e.preventDefault(); tryFind(); }
+    else if(e.key==="Enter" && !e.isComposing){ e.preventDefault(); tryFind(); }   /* a composing Enter belongs to the input method */
   };
   document.getElementById("introgo").onclick = ()=>done();
   /* Show me around: three short steps in the same window */
@@ -5257,7 +5297,7 @@ const pbHist = document.getElementById("pbhist"), pbMarks = document.getElementB
 const pbPlay = document.getElementById("pbplay"), pbSpeed = document.getElementById("pbspeed"), pbFollow = document.getElementById("pbfollow");
 const PLAY = {on:false, playing:false, t:-Infinity, model:null, speed:2, follow:true, snap:true, faces:new Map(), more:[], raf:null, last:0,
   idle:0, ended:false, drag:false, wasPlaying:false, onMap:0, history:null, histP:null, hist:null, histKey:"", hinted:false,
-  hero:null, party:null, ac:undefined, faceSize:26, watched:0, skipped:false};
+  hero:null, party:null, ac:undefined, faceSize:26, watched:0, skipped:false, capQ:[], capT:null};
 let PCAM = null;   /* the camera's spring: centre (map units) and log of the world width, with their speeds */
 const easeOut = p => 1 - Math.pow(1 - p, 3);
 const easeInOut = p => p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
@@ -5290,7 +5330,7 @@ function playOpen(){
   if(!(PLAY.t > PLAY.model.t0 && PLAY.t < PLAY.model.t1 - .01)) PLAY.t = PLAY.model.t0;
   PLAY.follow = true; PLAY.snap = true; PCAM = null; PLAY.ended = false;
   if(PLAY.t <= PLAY.model.t0){ PLAY.watched = 0; PLAY.skipped = false; }
-  pbCaps.innerHTML = "";
+  playCapsClear();
   playSetPlaying(true);
   syncMapChips();
   if(!PLAY.hinted){
@@ -5318,7 +5358,7 @@ function playStop(){
   playPartyEnd();
   if(PLAY.raf){ cancelAnimationFrame(PLAY.raf); PLAY.raf = null; }
   document.body.classList.remove("playing"); playEl.hidden = true;
-  facesEl.innerHTML = ""; PLAY.faces.clear(); PLAY.more = []; pbCaps.innerHTML = "";
+  facesEl.innerHTML = ""; PLAY.faces.clear(); PLAY.more = []; playCapsClear();
 }
 function playClose(){
   if(!PLAY.on) return;
@@ -5328,7 +5368,7 @@ function playClose(){
 function playSetPlaying(on){
   const m = PLAY.model;
   if(on && m && PLAY.t >= m.t1 - .01){   /* at the end, Play starts again from the beginning */
-    PLAY.t = m.t0; PLAY.snap = true; PLAY.follow = true; PCAM = null; pbCaps.innerHTML = ""; PLAY.watched = 0; PLAY.skipped = false;
+    PLAY.t = m.t0; PLAY.snap = true; PLAY.follow = true; PCAM = null; playCapsClear(); PLAY.watched = 0; PLAY.skipped = false;
   }
   if(on) PLAY.ended = false;
   PLAY.playing = !!on; PLAY.last = 0;
@@ -5671,18 +5711,49 @@ function playMileText(x){
   return Math.floor(x.t) + " · " + s.replace("%n", nm).replace("%p", pl);
 }
 const playHistText = x => x.y + (x.y2 && x.y2 !== x.y ? "–" + x.y2 : "") + " · " + pickL(x.en, x.fr);
-function playCaption(text, src, secs, cls){
-  const d = document.createElement("div");
-  d.className = "pcap" + (src ? " hist" : "") + (cls ? " " + cls : "");
-  d.innerHTML = `<span>${esc(text)}</span>` + (src && /^https:\/\//.test(src.url || "") ? `<a href="${esc(src.url)}" target="_blank" rel="noopener" title="${esc(src.src || "")}">${esc(T("play_source"))}</a>` : "");
-  pbCaps.appendChild(d);
-  while(pbCaps.children.length > 2) pbCaps.firstElementChild.remove();
-  setTimeout(()=>{ d.classList.add("out"); setTimeout(()=>d.remove(), 500); }, secs * 1000);
+/* the notes over the bar (site audit, 20 Oct 2026: at 5 and 10 years a second, and for one note even at 2, a note was
+   pushed off in under a second). At most two are up at a time, and none is pushed off before it has been up PCAP_MIN
+   seconds. A family note, or a history note, that comes while one of its kind went up less than that ago joins it as a
+   line of its own, so notes close together read as one list and none falls behind the years; any other note waits for
+   room. The coronation's royal note never waits: the year stands still for it. */
+const PCAP_MIN = 2.5, PCAP_LINES = 4;
+function playCapsClear(){ PLAY.capQ = []; clearTimeout(PLAY.capT); PLAY.capT = null; pbCaps.innerHTML = ""; }
+function playCaption(text, src, secs, cls, join){
+  PLAY.capQ.push({text, src, secs, cls, join: join || ""});
+  playCapsFlush();
+}
+function playCapsFlush(){
+  clearTimeout(PLAY.capT); PLAY.capT = null;
+  while(PLAY.capQ.length){
+    const c = PLAY.capQ[0], now = performance.now();
+    const up = [...pbCaps.children].filter(b => !b.classList.contains("out") && !b.classList.contains("royal"));
+    const into = c.join ? up.find(b => b._join === c.join && now - b._at < PCAP_MIN * 1000 && b.children.length < PCAP_LINES) : null;
+    if(!into && c.cls !== "royal" && up.length >= 2){
+      const old = up.reduce((a, b) => b._at < a._at ? b : a), wait = PCAP_MIN * 1000 - (now - old._at);
+      if(wait > 0){ PLAY.capT = setTimeout(playCapsFlush, wait + 15); return; }
+      old.remove();
+    }
+    PLAY.capQ.shift();
+    playCapShow(c, into);
+  }
+}
+function playCapShow(c, into){
+  const d = into || document.createElement("div"), ln = document.createElement("div"), now = performance.now();
+  ln.className = "pcl";
+  ln.innerHTML = `<span>${esc(c.text)}</span>` + (c.src && /^https:\/\//.test(c.src.url || "") ? `<a href="${esc(c.src.url)}" target="_blank" rel="noopener" title="${esc(c.src.src || "")}">${esc(T("play_source"))}</a>` : "");
+  if(!into){ d.className = "pcap" + (c.src ? " hist" : "") + (c.cls ? " " + c.cls : ""); d._join = c.join; d._end = 0; pbCaps.appendChild(d); }
+  d.appendChild(ln);
+  d._at = now;   /* its newest line went up now: it stays at least PCAP_MIN from here, and as long as that line asks */
+  if(now + c.secs * 1000 > d._end){
+    d._end = now + c.secs * 1000;
+    clearTimeout(d._t);
+    d._t = setTimeout(()=>{ d.classList.add("out"); setTimeout(()=>d.remove(), 500); if(d.isConnected) playCapsFlush(); }, c.secs * 1000);
+  }
 }
 function playFire(a, b){
   if(!(b > a)) return;
-  PLAY.model.miles.forEach(x => { if(x.t > a && x.t <= b) playCaption(playMileText(x), null, 6.5); });
-  (PLAY.history || []).forEach(x => { if(x.y > a && x.y <= b) playCaption(playHistText(x), x, 8); });
+  PLAY.model.miles.forEach(x => { if(x.t > a && x.t <= b) playCaption(playMileText(x), null, 6.5, "", "m"); });
+  (PLAY.history || []).forEach(x => { if(x.y > a && x.y <= b) playCaption(playHistText(x), x, 8, "", "h"); });
 }
 function playEnd(){
   const m = PLAY.model, live = m.tracks.filter(tr => tr.end === null);
@@ -5907,7 +5978,7 @@ pbRange.addEventListener("input", ()=>{
   if(!PLAY.drag){ PLAY.drag = true; PLAY.wasPlaying = PLAY.playing; }
   if(+pbRange.value - PLAY.t > 20) PLAY.skipped = true;
   playPartyEnd();
-  PLAY.t = +pbRange.value; PLAY.snap = true; PLAY.ended = false; pbCaps.innerHTML = "";
+  PLAY.t = +pbRange.value; PLAY.snap = true; PLAY.ended = false; playCapsClear();
   playKick();
 });
 pbRange.addEventListener("change", ()=>{
@@ -5921,7 +5992,7 @@ pbMarks.addEventListener("click", e=>{
   const to = Math.max(PLAY.model.t0, +b.dataset.t - 1.5 * PLAY.speed);
   if(to - PLAY.t > 20) PLAY.skipped = true;
   playPartyEnd();
-  PLAY.t = to; PLAY.snap = true; pbCaps.innerHTML = "";
+  PLAY.t = to; PLAY.snap = true; playCapsClear();
   playSetPlaying(true);
 });
 PLAYREADY = true;
@@ -6170,10 +6241,10 @@ function rBranch(iv){
   if(b) return `<span class="rbranch"><i style="background:var(${b.color})"></i>${esc(T(b.key))}</span>`;
   return iv.onTree === false ? `<span class="rbranch rnot">${T("res_not_on_tree")}</span>` : "";
 }
-function rPeople(iv){
+function rPeople(iv, lv = 3){
   const ps = (iv.people || []).filter(p => p.card || p.n);
   if(!ps.length) return "";
-  return `<div class="rsec"><h3 class="rlbl">${T("res_on_tree")}</h3><div class="rpeople">` + ps.map(p => {
+  return `<div class="rsec"><h${lv} class="rlbl">${T("res_on_tree")}</h${lv}><div class="rpeople">` + ps.map(p => {
     const n = p.card ? allNodes.find(x => x.p.id === p.card) : null;
     const name = n ? n.p.name : p.n, yrs = n ? fmtYears(n.p.years) : (p.y || "");
     return n ? `<button type="button" class="rperson" data-ra="person" data-card="${esc(p.card)}" title="${esc(T("map_intree"))}">${rIc(R_IC.tree)}<b>${esc(name)}</b><span>${esc(yrs)}</span></button>`
@@ -6189,13 +6260,13 @@ function rWhoSince(s){
   return [who, since].filter(Boolean).map(esc).join(" · ");
 }
 /* the facts of one source: where, how, next, why, what happened, and its visit list */
-function rSrcFacts(s){
+function rSrcFacts(s, lv = 4){
   const row = (k, v) => v ? `<div class="rfact"><span class="rk">${T(k)}</span><span class="rv">${esc(v)}</span></div>` : "";
   let h = `<div class="rfacts">` + row("res_where", rL(s, "where")) + row("res_how", rL(s, "how")) +
     row("res_who", rL(s, "who")) + row("res_since_l", s.since ? rDate(s.since) : "") + `</div>`;
   if(s.next) h += `<div class="rnext"><span class="rlbl">${T("res_next")}</span><span>${esc(rL(s, "next"))}</span></div>`;
   if(s.why) h += `<p class="rwhy"><span class="rlbl">${T("res_why")}</span> ${esc(rL(s, "why"))}</p>`;
-  if(s.log && s.log.length) h += `<h4 class="rlbl">${T("res_log")}</h4>` + rLog(s.log);
+  if(s.log && s.log.length) h += `<h${lv} class="rlbl">${T("res_log")}</h${lv}>` + rLog(s.log);
   if(s.visit && RES.visits[s.visit]) h += `<button type="button" class="rbtn" data-ra="visit" data-id="${esc(s.visit)}">${rIc(R_IC.arch)}<span>${esc(rT("res_open_visit").replace("%s", rL(RES.visits[s.visit], "short") || rL(RES.visits[s.visit], "name")))}</span>${rIc(R_IC.right)}</button>`;
   return h;
 }
@@ -6252,8 +6323,11 @@ function rDetail(iv, phone){
   const th = RES.themes.find(t => t.id === iv.theme);
   const imp = rImp(iv), also = rAlso(iv);
   const firstOpen = Math.max(0, iv.qs.findIndex(q => q.state !== "answered"));
+  /* the title's level, and the levels under it from that: on the phone the investigation is a page of its own, so its
+     title is a level 1 and its sections a level 2 (site audit, 20 Oct 2026: they were a 3 and a 4 on the phone too) */
+  const L = phone ? 1 : 2;
   let h = `<article class="rdet" aria-labelledby="ri-h">` +
-    `<div class="rkick">${esc(th ? rL(th, "name") : "")}</div><h${phone ? 1 : 2} id="ri-h" class="rdt" tabindex="-1">${esc(rL(iv, "title"))}</h${phone ? 1 : 2}>` +
+    `<div class="rkick">${esc(th ? rL(th, "name") : "")}</div><h${L} id="ri-h" class="rdt" tabindex="-1">${esc(rL(iv, "title"))}</h${L}>` +
     `<div class="rmeta">${rTierChip(iv.tier)}${imp ? `<span class="rimp">${esc(imp)}</span>` : ""}` +
     (iv.tier !== "closed" ? `<span class="rimp">· ${esc(rT("res_priority", iv.rank, iv.of))}</span>` : "") +
     `<span class="rupd">${esc(rT("res_updated").replace("%d", rDate(iv.updated)))}</span></div>` +
@@ -6261,10 +6335,10 @@ function rDetail(iv, phone){
     `<p class="rsum">${esc(rL(iv, "summary"))}</p>`;
   if(iv.next) h += `<div class="rnextbox"><div class="rlbl">${T("res_next")}${imp ? ` · <span>${esc(imp)}</span>` : ""}</div><div class="rnt">${esc(rL(iv, "next"))}</div>${also ? `<div class="ralso">${esc(also)}</div>` : ""}</div>`;
   if(iv.dec && rDecHref(iv.dec)) h += `<div class="rdecs">${rDecide(iv.dec)}</div>`;
-  h += rPeople(iv);
-  h += `<div class="rsec"><div class="rsech"><h3 class="rlbl">${T("res_progress")}</h3><span>${esc(rChecked(iv.closed, iv.total))}</span></div>${rBar(iv.sc, iv.total, "big")}` +
+  h += rPeople(iv, L + 1);
+  h += `<div class="rsec"><div class="rsech"><h${L + 1} class="rlbl">${T("res_progress")}</h${L + 1}><span>${esc(rChecked(iv.closed, iv.total))}</span></div>${rBar(iv.sc, iv.total, "big")}` +
     `<div class="rlegend">` + R_SEG.filter(k => iv.sc[k]).map(k => `<span><i class="sg-${k}"></i>${iv.sc[k]} ${esc(T(iv.sc[k] === 1 ? "rs1_" + k : "rsn_" + k))}</span>`).join("") + `</div></div>`;
-  h += `<h3 class="rlbl rqh">${T("res_questions")}</h3>`;
+  h += `<h${L + 1} class="rlbl rqh">${T("res_questions")}</h${L + 1}>`;
   iv.qs.forEach((q, qi) => {
     const k = rQKey(iv, qi);
     const open = phone ? true : (k in RS.qc ? RS.qc[k] : qi === firstOpen || q.src.some(s => RS.sx[s.id] || (s.dec && rDecHref(s.dec))));
@@ -6272,7 +6346,7 @@ function rDetail(iv, phone){
     const sum = R_SEG.filter(x => cnt[x]).map(x => cnt[x] + " " + T(cnt[x] === 1 ? "rs1_" + x : "rsn_" + x)).join(", ");
     h += `<section class="rq${open ? " open" : ""}"><div class="rqt"><span class="rqn">${qi + 1}</span>${rChip("qs-" + q.state, T("rq_" + q.state))}` +
       (phone ? "" : `<button type="button" class="tbtn rqtog" data-ra="q" data-k="${esc(k)}" aria-expanded="${open}" aria-controls="rq-${esc(k.replace(":", "-"))}">${esc(open ? T("res_hide") : rT(q.src.length === 1 ? "res_show_1" : "res_show_n", q.src.length))}</button>`) +
-      `</div><h4 class="rqq">${esc(rL(q, "q"))}</h4>${q.note ? `<p class="rqnote">${esc(rL(q, "note"))}</p>` : ""}` +
+      `</div><h${L + 2} class="rqq">${esc(rL(q, "q"))}</h${L + 2}>${q.note ? `<p class="rqnote">${esc(rL(q, "note"))}</p>` : ""}` +
       (open ? "" : `<p class="rqsum">${esc(rT(q.src.length === 1 ? "res_n_src_1" : "res_n_src", q.src.length))}${sum ? ": " + esc(sum) : ""}</p>`) +
       `<div class="rsrcs" id="rq-${esc(k.replace(":", "-"))}"${open ? "" : " hidden"}><div class="rlbl rlook">${T("res_looking")}</div>` +
       q.src.map(s => rSrcRow(s, phone)).join("") + `</div></section>`;
@@ -6346,7 +6420,7 @@ function rPhSrc(){
   return rBack(rL(iv, "title")) + `<article class="rsheet" aria-labelledby="rs-h"><div class="rkick">${esc(rL(q, "q"))}</div>` +
     `<h1 id="rs-h" tabindex="-1">${esc(rL(s, "t"))}</h1><div class="rmeta">${rStChip(s.st)}<span class="rupd">${rWhoSince(s)}</span></div>` +
     (s.dec && rDecHref(s.dec) ? `<div class="rdecs">${rDecide(s.dec)}</div>` : "") +
-    rSrcFacts(s) + `</article>`;
+    rSrcFacts(s, 2) + `</article>`;   /* under the page's level-1 title */
 }
 function rVisit(){
   const v = RES.visits[RS.visit];

@@ -202,7 +202,10 @@ if (!REAL) {
 {
   const json = Buffer.from(JSON.stringify([
     { y: 1600, y2: null, en: "A test event in 1600", fr: "Un événement de test en 1600", src: "Test source", url: "https://example.org/a" },
-    { y: 1700, y2: 1705, en: "Another test event, 1700–1705", fr: "Un autre événement de test, 1700–1705", src: "Test source", url: "https://example.org/b" }]));
+    { y: 1700, y2: 1705, en: "Another test event, 1700–1705", fr: "Un autre événement de test, 1700–1705", src: "Test source", url: "https://example.org/b" }]
+    /* five a year apart, which Play at its top speed passes in half a second (the notes test, 20 Oct 2026) */
+    .concat([0, 1, 2, 3, 4].map(i => ({ y: 1800 + i, y2: null, en: "A close test event in " + (1800 + i), fr: "Un événement de test rapproché en " + (1800 + i),
+      src: "Test source", url: "https://example.org/c" + i })))));
   fs.writeFileSync(path.join(OUT, "media", "history.bin"), P.sealBlob(P.keyFor(PW, SALT, ITER), "h:" + json.length, zlib.deflateRawSync(json), Buffer.concat([Buffer.from("history\0"), json])).file);
 }
 
@@ -435,7 +438,40 @@ async function run() {
     ok(s1 === "2 yr/s" && (await page.textContent("#pbspeed")) === "5 yr/s", "the speed steps from 2 to 5 years a second");
     const drawn = await page.evaluate(() => { const c = document.getElementById("pbhist"), d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i]) n++; return n; });
     ok(drawn > 100, "the timeline draws the births, moves and deaths (" + drawn + " px)");
-    ok((await page.$$("#pbmarks .pbm.h")).length === 2 && (await page.$$("#pbmarks .pbm.f")).length >= 3, "the history notes and the family's own are marked on the timeline");
+    ok((await page.$$("#pbmarks .pbm.h")).length === 7 && (await page.$$("#pbmarks .pbm.f")).length >= 3, "the history notes and the family's own are marked on the timeline");
+    /* the notes over the bar (site audit, 20 Oct 2026: at 5 and 10 years a second a note was pushed off in 83 ms).
+       The five notes of 1800 to 1804, played at the top speed: every one comes up, none leaves before 2.5 s, and
+       two boxes at most, so close notes share one */
+    await page.evaluate(() => { const r = document.getElementById("pbrange"); r.value = 1797; r.dispatchEvent(new Event("input", { bubbles: true })); r.dispatchEvent(new Event("change", { bubbles: true })); });
+    await page.click("#pbspeed");
+    const topSpeed = await page.textContent("#pbspeed");
+    const watching = page.evaluate(() => new Promise(done => {
+      const el = document.querySelector("#playbar .pbcaps"), t0 = performance.now(), first = {}, last = {};
+      let most = 0;
+      const look = () => {
+        const t = performance.now() - t0, up = [...el.querySelectorAll(".pcap")].filter(b => !b.classList.contains("out"));
+        most = Math.max(most, up.length);
+        /* a note's words: its line's (or, one note to a box, the box's) first span */
+        up.forEach(b => [...b.querySelectorAll(".pcl")].concat(b.querySelector(".pcl") ? [] : [b]).forEach(l => {
+          const k = (l.querySelector("span") || {}).textContent || ""; if (!/^180[0-4] · /.test(k)) return; if (!(k in first)) first[k] = t; last[k] = t; }));
+      };
+      const mo = new MutationObserver(look);
+      mo.observe(el, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
+      const tick = setInterval(look, 40);
+      setTimeout(() => {
+        look(); mo.disconnect(); clearInterval(tick);
+        const upNow = new Set([...el.querySelectorAll(".pcap:not(.out) span")].map(l => l.textContent));
+        const span = Object.keys(first).map(k => first[k]);
+        done({ seen: Object.keys(first).length, most, within: span.length ? Math.round(Math.max(...span) - Math.min(...span)) : -1,
+          short: Object.keys(first).filter(k => !upNow.has(k) && last[k] - first[k] < 2400).map(k => k.slice(0, 4) + " " + Math.round(last[k] - first[k]) + " ms") });
+      }, 6000);
+    }));
+    await page.click("#pbplay");
+    const burst = await watching;
+    await page.click("#pbplay");
+    for (let i = 0; i < 3; i++) await page.click("#pbspeed");
+    ok(topSpeed === "10 yr/s" && burst.seen === 5 && burst.within < 1500 && burst.most <= 2 && !burst.short.length && (await page.textContent("#pbspeed")) === "5 yr/s",
+      "at 10 years a second, five notes a year apart all come up at once, none leaves before 2.5 s, two boxes at most (" + JSON.stringify(burst) + ")");
     /* in 1745 the nine sons are all on dead lines with no portrait. Seen from afar their home crowd has no room (a
        crowd in the Netherlands is close by), so they wait in a +N, but one face always shows (Cory, 17 Oct 2026: "never
        show JUST the +x"); the ninth, alone on his island, has his face */
@@ -769,6 +805,12 @@ async function run() {
     const lb = lum(look.bg), li = lum(look.ink);
     ok(look.dark && lb < 0.1 && (li + 0.05) / (lb + 0.05) >= 7, "dark mode: a dark page with light text (" + look.bg + " / " + look.ink + ")");
     await shot(page, "d9-dark.png");
+    /* the cards' small badges in dark mode (site audit, 20 Oct 2026: "→ USA" was 2.6:1) */
+    await page.click("#vt-tree");
+    await page.waitForTimeout(400);
+    const tags = await page.$$eval(".node .badge", els => els.map(e => ({ t: e.textContent, c: getComputedStyle(e).color, b: getComputedStyle(e).backgroundColor })));
+    const tagLow = tags.filter(x => { const a = lum(x.c), b = lum(x.b); return !((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) >= 4.5); });
+    ok(tags.length >= 1 && !tagLow.length, "dark mode: a card's badge text is 4.5:1 or better (" + tags.map(x => x.t + " " + x.c + " on " + x.b).join(" | ") + ")");
     await ctx.close();
   }
   /* ---------------- the Map's file: a failed fetch is retried, and a slow one still draws ---------------- */
@@ -1116,6 +1158,204 @@ async function run() {
       });
       ok(Math.abs(g.right - g.left) < 3, "in Research the dock ends at its last view: no empty stretch on the right (" + Math.round(g.left) + "px / " + Math.round(g.right) + "px)");
       await shot(page, "r9-research-dock-phone.png");
+    }
+    await ctx.close();
+  }
+  /* ---------------- search: Enter goes by the words in the box (site audit, 20 Oct 2026) ----------------
+     Both boxes wait a moment before they list names. Enter inside that wait opened the person the box's
+     earlier words found, and in a fresh header box it did nothing. */
+  {
+    console.log("\n== search: Enter goes by the words in the box");
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await ctx.newPage();
+    watch(page, "search enter");
+    await page.goto(BASE);
+    await unlock(page, { keepIntro: true });
+    const lit = () => page.evaluate(() => { const e = document.querySelector(".node.sel .nm"); return e ? e.textContent : null; });
+    /* new words and Enter in the same moment, as a fast typist or a paste does */
+    const swap = (sel, words) => page.evaluate(([sel, words]) => {
+      const b = document.querySelector(sel); b.focus(); b.value = words; b.dispatchEvent(new Event("input", { bubbles: true }));
+      b.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    }, [sel, words]);
+    ok(await page.evaluate(() => document.getElementById("intro").style.display === "flex"), "the welcome card is open, with its search");
+    /* the welcome's search: a list for other words, a pick moved down it with the arrows, then new words and Enter */
+    await page.fill("#introsearch", "Testmann");
+    await page.waitForSelector("#introsug .isit", { timeout: 3000 });
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("ArrowDown");
+    await swap("#introsearch", "Branch");
+    await page.waitForTimeout(900);
+    const gotW = await lit(), closed = await page.evaluate(() => document.getElementById("intro").style.display !== "flex");
+    /* the first name those words find, as the header's list (the same matcher) puts it */
+    await page.fill("#search", "Branch");
+    await page.waitForSelector("#suggest .it", { timeout: 3000 });
+    const wantW = await page.evaluate(() => document.querySelector("#suggest .it .nm2").textContent);
+    await page.keyboard.press("Escape");
+    await page.fill("#search", "");
+    ok(closed && gotW && gotW === wantW, "the welcome's search opens the first person the new words find, not a pick from the old list (" + gotW + ", first is " + wantW + ")");
+    /* the header's search: a list for other words on screen, then new words and Enter */
+    await page.fill("#search", "Child3");
+    await page.waitForSelector("#suggest .it", { timeout: 3000 });
+    await swap("#search", "Branch4");
+    await page.waitForTimeout(900);
+    ok((await lit()) === "Branch4 Testmann", "the header's search opens the person the box names, not the list on screen (" + (await lit()) + ")");
+    /* and in a fresh box, before any list has come up */
+    await swap("#search", "Branch5");
+    await page.waitForTimeout(900);
+    ok((await lit()) === "Branch5 Testmann", "Enter in a fresh header box opens the person too (" + (await lit()) + ")");
+    /* the arrows still choose, while the words stay the same */
+    await page.fill("#search", "Branch");
+    await page.waitForSelector("#suggest .it", { timeout: 3000 });
+    await page.keyboard.press("ArrowDown");
+    const second = await page.evaluate(() => { const e = document.querySelectorAll("#suggest .it")[1]; return e ? e.querySelector(".nm2").textContent : null; });
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(900);
+    ok(second && (await lit()) === second, "with the same words, Enter opens the name picked with the arrows (" + second + ")");
+    await ctx.close();
+  }
+  /* ---------------- search lists, for the keyboard and for assistive tech (site audit, 20 Oct 2026) ----------------
+     The arrows could pick a row scrolled out of sight in the welcome's list, and Enter then opened someone the
+     reader could not see; neither list told assistive tech what was on it or which row was picked, and the header's
+     "No match" was never said. The Living tag's green was 4.43:1 on its tint, and an input method's Enter (still
+     composing) in the welcome's box opened a person. */
+  {
+    console.log("\n== search lists: keyboard and assistive tech");
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await ctx.newPage();
+    watch(page, "search lists");
+    await page.goto(BASE);
+    await unlock(page, { keepIntro: true });
+    const state = (box, list) => page.evaluate(([box, list]) => {
+      const b = document.getElementById(box), l = document.getElementById(list), act = l.querySelector(".act");
+      const lr = l.getBoundingClientRect(), ar = act ? act.getBoundingClientRect() : null, opts = [...l.querySelectorAll('[role="option"]')];
+      return { role: b.getAttribute("role"), exp: b.getAttribute("aria-expanded"), ctl: b.getAttribute("aria-controls"), ad: b.getAttribute("aria-activedescendant"),
+        act: act ? act.id : null, listRole: l.getAttribute("role"), opts: opts.length, sel: opts.filter(o => o.getAttribute("aria-selected") === "true").map(o => o.id).join(),
+        seen: !!ar && ar.top >= lr.top - 0.5 && ar.bottom <= lr.bottom + 0.5, scrolls: l.scrollHeight > l.clientHeight + 1 };
+    }, [box, list]);
+    const walk = async (box, list) => {
+      const trail = [];
+      for (let i = 0; i < 9; i++) { await page.keyboard.press("ArrowDown"); trail.push(await state(box, list)); }
+      return { trail, unseen: trail.filter(s => !s.seen).length, untold: trail.filter(s => !(s.act && s.ad === s.act && s.sel === s.act)).length };
+    };
+    /* the welcome's box */
+    await page.fill("#introsearch", "Testmann");
+    await page.waitForSelector("#introsug .isit", { timeout: 3000 });
+    const w0 = await state("introsearch", "introsug"), ww = await walk("introsearch", "introsug");
+    ok(w0.role === "combobox" && w0.ctl === "introsug" && w0.exp === "true" && w0.listRole === "listbox" && w0.opts === 8 && w0.ad === "isug-o0",
+      "the welcome's box is a combobox over a listbox of 8 options, its first one active (" + JSON.stringify(w0) + ")");
+    ok(w0.scrolls && ww.unseen === 0, "every row the arrows pick in the welcome's list is scrolled into sight (" + ww.unseen + " of 9 out of sight; the list scrolls: " + w0.scrolls + ")");
+    ok(ww.untold === 0, "…and each is the box's active, selected option (" + ww.untold + " of 9 not)");
+    /* an input method's Enter is its own; the next Enter opens the picked name */
+    await page.evaluate(() => document.getElementById("introsearch").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", isComposing: true, bubbles: true, cancelable: true })));
+    await page.waitForTimeout(400);
+    ok(await page.evaluate(() => document.getElementById("intro").style.display === "flex"), "an Enter that is still composing (an input method's) leaves the welcome open");
+    const picked = await page.evaluate(() => { const a = document.querySelector("#introsug .act"); return a ? a.firstChild.textContent : null; });
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(900);
+    const litNow = await page.evaluate(() => { const e = document.querySelector(".node.sel .nm"); return e ? e.textContent : null; });
+    ok(picked && litNow === picked && (await page.evaluate(() => document.getElementById("intro").style.display !== "flex")), "…and the plain Enter after it opens the name picked in sight (" + litNow + ")");
+    /* the header's box */
+    await page.fill("#search", "Testmann");
+    await page.waitForSelector("#suggest .it", { timeout: 3000 });
+    const h0 = await state("search", "suggest"), hw = await walk("search", "suggest");
+    ok(h0.role === "combobox" && h0.ctl === "suggest" && h0.exp === "true" && h0.listRole === "listbox" && h0.opts === 8 && h0.ad === "sug-o0" &&
+       (await page.getAttribute("#suggest", "aria-label")) === "Search a name" && hw.untold === 0 && hw.unseen === 0,
+      "the header's box is a combobox over a named listbox, and each row the arrows pick is its active option, in sight (" + hw.untold + " untold, " + hw.unseen + " out of sight, of 9)");
+    /* the Living tag's text on its tint, in light and then dark */
+    const lvRatio = () => page.evaluate(() => {
+      const e = document.querySelector("#suggest .lv"); if (!e) return 0;
+      const cs = getComputedStyle(e), px = (c) => { const m = c.match(/^color\(srgb ([\d.]+) ([\d.]+) ([\d.]+)/); return m ? [+m[1] * 255, +m[2] * 255, +m[3] * 255] : (c.match(/[\d.]+/g) || []).slice(0, 3).map(Number); };
+      const L = c => { const v = c.map(x => x / 255).map(x => x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4)); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
+      const a = L(px(cs.color)), b = L(px(cs.backgroundColor)); return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+    });
+    const lvL = await lvRatio();
+    await page.evaluate(() => document.documentElement.classList.add("dark"));
+    const lvD = await lvRatio();
+    await page.evaluate(() => document.documentElement.classList.remove("dark"));
+    ok(lvL >= 4.5 && lvD >= 4.5, "the Living tag's text is 4.5:1 or better on its tint, as drawn (" + lvL.toFixed(2) + " light, " + lvD.toFixed(2) + " dark)");
+    /* no one by those words: a line, not a list, and said aloud */
+    await page.fill("#search", "Qqzzx");
+    await page.waitForSelector("#suggest .none", { timeout: 3000 });
+    const nm = await page.evaluate(() => { const st = document.getElementById("sugstat");
+      return { role: document.getElementById("suggest").getAttribute("role"), label: document.getElementById("suggest").getAttribute("aria-label"),
+        exp: document.getElementById("search").getAttribute("aria-expanded"), ad: document.getElementById("search").getAttribute("aria-activedescendant"),
+        live: st ? st.getAttribute("aria-live") : null, said: st ? st.textContent : null }; });
+    ok(nm.role === null && nm.label === null && nm.exp === "false" && nm.ad === null && nm.live === "polite" && nm.said === "No match",
+      "the header's No match is a line, not a list, and a polite live line says it (" + JSON.stringify(nm) + ")");
+    await page.keyboard.press("Escape");
+    ok((await page.evaluate(() => { const st = document.getElementById("sugstat"); return [document.getElementById("search").getAttribute("aria-expanded"), st ? st.textContent : "(none)"].join("|"); })) === "false|",
+      "Escape closes the list, and the box says so");
+    await page.fill("#search", "");
+    await ctx.close();
+  }
+  /* ---------------- headings and landmarks (site audit, 20 Oct 2026) ----------------
+     On a phone a Research screen is a page of its own: its headings step down one level at a time from its title.
+     The map's Go to places, Play and the phone's Go to menu sit in a named region, so a landmark jump reaches them. */
+  for (const phone of [false, true]) {
+    console.log("\n== " + (phone ? "phone" : "desktop") + ": headings and landmarks");
+    const ctx = await browser.newContext(phone ? { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true } : { viewport: { width: 1280, height: 800 } });
+    const page = await ctx.newPage();
+    watch(page, (phone ? "phone" : "desktop") + " landmarks");
+    await page.goto(BASE);
+    await unlock(page);
+    await page.waitForTimeout(600);
+    /* every heading on screen, in order: none may go down more than one level from the one before */
+    const steps = () => page.evaluate(() => {
+      const hs = [...document.querySelectorAll("h1,h2,h3,h4,h5,h6")].filter(h => h.getClientRects().length && getComputedStyle(h).visibility !== "hidden");
+      const lv = hs.map(h => +h.tagName[1]), bad = lv.filter((l, i) => i && l > lv[i - 1] + 1);
+      return { seq: lv.join(""), bad: bad.length };
+    });
+    const region = sel => page.evaluate(s => {
+      const el = document.querySelector(s); if (!el) return null;
+      const lm = el.closest("header,nav,main,aside,footer,[role=region][aria-label],[role=banner],[role=navigation],[role=main]");
+      return lm ? (lm.getAttribute("aria-label") || lm.tagName.toLowerCase()) : "";
+    }, sel);
+    if (phone) {
+      await page.tap('#dock [data-view="research"]');
+      await page.waitForSelector(".rph .rinv", { timeout: 5000 });
+      await page.tap('.rinv[data-id="i2"]');
+      await page.waitForSelector(".rdet .rdt");
+      await page.waitForTimeout(300);
+      const inv = await steps();
+      ok(inv.seq.startsWith("12") && !inv.bad, "phone: an investigation's headings step one level at a time from its title (" + inv.seq + ")");
+      await page.tap('[data-ra="src"][data-id="s6"]');
+      await page.waitForSelector(".rsheet h1");
+      await page.waitForTimeout(300);
+      const src = await steps();
+      ok(src.seq === "12" && !src.bad && /What has happened/.test(await page.textContent(".rsheet h2")), "phone: a source's page goes from its title to What has happened, level 1 to 2 (" + src.seq + ")");
+    } else {
+      await page.click("#vt-res");
+      await page.waitForSelector(".rdet .rdt", { timeout: 5000 });
+      await page.evaluate(() => { location.hash = "#research/i2"; });
+      await page.waitForSelector(".rdet .rdt");
+      await page.click('[data-ra="src"][data-id="s6"]');
+      await page.waitForTimeout(400);
+      const desk = await steps();
+      ok(!desk.bad && /^1+2/.test(desk.seq), "desktop: Research's headings step one level at a time, with a source open (" + desk.seq + ")");
+    }
+    /* the map: its controls are in the region, which is not there on the other views */
+    await page.evaluate(() => document.querySelector('#dock [data-view="tree"]').click());
+    await page.waitForTimeout(500);
+    ok(await page.evaluate(() => { const r = document.querySelector('[role=region][data-i18n-aria="map_ctl"]'); return !!r && !r.getClientRects().length; }),
+      (phone ? "phone" : "desktop") + ": on the tree there is no empty Map controls region");
+    await page.evaluate(() => document.querySelector('#dock [data-view="map"]').click());
+    await page.waitForTimeout(1500);
+    if (!phone) {
+      ok((await region("#goto")) === "Map controls" && (await region("#playchip")) === "Map controls" && await page.isVisible('#goto [data-mr="alsace"]'),
+        "desktop: the map's Go to places and Play are in the Map controls region");
+    } else {
+      await page.tap("#gochip");
+      await page.waitForSelector("#gomenu button", { state: "visible", timeout: 3000 }).catch(() => {});
+      const menu = await page.evaluate(() => {
+        const m = document.getElementById("gomenu"), b = m.querySelector("button"); if (!b || !b.getClientRects().length) return null;
+        const r = b.getBoundingClientRect(), top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return { onTop: !!top && m.contains(top), n: m.querySelectorAll("button").length };
+      });
+      ok((await region("#gomenu")) === "Map controls" && (await region("#gochip")) === "Map controls" && menu && menu.onTop && menu.n >= 2,
+        "phone: the open Go to menu is in the Map controls region and still on top of the page (" + JSON.stringify(menu) + ")");
+      await page.evaluate(() => document.getElementById("lang").click());
+      await page.waitForTimeout(300);
+      ok((await region("#gochip")) === "Commandes de la carte", "phone: the region is named in French too");
     }
     await ctx.close();
   }
