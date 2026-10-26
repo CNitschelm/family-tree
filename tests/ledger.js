@@ -86,7 +86,8 @@ fs.writeFileSync(path.join(ARCH, 'archive', 'store', 'state.json'), JSON.stringi
   [sid(URL_C)]: stored(URL_C, '2026-09-01.html', 'text/html'),
   [sid(URL_D)]: stored(URL_D, '2026-09-01.html', 'text/html') }));
 
-const env = { ...process.env, FT_ROOT: T, FT_ARCHIVE: ARCH, FT_LEDGER: path.join(T, 'ledger') };
+/* FT_RESEARCH too: a cloud shell's ~/.ft-env points it at the real research.json, which the throwaway repo must not read */
+const env = { ...process.env, FT_ROOT: T, FT_ARCHIVE: ARCH, FT_LEDGER: path.join(T, 'ledger'), FT_RESEARCH: path.join(T, 'research.json') };
 delete env.FT_WHO;
 let n = 0;
 function change(cs, extra = []) {

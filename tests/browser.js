@@ -1245,10 +1245,20 @@ async function run() {
       "the welcome's box is a combobox over a listbox of 8 options, its first one active (" + JSON.stringify(w0) + ")");
     ok(w0.scrolls && ww.unseen === 0, "every row the arrows pick in the welcome's list is scrolled into sight (" + ww.unseen + " of 9 out of sight; the list scrolls: " + w0.scrolls + ")");
     ok(ww.untold === 0, "…and each is the box's active, selected option (" + ww.untold + " of 9 not)");
-    /* an input method's Enter is its own; the next Enter opens the picked name */
-    await page.evaluate(() => document.getElementById("introsearch").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", isComposing: true, bubbles: true, cancelable: true })));
-    await page.waitForTimeout(400);
-    ok(await page.evaluate(() => document.getElementById("intro").style.display === "flex"), "an Enter that is still composing (an input method's) leaves the welcome open");
+    /* an input method's Enter is its own, whether the browser says so by isComposing or (Safari, once the text is
+       set) only by keyCode 229; the next Enter opens the picked name */
+    const imeEnter = (id, how) => page.evaluate(([id, how]) => {
+      const ev = new KeyboardEvent("keydown", { key: "Enter", isComposing: how === "composing", bubbles: true, cancelable: true });
+      if (how === "229") Object.defineProperty(ev, "keyCode", { get: () => 229 });
+      document.getElementById(id).dispatchEvent(ev);
+      return ev.defaultPrevented;
+    }, [id, how]);
+    for (const how of ["composing", "229"]) {
+      const taken = await imeEnter("introsearch", how);
+      await page.waitForTimeout(400);
+      ok(!taken && await page.evaluate(() => document.getElementById("intro").style.display === "flex"),
+        "an input method's Enter (" + how + ") leaves the welcome open and is not taken from the input method");
+    }
     const picked = await page.evaluate(() => { const a = document.querySelector("#introsug .act"); return a ? a.firstChild.textContent : null; });
     await page.keyboard.press("Enter");
     await page.waitForTimeout(900);
@@ -1261,6 +1271,16 @@ async function run() {
     ok(h0.role === "combobox" && h0.ctl === "suggest" && h0.exp === "true" && h0.listRole === "listbox" && h0.opts === 8 && h0.ad === "sug-o0" &&
        (await page.getAttribute("#suggest", "aria-label")) === "Search a name" && hw.untold === 0 && hw.unseen === 0,
       "the header's box is a combobox over a named listbox, and each row the arrows pick is its active option, in sight (" + hw.untold + " untold, " + hw.unseen + " out of sight, of 9)");
+    /* the header's box leaves an input method's Enter alone too: the words stay, the list stays open, no one is opened */
+    for (const how of ["composing", "229"]) {
+      const before = await page.evaluate(() => { const e = document.querySelector(".node.sel .nm"); return e ? e.textContent : null; });
+      const taken = await imeEnter("search", how);
+      await page.waitForTimeout(400);
+      const after = await page.evaluate(() => ({ v: document.getElementById("search").value, open: document.getElementById("suggest").style.display === "block",
+        lit: (document.querySelector(".node.sel .nm") || {}).textContent || null }));
+      ok(!taken && after.v === "Testmann" && after.open && after.lit === before,
+        "an input method's Enter (" + how + ") in the header's box keeps its words and list and opens no one (" + JSON.stringify(after) + ")");
+    }
     /* the Living tag's text on its tint, in light and then dark */
     const lvRatio = () => page.evaluate(() => {
       const e = document.querySelector("#suggest .lv"); if (!e) return 0;
@@ -1410,7 +1430,10 @@ async function run() {
     const b = BD.build(page0, cfg, DIR);
     const e = await BD.encrypt(b.html, cfg, DIR, { files: b.files });
     BD.verify(e.html, b.defaults, cfg, e.files);
-    BD.writeFolder(DEMO, "index.html", e.html, e.files);
+    /* browsed as it is published: minified (PERF-3), when the tools for that are here */
+    const slimWhy = BD.slimReady();
+    console.log(slimWhy ? "  --  the demo is browsed readable, not minified: " + slimWhy : "  (the demo is browsed minified, as it is published)");
+    BD.writeFolder(DEMO, "index.html", slimWhy ? e.html : await BD.slim(e.html), e.files);
     const wrote = new Set(["/demo/", "/demo/index.html", ...[...e.files.keys()].map(f => "/demo/" + f)]);
     const dEnc = P.readEnc(e.html), cardsOnly = P.openEnc(dEnc, PW, null, { core: true });
     ok(dEnc.v === 3 && e.files.has("media/" + dEnc.x + ".bin") && !cardsOnly.profile.bio && !JSON.stringify(cardsOnly).includes("oldest test person"),

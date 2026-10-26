@@ -3722,7 +3722,7 @@ searchEl.addEventListener("input",e=>{
 searchEl.addEventListener("keydown",e=>{
   /* Enter goes by the words in the box now. Within the 150 ms wait the list on screen was made from older words
      (or there was none yet), and Enter opened the person those words found (site audit, 20 Oct 2026) */
-  if(e.key==="Enter" && !e.isComposing){
+  if(e.key==="Enter" && !e.isComposing && e.keyCode !== 229){   /* a composing Enter (229: Safari's, after the text is set) belongs to the input method */
     const q = searchEl.value.trim();
     if(!q) return;
     e.preventDefault();
@@ -3962,7 +3962,7 @@ function showIntro(){
   box.onkeydown = e=>{
     if(e.key==="ArrowDown" && items.length){ e.preventDefault(); idx=(idx+1)%items.length; paint(); }
     else if(e.key==="ArrowUp" && items.length){ e.preventDefault(); idx=(idx-1+items.length)%items.length; paint(); }
-    else if(e.key==="Enter" && !e.isComposing){ e.preventDefault(); tryFind(); }   /* a composing Enter belongs to the input method */
+    else if(e.key==="Enter" && !e.isComposing && e.keyCode !== 229){ e.preventDefault(); tryFind(); }   /* a composing Enter (229: Safari's) belongs to the input method */
   };
   document.getElementById("introgo").onclick = ()=>done();
   /* Show me around: three short steps in the same window */

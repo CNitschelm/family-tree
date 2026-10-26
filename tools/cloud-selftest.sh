@@ -19,7 +19,8 @@
 # than the airlock takes, no writer lock or someone else's, a commit a queue rebuild dropped, other site
 # work under this session's commits, a private push that meets the same lines: undone), the airlock's
 # verdicts (refused blocks setup and the lock, a finish already under way still queues with a warning,
-# published releases), direct publishing (only with an empty queue and the writer lock), a routine that
+# published releases), direct publishing (only with an empty queue and the writer lock; live only when the site
+# serves the commit's own page, not just its payload), a routine that
 # clones the site itself or runs setup from inside its own clone, a QUEUE CONFLICT (setup and the lock
 # stop), a read-only session (FT_READONLY=1) that neither stops on a blocked queue nor pushes, a finish that
 # could not queue (exit 2: the same machine's setup then stops, and the printed command repairs it),
@@ -408,6 +409,26 @@ quiet lock H take "h" "direct"
 check "direct publishing (interactive, empty queue, the lock held) pushes public main" in_cloud H env FT_PUBLISH=direct FT_SKIP_LIVE=1 bash "$TOOLS/cloud-finish.sh" "Update working state" "h"
 test "$(git --git-dir="$GHS" rev-parse main)" = "$(git -C "$T/H/family-tree" rev-parse HEAD)" && ok "…public main is that commit" || no "direct push"
 gp show main:ledger/LOCK | grep -qx free && ok "…and the lock is released" || no "direct did not release"
+# the live check after a direct push: a page whose code changed and whose payload did not keeps its iv, so only
+# the page's own bytes tell the new page from the old one (a local "site" serves whichever page is put in it)
+mkdir -p "$T/www"; git --git-dir="$GHS" show main:index.html > "$T/www/index.html"
+port=$(( 20000 + RANDOM % 20000 )); ( cd "$T/www" && exec python3 -m http.server --bind 127.0.0.1 "$port" ) >/dev/null 2>&1 & wwwpid=$!
+sleep 1
+codec() { # $1 = a comment: a commit of page code (the payload unchanged, so the gate's stamp still holds)
+  echo "<!-- $1 -->" >> "$T/H/family-tree/index.html" && gnohook -C "$T/H/family-tree" commit -qam "Update page code" \
+    && grep -o 'const ENC = {v:[0-9]*, iter:[0-9]*, salt:"[^"]*", iv:"[^"]*"' "$T/H/family-tree/index.html" | head -n 1 \
+       | sed 's/.*iv:"//; s/"$//' > "$T/H/family-tree/.gate-stamp"
+}
+livefin() { quiet lock H take "h" "direct"; in_cloud H env FT_PUBLISH=direct SITE="http://127.0.0.1:$port/" NO_PROXY=127.0.0.1 no_proxy=127.0.0.1 \
+  FT_LIVE_TRIES=2 FT_LIVE_WAIT=0 bash "$TOOLS/cloud-finish.sh" "Update working state" "h"; }
+codec "code only"
+refuse "after a direct push of page code, the old page with the same payload is not reported live" livefin
+says "the page's bytes are this commit's: no" "…and says the page's bytes are not this commit's"
+codec "code only, again"
+git -C "$T/H/family-tree" show HEAD:index.html > "$T/www/index.html"
+check "…and once the site serves the new page, it is reported live" livefin
+says "serves this commit's page" "…by its payload and its bytes"
+kill "$wwwpid" 2>/dev/null; wait "$wwwpid" 2>/dev/null
 mkdir -p "$T/R1/home" && quiet git clone --depth 1 "file://$GHP" "$T/R1/family-tree-private" \
   && quiet git clone --depth 1 "file://$GHA" "$T/R1/family-tree-sources"
 check "a routine without the site attached clones it read-only and sets up" sh -c "cd '$T/R1' && HOME='$T/R1/home' FT_SITE_URL='file://$GHS' FT_SKIP_DECRYPT=1 FT_SKIP_TOOLS=1 bash '$TOOLS/cloud-setup.sh'"

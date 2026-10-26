@@ -30,7 +30,8 @@
 #     private and pushes it, with the writer lock still held (so no other session starts from a queue without
 #     these commits); when there are own site commits, .public-head = the newest of them
 #  5. queues the own site commits (or, direct, pushes them)
-#  6. releases the writer lock if <who> holds it, and pushes that; then (direct) waits for the live site
+#  6. releases the writer lock if <who> holds it, and pushes that; then (direct) waits for the live site to
+#     serve this commit's page: its payload iv and its SHA-256, cache-busted (FT_LIVE_TRIES, FT_LIVE_WAIT: tests)
 # A stop up to 4 pushes nothing but, possibly, the archive's commits (exit 1; a state commit 4 could not
 # push is undone, its changes kept). A failure at 5 is a STATE SPLIT (exit 2): OPERATING.md, 'State split'.
 
@@ -294,11 +295,22 @@ retry git -C "$FT" push -q origin HEAD:main \
 echo "site: pushed $own commit(s) directly, main at $(short "$H")"
 unlock
 [ "${FT_SKIP_LIVE:-0}" = 1 ] && { echo "live: check skipped (FT_SKIP_LIVE=1)"; exit 0; }
-want=$(grep -o 'const ENC = {v:[0-9]*, iter:[0-9]*, salt:"[^"]*", iv:"[^"]*"' "$FT/index.html" | head -n 1 | sed 's/.*iv:"//; s/"$//')
-for i in $(seq 1 30); do
-  got=$(curl -fsS --max-time 20 "$SITE" 2>/dev/null | grep -o 'const ENC = {v:[0-9]*, iter:[0-9]*, salt:"[^"]*", iv:"[^"]*"' | head -n 1 | sed 's/.*iv:"//; s/"$//')
-  [ "$got" = "$want" ] && { echo "live: the site serves this payload (iv $want)"; exit 0; }
-  sleep 20
+# the payload's iv AND the page's own bytes (as verify-deploy.yml does): a commit that changes the page's code and
+# not its data keeps the iv, so the iv alone matched the old page at once. Cache-busted, so no cached copy answers.
+enc() { grep -o 'const ENC = {v:[0-9]*, iter:[0-9]*, salt:"[^"]*", iv:"[^"]*"' "$1" | head -n 1 | sed 's/.*iv:"//; s/"$//'; }
+mine="$(mktemp)"; live="$(mktemp)"; git -C "$FT" show "$H:index.html" > "$mine"
+want=$(enc "$mine"); wantsha=$(sha256sum < "$mine" | cut -d' ' -f1)
+tries="${FT_LIVE_TRIES:-30}"; got=""; same="no"
+for i in $(seq 1 "$tries"); do
+  got=""; same="no"
+  if curl -fsS --max-time 20 -H 'Cache-Control: no-cache' "${SITE}?cb=$(short "$H")-$i-$RANDOM" -o "$live" 2>/dev/null; then
+    got=$(enc "$live"); [ "$(sha256sum < "$live" | cut -d' ' -f1)" = "$wantsha" ] && same="yes"
+  fi
+  if [ "$got" = "$want" ] && [ "$same" = yes ]; then
+    echo "live: the site serves this commit's page (iv $want, sha256 $(printf %.12s "$wantsha"))"; rm -f "$mine" "$live"; exit 0
+  fi
+  [ "$i" -lt "$tries" ] && sleep "${FT_LIVE_WAIT:-20}"
 done
-echo "live: NOT confirmed after 10 minutes (serving iv ${got:-nothing}, expected $want). Check the verify-deploy run; do not re-encrypt."
+rm -f "$mine" "$live"
+echo "live: NOT confirmed after $tries look(s) (serving iv ${got:-nothing}, expected $want; the page's bytes are this commit's: $same). Check the verify-deploy run; do not re-encrypt."
 exit 3

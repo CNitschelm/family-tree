@@ -210,6 +210,25 @@ section("Build template");
     ok(r.html.includes('const HISTFILE = "";') && /const HISTFILE = "media\/history\.bin";/.test(html),
       "Play's history notes are the family's own: the demo gets none and asks for no file");
     ok(r.html.includes('const PLAY_HERO = "";') && /const PLAY_HERO = "c\d{3}";/.test(html), "the coronation is the family build's own: the demo crowns nobody");
+    /* PERF-3 (site audit, 19 Oct 2026): the published demo is minified, the same program and the same styles */
+    const mc = [[".a :hover {\n  color : red ;\n}\n", ".a :hover{color :red}"], ["a/* note */b{x:1}", "a b{x:1}"],
+      ["p{width:calc(1px + 2px);margin: 0 auto}", "p{width:calc(1px + 2px);margin:0 auto}"], ['q::before{content:"a  ;  b"}', 'q::before{content:"a  ;  b"}'],
+      ["i{background:url(data:x/y;base64,AB/+CD)}", "i{background:url(data:x/y;base64,AB/+CD)}"], ["/* SIL Open Font License */\nb{font:1px a , b}", "/* SIL Open Font License */ b{font:1px a,b}"],
+      ["@media (max-width: 600px) {\n  .x > .y { top: 0; }\n}", "@media (max-width:600px){.x > .y{top:0}}"]];
+    const mcBad = mc.filter(([i, o]) => BD.minCss(i) !== o || BD.minCss(o) !== o);
+    ok(!mcBad.length, "the demo's styles minify safely: notes out (licences kept), strings and url() untouched, no space dropped before a colon or inside calc(), and a second pass changes nothing" +
+      (mcBad.length ? " — " + mcBad.map(([i]) => JSON.stringify(i) + " → " + JSON.stringify(BD.minCss(i))).join("; ") : ""));
+    const why = BD.slimReady();
+    if (why) console.log("  --  the minified demo is not checked here: " + why);
+    else {
+      const sl = await BD.slim(e2.html), body = h => h.match(/<script>([\s\S]*)<\/script>/)[1];
+      const notes = (body(sl).match(/\/\*[\s\S]*?\*\//g) || []).filter(c => !/licen[cs]e|copyright/i.test(c));
+      ok(sl.length < e2.html.length * 0.9 && BD.sameProgram(body(e2.html), body(sl)) && !notes.length &&
+         JSON.stringify(BD.encOf(sl)) === JSON.stringify(enc2) && sl.slice(0, sl.indexOf("<style>")) === e2.html.slice(0, e2.html.indexOf("<style>")),
+        "the published demo is minified (" + e2.html.length + " → " + sl.length + " bytes): the same program, no notes but licences, the same payload, the markup before the styles untouched");
+      let caught = false; try { BD.sameProgram("a = b + c;", "a = b - c;"); caught = !BD.sameProgram("a = b + c;", "a = b - c;"); } catch (_) {}
+      ok(caught, "…and the same-program check tells two different programs apart");
+    }
   } catch (e) { ok(false, "tools/build-demo.js still builds from this file — " + e.message); }
   finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 }
@@ -289,7 +308,8 @@ section("Floating controls");
        /<input id="introsearch"[^>]* role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="introsug"><div id="introsug" role="listbox" aria-labelledby="int-try"><\/div>/.test(html) &&
        /role="option" id="sug-o\$\{i\}" aria-selected="\$\{i===sugIdx\}"/.test(js) && /role="option" id="isug-o\$\{i\}" aria-selected="\$\{i===idx\}"/.test(js) &&
        /function keepInView\(list, row\)/.test(js) && (js.match(/comboState\((?:searchEl, sugEl, "sug-o"|box, sug, "isug-o")/g) || []).length >= 5 &&
-       /sugStat\.textContent = T\("nomatch"\)/.test(js) && /else if\(e\.key==="Enter" && !e\.isComposing\)\{ e\.preventDefault\(\); tryFind\(\); \}/.test(js),
+       /sugStat\.textContent = T\("nomatch"\)/.test(js) && /else if\(e\.key==="Enter" && !e\.isComposing && e\.keyCode !== 229\)\{ e\.preventDefault\(\); tryFind\(\); \}/.test(js) &&
+       /searchEl\.addEventListener\("keydown",e=>\{[^]{0,400}?\n  if\(e\.key==="Enter" && !e\.isComposing && e\.keyCode !== 229\)\{/.test(js),
       "both search boxes are comboboxes over a listbox of options, the header's No match is said aloud, and neither acts on an input method's Enter");
     /* the Living tag on a suggestion: its ink on its own tint (the tint is --live mixed into the panel) */
     const lv = (html.match(/:root\{--live:(#[0-9A-Fa-f]{6});--live-ink:(#[0-9A-Fa-f]{6})\} html\.dark\{--live:(#[0-9A-Fa-f]{6});--live-ink:(#[0-9A-Fa-f]{6})\}/) || []).slice(1);

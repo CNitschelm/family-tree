@@ -2,7 +2,7 @@
 /*
  * Build the public DEMO of this site from THIS repo's index.html.
  *
- *   node tools/build-demo.js <demo-dir> [--out <file>] [--template <file>]
+ *   node tools/build-demo.js <demo-dir> [--out <file>] [--template <file>] [--readable]
  *
  * index.html is the family build and the only template. A demo is the same file with its
  * per-build parts swapped, and every one of those parts is DATA in <demo-dir>/demo.json:
@@ -284,6 +284,161 @@ function verify(out, defaults, cfg, files) {
     die("the family's name \"" + surname + "\" appears in the demo output — give that string a demo value in demo.json");
 }
 
+/* ---------- the published page as small as it can be (site audit PERF-3, 19 Oct 2026; Cory's yes, 20 Oct) ----------
+   The demo is the family's code, readable. Published, it carries no notes and no spare whitespace: the script through
+   terser with compress and mangle off (the same program, nothing renamed or rewritten: its syntax tree is checked
+   against the readable one, node for node), the styles through minCss() below, licence notices kept in both. Each
+   embedded variable font keeps only the weights its @font-face declares: a browser never draws a weight outside that
+   range, so the rest of the axis is bytes no one sees (fontTools' instancer; every glyph's outline is checked against
+   the full font at five weights). Needs terser and acorn (npm i -g terser@5 acorn@8) and Python's fontTools with
+   brotli (pip install fonttools brotli); a build without them stops, rather than quietly publishing the larger page.
+   --readable skips this step (for looking at the output). */
+const LEGAL = /licen[cs]e|copyright/i;
+function need(mod, hint) {
+  try { return require(mod); } catch (_) { /* not beside this repo: try the global modules */ }
+  try {
+    const g = require("child_process").execFileSync("npm", ["root", "-g"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    return require(path.join(g, mod));
+  } catch (_) { /* not there either */ }
+  die("the published demo is minified (PERF-3), and that needs " + mod + ": " + hint + " (or build with --readable to look at it)");
+}
+
+/* CSS without its notes (licence notices stay) and without spare whitespace. Strings and url(…) are copied as they
+   are. A run of whitespace becomes one space, and none is kept beside { } ; , or after a colon, nor a last ; before a }.
+   A space BEFORE a colon stays: in a selector it is the descendant combinator (".a :hover" is not ".a:hover"). */
+function minCss(src) {
+  const out = []; let i = 0, n = src.length;
+  const tail = () => out.length ? out[out.length - 1] : "";
+  while (i < n) {
+    const ch = src[i];
+    if (ch === '"' || ch === "'") {
+      let j = i + 1; while (j < n && src[j] !== ch) j += src[j] === "\\" ? 2 : 1;
+      out.push(src.slice(i, j + 1)); i = j + 1;
+    } else if (src.startsWith("/*", i)) {
+      const j = src.indexOf("*/", i + 2); if (j < 0) die("a style's comment is not closed");
+      const note = src.slice(i, j + 2);
+      if (LEGAL.test(note)) { out.push(note); i = j + 2; }
+      else { src = src.slice(0, i) + " " + src.slice(j + 2); n = src.length; }   /* a note counts as whitespace */
+    } else if (/^url\(/i.test(src.slice(i, i + 4)) && !/["']/.test(src[i + 4] || "")) {
+      const j = src.indexOf(")", i); if (j < 0) die("a style's url( is not closed");
+      out.push(src.slice(i, j + 1)); i = j + 1;
+    } else if (/\s/.test(ch)) {
+      let j = i; while (j < n && /\s/.test(src[j])) j++;
+      const prev = tail().slice(-1), next = src[j] || "";
+      if (prev && !/[{};,:]/.test(prev) && next && !/[{};,]/.test(next)) out.push(" ");
+      i = j;
+    } else if (ch === "}" && tail().endsWith(";")) {
+      out[out.length - 1] = tail().slice(0, -1); out.push("}"); i++;
+    } else { out.push(ch); i++; }
+  }
+  return out.join("").trim();
+}
+
+/* two scripts are the same program when their syntax trees are the same, positions and the spelling of literals aside */
+function sameProgram(a, b) {
+  const acorn = need("acorn", "npm i -g acorn@8");
+  const opt = { ecmaVersion: "latest", sourceType: "script" };
+  const norm = v => {
+    if (Array.isArray(v)) return v.map(norm);
+    if (v instanceof RegExp) return "/" + v.source + "/" + v.flags;
+    if (typeof v === "bigint") return v.toString() + "n";
+    if (!v || typeof v !== "object") return v;
+    const o = {};
+    for (const k of Object.keys(v)) if (!["start", "end", "loc", "range", "raw"].includes(k)) o[k] = norm(v[k]);
+    if (v.type === "TemplateElement") o.value = v.value.cooked;
+    return o;
+  };
+  return JSON.stringify(norm(acorn.parse(a, opt))) === JSON.stringify(norm(acorn.parse(b, opt)));
+}
+
+/* one variable woff2 font cut to the weight range its @font-face declares, and checked: every glyph's advance and
+   outline at the range's ends, its middle and two weights between, against the full font at the same weight, to
+   within 2/1000 of an em (the instancer rounds its deltas). Prints nothing and changes nothing for a font that has
+   no weight axis or whose axis is already inside the range. */
+const FONT_PY = String.raw`
+import sys, io
+from fontTools.ttLib import TTFont
+from fontTools.varLib import instancer
+from fontTools.pens.recordingPen import RecordingPen
+lo, hi = float(sys.argv[1]), float(sys.argv[2])
+raw = sys.stdin.buffer.read()
+load = lambda b: TTFont(io.BytesIO(b), recalcTimestamp=False)
+f = load(raw)
+ax = [a for a in f["fvar"].axes if a.axisTag == "wght"] if "fvar" in f else []
+if not ax or (ax[0].minValue >= lo and ax[0].maxValue <= hi): sys.exit(0)
+lo, hi = max(lo, ax[0].minValue), min(hi, ax[0].maxValue)
+if lo > hi: sys.exit("the declared weights miss the font's axis")
+cut = instancer.instantiateVariableFont(f, {"wght": (lo, hi) if lo < hi else lo}, updateFontNames=False)
+cut.flavor = "woff2"; o = io.BytesIO(); cut.save(o); new = o.getvalue()
+upm = load(raw)["head"].unitsPerEm
+def shape(b, w):
+    g = instancer.instantiateVariableFont(load(b), {"wght": w}) if "fvar" in load(b) else load(b)
+    gs = g.getGlyphSet(); r = {}
+    for name in g.getGlyphOrder():
+        p = RecordingPen(); gs[name].draw(p); r[name] = (gs[name].width, p.value)
+    return r
+worst = 0.0
+for w in sorted({lo, hi, (lo + hi) / 2, lo + (hi - lo) / 7, hi - (hi - lo) / 5}):
+    a, b = shape(raw, w), shape(new, w)
+    if sorted(a) != sorted(b): sys.exit("the cut font lost or gained glyphs")
+    for name in a:
+        (wa, pa), (wb, pb) = a[name], b[name]
+        worst = max(worst, abs(wa - wb))
+        if [op for op, _ in pa] != [op for op, _ in pb]: sys.exit("glyph " + name + " changed its drawing at weight " + str(w))
+        for (_, xa), (_, xb) in zip(pa, pb):
+            for p, q in zip(xa, xb):
+                if isinstance(p, tuple): worst = max(worst, abs(p[0] - q[0]), abs(p[1] - q[1]))
+if worst > 0.002 * upm: sys.exit("a glyph moved %.2f units of %d at some weight" % (worst, upm))
+sys.stdout.buffer.write(new)
+`;
+function cutFonts(css) {
+  return css.replace(/@font-face\{[^}]*\}/g, rule => {
+    const w = rule.match(/font-weight:\s*(\d+)(?:\s+(\d+))?\s*[;}]/), src = rule.match(/url\(data:font\/woff2;base64,([A-Za-z0-9+/=]+)\)/);
+    if (!w || !src) return rule;
+    /* -P: the folder the build runs in is not searched for modules */
+    const r = require("child_process").spawnSync("python3", ["-P", "-c", FONT_PY, w[1], w[2] || w[1]],
+      { input: Buffer.from(src[1], "base64"), maxBuffer: 64 << 20 });
+    if (r.error || r.status !== 0) {
+      const why = String(r.stderr || (r.error && r.error.message) || "").trim().split("\n").pop();
+      if (/No module named|ENOENT/.test(why)) die("the published demo's fonts are cut to their weights (PERF-3), and that needs Python 3.11+ with fontTools: pip install fonttools brotli (or build with --readable to look at it)");
+      die("cutting an embedded font to its weights failed: " + why);
+    }
+    return r.stdout.length ? rule.replace(src[1], () => r.stdout.toString("base64")) : rule;
+  });
+}
+
+/* "" when the script's tools are at hand (a test can say what it skips), else what is missing */
+function slimReady() { try { need("terser", "npm i -g terser@5"); need("acorn", "npm i -g acorn@8"); return ""; } catch (e) { return e.message; } }
+
+/* the readable page in, the published page out; every check above holds for it, or the build stops */
+async function slim(html) {
+  const terser = need("terser", "npm i -g terser@5");
+  const blocks = [...html.matchAll(/<(script|style)>([\s\S]*?)<\/\1>/g)];
+  if (blocks.filter(m => m[1] === "script").length !== 1) die("the page should have one inline script");
+  let out = "", last = 0;
+  for (const m of blocks) {
+    out += html.slice(last, m.index);
+    let body = m[2];
+    if (m[1] === "style") {
+      body = minCss(cutFonts(body));
+      if (minCss(body) !== body) die("the styles do not minify to a fixed point");
+    } else {
+      const r = await terser.minify(body, { ecma: 2020, compress: false, mangle: false, module: false,
+        format: { comments: (_, c) => LEGAL.test(c.value), quote_style: 3, keep_quoted_props: true, keep_numbers: true, inline_script: true } });
+      if (!r.code) die("terser gave no script");
+      if (!sameProgram(body, r.code)) die("the minified script is not the same program as the readable one");
+      body = r.code;
+    }
+    out += "<" + m[1] + ">" + body + "</" + m[1] + ">";
+    last = m.index + m[0].length;
+  }
+  out += html.slice(last);
+  try { new Function(out.match(/<script>([\s\S]*)<\/script>/)[1]); } catch (e) { die("the minified script does not parse: " + e.message); }
+  return out;
+}
+/* the page's ENC line, read whether the page is readable or minified */
+const encOf = html => require("./payload.js").readEnc(html.replace(/const ENC=\{/, "const ENC = {"));
+
 /* the files first, each read back, then the page, so a page is never there before what it names; then out of media/
    and map/ go the files the new page no longer names (only those two folders: the rest of the folder, such as the
    site's own .htaccess and icon, is not the build's) */
@@ -312,7 +467,7 @@ if (require.main === module) {
   (async () => {
     const args = process.argv.slice(2);
     const dir = args.find(a => !a.startsWith("--") && args[args.indexOf(a) - 1] !== "--out" && args[args.indexOf(a) - 1] !== "--template");
-    if (!dir) die("usage: node tools/build-demo.js <demo-dir> [--out <file>] [--template <file>]");
+    if (!dir) die("usage: node tools/build-demo.js <demo-dir> [--out <file>] [--template <file>] [--readable]");
     const opt = f => { const i = args.indexOf(f); return i >= 0 ? args[i + 1] : null; };
     const cfgPath = path.join(dir, "demo.json");
     if (!fs.existsSync(cfgPath)) die("no demo.json in " + dir);
@@ -325,15 +480,17 @@ if (require.main === module) {
     if (fs.existsSync(out) && fs.statSync(out).isDirectory()) die("--out names the page's file (<folder>/index.html), and " + out + " is a folder");
     /* the salt of the page already there, so the same data writes the same media files (demo.json may fix one) */
     let salt = null;
-    try { salt = require("./payload.js").readEnc(fs.readFileSync(out, "utf8")).salt || null; } catch (_) { /* no page there yet */ }
+    try { salt = encOf(fs.readFileSync(out, "utf8")).salt || null; } catch (_) { /* no page there yet */ }
     const { html, defaults, files } = build(template, cfg, dir);
     const enc = await encrypt(html, cfg, dir, { files, salt });
     verify(enc.html, defaults, cfg, enc.files);
-    const w = writeFolder(path.dirname(out), path.basename(out), enc.html, enc.files);
-    console.log("demo built: " + out + " — " + Buffer.byteLength(enc.html) + " bytes, " + enc.people + " people, iv " + enc.iv +
+    const page = args.includes("--readable") ? enc.html : await slim(enc.html);
+    const w = writeFolder(path.dirname(out), path.basename(out), page, enc.files);
+    console.log("demo built: " + out + " — " + Buffer.byteLength(page) + " bytes" + (page === enc.html ? " (readable)" : " (" + Buffer.byteLength(enc.html) + " readable)") +
+      ", " + enc.people + " people, iv " + enc.iv +
       "; beside it " + enc.files.size + " files, " + [...enc.files.values()].reduce((a, b) => a + b.length, 0) + " bytes (" +
       w.written + " written, " + w.kept + " unchanged" + (w.removed.length ? ", " + w.removed.length + " no longer used taken out" : "") + ")");
   })().catch(e => { console.error("build-demo: " + (e instanceof BuildError ? e.message : (e.stack || e.message))); process.exit(1); });
 }
 
-module.exports = { build, encrypt, verify, writeFolder, SLOT, FILE_RE };
+module.exports = { build, encrypt, verify, slim, slimReady, minCss, sameProgram, encOf, writeFolder, SLOT, FILE_RE };

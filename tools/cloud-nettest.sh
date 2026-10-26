@@ -51,6 +51,11 @@ probe need       "Wikipedia"                  "https://en.wikipedia.org/wiki/Als
 probe need       "GitHub status"              "https://www.githubstatus.com/api/v2/status.json"
 probe may-refuse "FamilySearch"               "https://www.familysearch.org/"
 probe may-refuse "Find a Grave"               "https://www.findagrave.com/"
+# record sites the environment's list has let through since 25 Oct 2026 (decisions-page item yc22; tested 26 Oct)
+probe need       "Wikimedia Commons"          "https://commons.wikimedia.org/wiki/Main_Page"
+probe need       "Filae"                      "https://www.filae.com/"
+probe need       "RetroNews"                  "https://www.retronews.fr/"
+probe may-refuse "MyHeritage"                 "https://www.myheritage.com/research"
 probe need       "npm registry"               "https://registry.npmjs.org/"
 probe need       "PyPI"                       "https://pypi.org/simple/pip/"
 probe must-block "a host not on the list"     "https://example.com/"

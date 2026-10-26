@@ -217,8 +217,8 @@ that changes a file the airlock does not publish, more commits than the airlock 
 dropped or the airlock refused), push the notes as above, release the writer lock
 (`bash tools/cloud-lock.sh release "<who>"`), and redo the site work in a new session: a payload commit
 carries the whole payload, so it is never merged or rebased. **Exit 2** is a STATE SPLIT (below).
-**Exit 3** (direct only): pushed, but the live site did not show it within ten minutes; read the
-verify-deploy run.
+**Exit 3** (direct only): pushed, but within ten minutes the live site did not serve this commit's page
+(its payload iv and the page's own SHA-256, cache-busted, as verify-deploy checks); read the verify-deploy run.
 
 ## A refused queue
 
