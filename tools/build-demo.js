@@ -10,7 +10,10 @@
  *   site      → the `const SITE = {…}` switches (storage prefix, public password, search, …)
  *   branches  → `const BRANCHES = […]`       regions → `const REGIONS = {…}`
  *   i18n      → strings to set per language (null deletes a key). Branch labels of template
- *               branches the demo does not have are dropped automatically.
+ *               branches the demo does not have are dropped automatically. The site's name and the
+ *               demo tag are strings too, so they follow the language: i18n.<lang>.site_title (the
+ *               English one is the "title" slot's text) and i18n.<lang>.demo_tag (the English one is
+ *               the text of the <span class="demotag"> in the "tag" slot).
  *   slots     → the <!--build:NAME-->…<!--/build:NAME--> spans in the markup. A value may pull
  *               a file in with {{include:<file>}}. Every slot in the template needs a value,
  *               and every value needs a slot: a new slot fails the build until it is decided.
@@ -26,7 +29,8 @@
  *   research  → when site.research is true: a made-up research file for the demo's own invented people
  *               (tools/research.js's format; card ids from <data>), sealed under the demo's password as
  *               media/research.bin and media/research-cards.bin. With site.research false the Research tab is hidden.
- *   (Play's history notes, HISTFILE, and its coronation, PLAY_HERO, are the family build's own: the demo gets "" for both.)
+ *   (Play's history notes, HISTFILE, its coronation, PLAY_HERO, and the owner view, CONFFILE, are the family build's
+ *   own: the demo gets "" for all three.)
  *   links     → optional: a made-up {"<card id>": <percent 0–100>} file, the "how sure" figure the tree shows on the
  *               line down to each child (the family page reads media/links.bin, R-0481), sealed the same way as
  *               media/links.bin. Without it the demo shows no figures and asks for no file.
@@ -135,6 +139,21 @@ function build(template, cfg, dir, opts = {}) {
   if (cfg.site.autoPw) ["pwopening", "pwdemo"].forEach(k => langs.forEach(l => {
     if (typeof I18N[l][k] !== "string" || !I18N[l][k].trim()) die("i18n: a build with a public password needs a \"" + k + "\" string in " + l);
   }));
+  /* the name and the tag follow the language (site audit GAP4-7): the English strings are the slots' own words, and
+     every language has its own, so the family's name is never left in the strings and the tag can be translated */
+  const plain = v => String(v).replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+  const tTitle = plain(defaults.title || ""), dTitle = plain(include(cfg.slots.title || ""));
+  if (dTitle !== tTitle) {
+    if (I18N.en.site_title !== dTitle) die("i18n: en.site_title must be the title slot's text (\"" + dTitle + "\")");
+    langs.forEach(l => { if (typeof I18N[l].site_title !== "string" || !I18N[l].site_title.trim() || plain(I18N[l].site_title) === plain(evalLiteral(i18.src, "I18N")[l].site_title || "")) die("i18n: the demo needs its own site_title in " + l); });
+  }
+  const tagSlot = include(cfg.slots.tag || "");
+  if (plain(tagSlot)) {
+    const tm = tagSlot.match(/<span class="demotag">([^<]*)<\/span>/);
+    if (!tm || plain(tagSlot) !== plain(tm[1])) die("slots: the tag slot must be one <span class=\"demotag\">…</span>, so the language switch can rewrite it");
+    if (I18N.en.demo_tag !== plain(tm[1])) die("i18n: en.demo_tag must be the tag slot's text (\"" + plain(tm[1]) + "\")");
+    langs.forEach(l => { if (typeof I18N[l].demo_tag !== "string" || !I18N[l].demo_tag.trim()) die("i18n: a build with a tag needs its demo_tag in " + l); });
+  }
   html = html.slice(0, i18.start) + "const I18N = {\n" + langs.map(l => "  " + l + ":" + js(I18N[l])).join(",\n") + "\n};" + html.slice(i18.end);
 
   /* 5. data date and note */
@@ -168,6 +187,9 @@ function build(template, cfg, dir, opts = {}) {
   /* 9. the coronation in Play is for the family build's owner (his card): the demo crowns nobody */
   if (!/const PLAY_HERO = "[^"\n]*";/.test(html)) die("template has no PLAY_HERO line");
   html = html.replace(/const PLAY_HERO = "[^"\n]*";/, () => 'const PLAY_HERO = "";');
+  /* 10. the owner view is Cory's: the demo keeps no #owner key and asks for no owner file (site audit GAP3-4) */
+  if (!/const CONFFILE = "[^"\n]*";/.test(html)) die("template has no CONFFILE line");
+  html = html.replace(/const CONFFILE = "[^"\n]*";/, () => 'const CONFFILE = "";');
   if (cfg.links) file(cfg.links);
   return { html, defaults, files };
 }
@@ -234,8 +256,8 @@ function verify(out, defaults, cfg, files) {
   const m = out.match(/<script>([\s\S]*)<\/script>/);
   if (!m) die("output has no script");
   try { new Function(m[1]); } catch (e) { die("output script does not parse: " + e.message); }
-  /* everything the page asks for is in its own folder: every file it names is one this build writes (the owner file
-     is fetched only on a device holding the owner's key, which no demo visitor has), and nothing comes from another
+  /* everything the page asks for is in its own folder: every file it names is one this build writes (and no owner
+     file: CONFFILE is "", so no #owner address or stored key makes the page ask for one), and nothing comes from another
      site or from a data: address (a fetch() of one is refused by a connect-src 'self' policy, as the demo's server sends) */
   files = files || new Map();
   [...files.keys()].forEach(f => { if (!FILE_RE.test(f)) die("the build would write " + f + ", outside media/ and map/"); });
@@ -247,7 +269,7 @@ function verify(out, defaults, cfg, files) {
   if (enc.x) want.push(["ENC.x", "media/" + enc.x + ".bin"]);
   want.forEach(([k, v]) => { if (v && !files.has(v)) die(k + " names " + v.slice(0, 60) + ", which is not a file this build writes beside the page"); });
   const conf = one("CONFFILE", /const CONFFILE = "([^"\n]*)";/);
-  if (!FILE_RE.test(conf)) die("CONFFILE is not a file in the page's own folder");
+  if (conf !== "") die("CONFFILE must be \"\" in a demo: the owner view is the family build's own");
   /* and nothing the markup or its styles load comes from elsewhere: a stylesheet, script, font or picture from another
      site (a scheme or // in a src, srcset, a <link>'s href, url() or @import), or a script file at all; links a reader
      follows (<a href>) are not loads */

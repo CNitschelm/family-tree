@@ -146,8 +146,8 @@ section("Build template");
     const cfg = { maplbl: "l.txt", synced: "2026-01-01", dataNote: "test build", slots,
       site: Object.assign({}, SITE, { store: "fttest-", autoPw: "x", search: false, research: false }),
       branches: [tBr[0], tBr[1]], regions: tRg,
-      i18n: { en: { intro_title: "Test", search_long: "Test", pwopening: "Opening", pwdemo: "Password: x" },
-              fr: { intro_title: "Test", search_long: "Test", pwopening: "Ouverture", pwdemo: "Mot de passe : x" } } };
+      i18n: { en: { intro_title: "Test", search_long: "Test", pwopening: "Opening", pwdemo: "Password: x", site_title: "Test Tree" },
+              fr: { intro_title: "Test", search_long: "Test", pwopening: "Ouverture", pwdemo: "Mot de passe : x", site_title: "Arbre de test" } } };
     const r = BD.build(html, cfg, tmp);
     ok(/const SITE = \{"store":"fttest-"/.test(r.html) && /class="nosearch"/.test(r.html) &&
        !/<!--\/?build:/.test(r.html) && r.html.includes("<title>Test Tree</title>"),
@@ -210,6 +210,20 @@ section("Build template");
     ok(r.html.includes('const HISTFILE = "";') && /const HISTFILE = "media\/history\.bin";/.test(html),
       "Play's history notes are the family's own: the demo gets none and asks for no file");
     ok(r.html.includes('const PLAY_HERO = "";') && /const PLAY_HERO = "c\d{3}";/.test(html), "the coronation is the family build's own: the demo crowns nobody");
+    /* site audit, 26 Oct 2026 */
+    ok(r.html.includes('const CONFFILE = "";') && /const CONFFILE = "media\/owner\.bin";/.test(html) &&
+       refuses("conf", e2.html.replace('const CONFFILE = "";', 'const CONFFILE = "media/owner.bin";'), e2.files),
+      "the owner view is the family's own: the demo's CONFFILE is \"\", and the builder refuses a demo that names an owner file (GAP3-4)");
+    const dI = vmx.runInNewContext((r.html.match(/const I18N = \{[\s\S]*?\n\};/) || [""])[0].replace(/^const /, "var ") + "\nI18N");
+    ok(dI.en.site_title === "Test Tree" && dI.fr.site_title === "Arbre de test" && dI.fr.demo_tag === "",
+      "the demo's name is a string in each language, so French gets its own (GAP4-7)");
+    const stops = mod => { try { const c = JSON.parse(JSON.stringify(cfg)); mod(c); BD.build(html, c, tmp); return false; } catch (_) { return true; } };
+    ok(stops(c => { delete c.i18n.en.site_title; }) && stops(c => { delete c.i18n.fr.site_title; }) && stops(c => { c.i18n.en.site_title = "Another Tree"; }),
+      "the demo build stops without its own name in each language, or when the English name is not the title slot's");
+    ok(stops(c => { c.slots.tag = "Demo"; c.i18n.en.demo_tag = "Demo"; c.i18n.fr.demo_tag = "Démo"; }) &&
+       stops(c => { c.slots.tag = '<span class="demotag">Demo</span>'; c.i18n.en.demo_tag = "Demo"; }) &&
+       !stops(c => { c.slots.tag = '<span class="demotag">Demo</span>'; c.i18n.en.demo_tag = "Demo"; c.i18n.fr.demo_tag = "Démo"; }),
+      "a demo tag must be one <span class=\"demotag\"> with its words in each language; with them it builds");
     /* PERF-3 (site audit, 19 Oct 2026): the published demo is minified, the same program and the same styles */
     const mc = [[".a :hover {\n  color : red ;\n}\n", ".a :hover{color :red}"], ["a/* note */b{x:1}", "a b{x:1}"],
       ["p{width:calc(1px + 2px);margin: 0 auto}", "p{width:calc(1px + 2px);margin:0 auto}"], ['q::before{content:"a  ;  b"}', 'q::before{content:"a  ;  b"}'],
@@ -444,7 +458,54 @@ section("Union labels");
     ok(L(same, 0) === "Odile Probe (1700–1750)" && L(same, 1) === "Odile Probe (1720–1790)", "the same name twice: with the spouse's years");
     ok(L(two, 2) === "", "a union with no spouse named: no label");
   }
-  ok(/t\.textContent = "w\/ " \+ unionLabel\(a\.p, b\.unionIdx\);/.test(js), "the line's label comes from unionLabel");
+  ok(/t\.textContent = T\("union_with"\) \+ " " \+ unionLabel\(a\.p, b\.unionIdx\);/.test(js), "the line's label comes from unionLabel");
+  ok(/union_with:"w\/"/.test(js) && /union_with:"avec"/.test(js) && /pct:"%p%"/.test(js) && /pct:"%p\\u202F%"/.test(js),
+    "the label says w/ in English and avec in French; the figure is 95% and 95 % (narrow no-break space) (GAP4-5)");
+}
+
+/* ---------- site audit, 26 Oct 2026: odd addresses, stored values and payload fields ---------- */
+section("Odd inputs");
+{
+  const vmx = require("vm");
+  const ctx = vmx.createContext({});
+  vmx.runInContext(grab("function esc(", "\n") + "\nconst BLANK = 'blank';\n" + grab("const MEDIA_RE", "\n") + "\n" + grab("function picAttrs(", "\nfunction hydrate("), ctx);
+  ok(vmx.runInContext(`esc("a'b\\"c<d>&")`, ctx) === "a&#39;b&quot;c&lt;d&gt;&amp;", "esc() escapes a single quote too (GAP3-12)");
+  const pa = v => vmx.runInContext("picAttrs(" + JSON.stringify(v) + ")", ctx);
+  ok(/^src="data:image\/jpeg;base64,AAA" /.test(pa("data:image/jpeg;base64,AAA")) && /data-ref="media:/.test(pa("media:0123456789abcdef01234567:4x3")) &&
+     /^src="blank" /.test(pa('x" onerror="alert(1)')) && /^src="blank" /.test(pa("https://example.org/a.jpg")) && /^src="blank" /.test(pa("javascript:alert(1)")),
+    "a record's picture is a data:image or a media: reference, nothing else reaches the page (GAP3-12)");
+  ok(!/src="\$\{(?!esc\()[^}]*\}"/.test(js.replace(/src="\$\{BLANK\}"/g, "")), "every picture address the page writes into markup goes through esc() (GAP3-12)");
+  ok(/class="cert \$\{esc\(c\)\}"/.test(js) && /class="cert \$\{esc\(cls\)\}"/.test(js) && /class="pbm \$\{esc\(x\.c\)\}"/.test(js) && /function eventLabel\(t\)\{ return esc\(/.test(js),
+    "grades, Play's marks and event names are escaped where they become markup (GAP3-12)");
+  ok(/if\(LANG !== "en" && LANG !== "fr"\) LANG = "en";/.test(js) && !/if\(!I18N\[LANG\]\)/.test(js), "a stored language is en or fr, nothing else: I18N.constructor is not a language (GAP3-6)");
+  const rp = grab("function resPrep(", "\n  D.invs.forEach");
+  ok(/Object\.create\(null\)/.test(rp) && /visits:Object\.assign\(map0\(\), R\.visits \|\| \{\}\)/.test(rp) && /byId:map0\(\), src:map0\(\), vItems:map0\(\), vInvs:map0\(\)/.test(rp),
+    "Research's lookups have no prototype: #research/constructor and #research/__proto__ find nothing (GAP3-2)");
+  const ck = grab("async function confKey(", "\nasync function confOpen(");
+  ok(/x = await confOpen\(k\); \}catch\(e\)\{ if\(e && e\.badKey\) k = null; \}/.test(ck) && ck.indexOf("confOpen(k)") < ck.indexOf("ckPut(k)") &&
+     /badKey:true/.test(grab("async function confOpen(", "\nlet confQ")),
+    "a key from an #owner link is kept only once it opens the owner file; a file that cannot be fetched keeps it (GAP3-3)");
+  ok(/else if\(m\[2\] && CONFFILE\)/.test(js) && /if\(!CONFFILE\) return;/.test(grab("function confLoad(", "\nconfHook")) &&
+     js.indexOf('const CONFFILE = "') < js.indexOf("function ownerFromHash("),
+    "a build without an owner file takes no key from the address and asks for nothing (GAP3-4)");
+  const pc = vmx.createContext({ LANG: "fr" });
+  vmx.runInContext("function pickL(en, fr){ return (LANG === \"fr\" && fr) ? fr : en; }\n" + grab("const CC = {", "\n};") + "\n};\n" + grab("const PLAY_FR_IN", "\nfunction playMileText("), pc);
+  const fr = cc => vmx.runInContext("playCountryName(" + JSON.stringify(cc) + ")", pc);
+  ok(fr("GB") === "au Royaume-Uni" && fr("US") === "aux États-Unis" && fr("FR") === "en France" && fr("CA") === "au Canada" && fr("NL") === "aux Pays-Bas" &&
+     fr("HK") === "à Hong Kong" && fr("PT") === "au PT" && fr("IE") === "en Irlande",
+    "Play's French: au Royaume-Uni, aux États-Unis, en France, à Hong Kong (GAP4-8)");
+  pc.LANG = "en";
+  ok(vmx.runInContext('playCountryName("GB")', pc) === "the United Kingdom", "…and the United Kingdom in English");
+  ok(/function playCapLine\(ln\)/.test(js) && /pbCaps\.querySelectorAll\("\.pcl"\)\.forEach\(playCapLine\)/.test(grab("function syncMapLang(", "\nmapLangReady")) &&
+     !/playCaption\((?!\(\) =>|text,|joke,)/.test(js.replace(/function playCaption\(/, "")) && /const joke = \(\) =>/.test(js),
+    "every note over Play's bar is written in the current language, and rewritten when it changes (GAP4-9)");
+  ok(/#row2:has\(#mapback\.on\) #playchip > span\{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect\(0 0 0 0\)/.test(html),
+    "on a phone, during a journey, Play shows its icon only, its words kept for screen readers (GAP4-3)");
+  ok(/class="sttl"><!--build:title-->/.test(html) && (html.match(/class="sttl"/g) || []).length === 3 && /function applyTitles\(\)/.test(js) &&
+     /site_title:"Nitschelm Family Tree"/.test(js) && /site_title:"Arbre familial Nitschelm"/.test(js),
+    "the site's name is a string per language, written into the lock screen, the top bar and the menu (GAP4-7)");
+  ok(/addSrc\(x\.l, x\.l_fr, x\.u\)/.test(js) && (js.match(/pickL\(s\.l, s\.l_fr\)/g) || []).length === 2,
+    "a card source's French label (l_fr), where there is one, is shown in French: the quote's cite, the tooltip and the source list (GAP4-6)");
 }
 
 /* ---------- 3. Decrypt DATA ---------- */
@@ -658,6 +719,12 @@ ok(profiled.every(n => {
 /* THE STANDARD, extended: every PERSON carries card-level sources (src array in the payload).
    url optional (family records); when present it must be http(s). */
 ok(allNodes.every(n => Array.isArray(n.p.src) && n.p.src.length > 0), "every person has at least one card source");
+{
+  /* l_fr (site audit GAP4-6, 26 Oct 2026): optional; where it is, it is a string with the same years as l */
+  const yrs = t => (String(t).match(/\d{4}/g) || []).sort().join();
+  const bad = []; allNodes.forEach(n => (n.p.src || []).forEach((s, i) => { if (s.l_fr !== undefined && (typeof s.l_fr !== "string" || !s.l_fr.trim() || yrs(s.l_fr) !== yrs(s.l))) bad.push(n.p.id + " src[" + i + "]"); }));
+  ok(!bad.length, "a card source's French label, where there is one, carries the same years as the English" + (bad.length ? " — " + bad.slice(0, 5).join(", ") : ""));
+}
 ok(allNodes.every(n => (n.p.src || []).every(s => s.l && typeof s.l === "string" && (!s.u || /^https?:\/\//.test(s.u)))),
   "card sources well-formed (label required, url http(s) when present)");
 /* corrected-base architecture: the payload IS the up-to-date tree (the _legacy reversion block was removed 19 Sep 2026) */
@@ -1248,7 +1315,7 @@ section("Play");
      up, none is pushed off before PCAP_MIN seconds, and notes close together join one as lines (tests/browser.js
      times a burst of them on screen) */
   ok(+((js.match(/const PCAP_MIN = ([\d.]+), PCAP_LINES = (\d+);/) || [])[1]) >= 2.5 && !/pbCaps\.children\.length > 2/.test(js) &&
-     /playCaption\(playMileText\(x\), null, 6\.5, "", "m"\)/.test(js) && /playCaption\(playHistText\(x\), x, 8, "", "h"\)/.test(js) &&
+     /playCaption\(\(\) => playMileText\(x\), null, 6\.5, "", "m"\)/.test(js) && /playCaption\(\(\) => playHistText\(x\), x, 8, "", "h"\)/.test(js) &&
      (js.match(/pbCaps\.innerHTML = ""/g) || []).length === 1,
     "Play's notes stay up at least 2.5 s each, two at a time, and notes close together share one");
   /* the coronation (Cory, 17 Oct 2026): his card, a living man of the tree with a dated pin, crowned at his first record */

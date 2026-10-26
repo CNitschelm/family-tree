@@ -68,7 +68,7 @@ g5.unions = [{ s: "Ottilie Probe", sy: "1650", c: BR.map(([key, bid], i) => {
   return h;
 }) }];
 const g4 = person("Septimus Testmann", "1598–1661", "m", { unions: [{ s: "Tertia Probe", sy: "1622", c: [g5] }] });
-const g3 = person("Sextus Testmann", "1566–1629", "m", { unions: [{ s: "Wendeline Probe", sy: "1593", c: [g4] }] });
+const g3 = person("Sextus Testmann", "1566–1629", "m", { unions: [{ s: "Wendeline Probe", sy: "1593", c: [g4] }, { s: "Secunda Probe", sy: "1625", c: [] }] });
 const g2 = person("Quintus Testmann", "c. 1531–1597", "m", { unions: [{ s: "", c: [g3] }] });
 const root = person("Probus Testmann", "c. 1495", "m", { anchor: "trunk", branch: "legacy", tag: "author", unions: [{ s: "", c: [g2] }],
   profile: { headline: "The oldest", headline_fr: "Le plus ancien", bio: ["Probus is the oldest test person."], bio_fr: ["Probus est la plus ancienne personne de test."] } });
@@ -423,6 +423,14 @@ async function run() {
       "Play opens its bar, in place of the map's pins");
     ok(await page.isHidden("#mapwhere") && await page.isHidden("#mapaim"), "Play shows no place pill: its faces and the names under them say where");
     ok(/green ring/.test(await page.textContent("#playbar .pbcaps")), "the first Play explains the rings once");
+    /* a note already up follows the language at once (site audit GAP4-9: it stayed English for up to 11 s) */
+    await page.click("#lang");
+    await page.waitForTimeout(200);
+    const capFr = await page.textContent("#playbar .pbcaps");
+    await page.click("#lang");
+    await page.waitForTimeout(200);
+    ok(/cercle vert/.test(capFr) && !/green ring/.test(capFr) && /green ring/.test(await page.textContent("#playbar .pbcaps")),
+      "a note over the bar is rewritten when the language changes, and back (" + capFr.slice(0, 40) + ")");
     const y1 = +(await page.textContent("#pbyear"));
     await page.waitForTimeout(1800);
     const y2 = +(await page.textContent("#pbyear"));
@@ -1098,6 +1106,35 @@ async function run() {
     await page.evaluate(k => { location.hash = "#owner=" + k; }, "A".repeat(43));
     await page.waitForTimeout(1200);
     ok((await labels()).every(l => !/cfo/.test(l.cls) && !/test tree|My own test note/.test(l.title)), "a wrong key shows no reasons");
+    /* a crafted link on a device that holds the key (site audit GAP3-3): the key that opens nothing is not kept */
+    await page.evaluate(k => { location.hash = "#owner=" + k; }, OKEY64);
+    await page.waitForFunction(() => !!document.querySelector("#world tspan.cfo"), null, { timeout: 5000 }).catch(() => {});
+    await page.evaluate(k => { location.hash = "#owner=" + k; }, "B".repeat(43));
+    await page.waitForTimeout(1200);
+    const kept1 = (await labels()).some(l => /cfo/.test(l.cls));
+    await page.reload();
+    await page.waitForFunction(() => !!document.querySelector("#world tspan.cfo"), null, { timeout: 8000 }).catch(() => {});
+    ok(kept1 && (await labels()).some(l => /cfo/.test(l.cls)), "a crafted #owner=<key> link leaves the device's own key in place, after a reload too");
+    await page.evaluate(() => { location.hash = "#owner-off"; });
+    await page.waitForTimeout(400);
+    await ctx.close();
+  }
+  if (!REAL) {
+    /* Cory's condition (26 Oct 2026): when the owner file cannot be fetched, a new key is kept as before */
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await ctx.newPage();
+    watch(page, "owner offline", true);
+    await page.goto(BASE);
+    await unlock(page);
+    await page.waitForTimeout(500);
+    FAIL.add("/media/owner.bin");
+    try {
+      await page.evaluate(k => { location.hash = "#owner=" + k; }, OKEY64);
+      await page.waitForTimeout(1000);
+    } finally { FAIL.delete("/media/owner.bin"); }
+    await page.reload();
+    await page.waitForFunction(() => !!document.querySelector("#world tspan.cfo"), null, { timeout: 8000 }).catch(() => {});
+    ok(await page.evaluate(() => !!document.querySelector("#world tspan.cfo")), "a key that arrives while the owner file cannot be fetched is kept, and opens it once the file is back");
     await page.evaluate(() => { location.hash = "#owner-off"; });
     await page.waitForTimeout(400);
     await ctx.close();
@@ -1421,12 +1458,12 @@ async function run() {
     fs.writeFileSync(path.join(DIR, "research.json"), JSON.stringify(Object.assign({}, R, { decide: undefined })));
     fs.writeFileSync(path.join(DIR, "links.json"), JSON.stringify({ [idOf["Quintus Testmann"]]: 50, [idOf["Sextus Testmann"]]: 95 }));
     fs.writeFileSync(path.join(DIR, "lbl.txt"), "0AA~Alphaville~FR\n1CC~Gamma City~US\n");
-    const slots = {}; [...page0.matchAll(/<!--build:([a-z0-9_-]+)-->/g)].forEach(m => { slots[m[1]] = m[1] === "head" ? "<title>Test Demo</title>" : m[1] === "title" ? "Test Demo" : ""; });
+    const slots = {}; [...page0.matchAll(/<!--build:([a-z0-9_-]+)-->/g)].forEach(m => { slots[m[1]] = m[1] === "head" ? "<title>Test Demo</title>" : m[1] === "title" ? "Test Demo" : m[1] === "tag" ? '<span class="demotag">Demo</span>' : ""; });
     const cfg = { site: Object.assign({}, SITE, { store: "ftbdemo-", autoPw: PW, research: true }), branches: lit(/const BRANCHES = \[[\s\S]*?\n\];/, "BRANCHES"),
       regions: lit(/const REGIONS = \{[\s\S]*?\n\};/, "REGIONS"), slots, synced: "2026-09-27", dataNote: "test demo build", maplbl: "lbl.txt",
       data: "data.json", research: "research.json", links: "links.json", password: PW, salt: SALT, iter: ITER,
-      i18n: { en: { intro_title: "Test demo", search_long: "Search the test tree", pwopening: "Opening the demo", pwdemo: "Password: test" },
-              fr: { intro_title: "Démo de test", search_long: "Rechercher", pwopening: "Ouverture de la démo", pwdemo: "Mot de passe : test" } } };
+      i18n: { en: { intro_title: "Test demo", search_long: "Search the test tree", pwopening: "Opening the demo", pwdemo: "Password: test", site_title: "Test Demo", demo_tag: "Demo" },
+              fr: { intro_title: "Démo de test", search_long: "Rechercher", pwopening: "Ouverture de la démo", pwdemo: "Mot de passe : test", site_title: "Arbre de démo", demo_tag: "Démo" } } };
     const b = BD.build(page0, cfg, DIR);
     const e = await BD.encrypt(b.html, cfg, DIR, { files: b.files });
     BD.verify(e.html, b.defaults, cfg, e.files);
@@ -1470,8 +1507,110 @@ async function run() {
       const stray = fetched.filter(u => !wrote.has(u));
       ok(fetched.length > 3 && !stray.length, label + ": every request is a file of the demo's own folder (" + fetched.length + " requests)" + (stray.length ? " — not: " + stray.slice(0, 4).join(", ") : ""));
       ok(fetched.filter(u => u === "/" + mapName.replace(/^\//, "") || /history\.bin|owner\.bin/.test(u)).length === 0, label + ": no family file is asked for (the family map, history notes, owner view)");
+      if (label === "desktop") {
+        /* the name and the tag in French (site audit GAP4-7) */
+        await page.click("#lang");
+        await page.waitForTimeout(300);
+        const fr = await page.evaluate(() => ({ h1: document.getElementById("ttl").textContent, drw: document.getElementById("drw-h").textContent, lock: document.querySelector("#lock h2").textContent, doc: document.title }));
+        await page.click("#lang");
+        await page.waitForTimeout(300);
+        const en = await page.evaluate(() => ({ h1: document.getElementById("ttl").textContent, doc: document.title }));
+        ok(fr.h1 === "Arbre de démoDémo" && fr.drw === fr.h1 && fr.lock === "Arbre de démo" && fr.doc === "Arbre de démo — Démo" && en.h1 === "Test DemoDemo" && en.doc === "Test Demo",
+          "desktop: the demo's name and its tag follow the language (" + JSON.stringify(fr) + " / " + JSON.stringify(en) + ")");
+        /* an #owner=<key> address, then a reload: the demo keeps no key and asks for no owner file (site audit GAP3-4) */
+        fetched.length = 0;
+        await page.evaluate(k => { location.hash = "#owner=" + k; }, OKEY64);
+        await page.waitForTimeout(600);
+        await page.reload();
+        await page.waitForTimeout(1500);
+        const hasKey = await page.evaluate(() => new Promise(res => { const rq = indexedDB.open("ftbdemo-keydb"); rq.onsuccess = () => { const db = rq.result;
+          try { const g = db.transaction(db.objectStoreNames[0], "readonly").objectStore(db.objectStoreNames[0]).get("owner"); g.onsuccess = () => res(!!g.result); g.onerror = () => res(null); } catch (_) { res(null); } }; rq.onerror = () => res(null); }));
+        ok(!fetched.some(u => /owner\.bin/.test(u)) && hasKey === false, "desktop: an #owner=<key> address makes the demo keep no key and ask for no owner file (" + hasKey + ")");
+      }
       await ctx.close();
     }
+  }
+  /* ---------------- site audit, 26 Oct 2026 (GAP3-2, GAP3-6, GAP4-5, GAP4-3) ---------------- */
+  if (!REAL) {
+    console.log("\n== odd addresses and stored values");
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await ctx.newPage();
+    const before = errors.length;
+    watch(page, "odd addresses");
+    await page.goto(BASE);
+    await unlock(page);
+    const bad = [];
+    for (const h of ["constructor", "__proto__", "toString", "hasOwnProperty", "visit/constructor", "visit/__proto__", "visit/toString"]) {
+      await page.evaluate(x => { location.hash = "#research/" + x; }, h);
+      await page.waitForTimeout(500);
+      const st = await page.evaluate(() => ({ list: document.querySelectorAll("#resin .rinv").length, loading: /Loading the research/.test(document.getElementById("resview").textContent) }));
+      if (!st.list || st.loading) bad.push(h + " " + JSON.stringify(st));
+    }
+    ok(!bad.length && errors.length === before, "#research/constructor, __proto__, toString and their visit/ forms fall back to the investigation list, with no page error" + (bad.length ? " — " + bad.join("; ") : ""));
+    await ctx.close();
+  }
+  if (!REAL) {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    await ctx.addInitScript(() => { try { if (!sessionStorage.getItem("seeded")) { localStorage.setItem("ft-lang", "constructor"); sessionStorage.setItem("seeded", "1"); } } catch (_) {} });
+    const page = await ctx.newPage();
+    const before = errors.length;
+    watch(page, "junk language");
+    await page.goto(BASE);
+    await unlock(page);
+    await page.waitForTimeout(300);
+    const st = await page.evaluate(() => ({ lang: document.documentElement.lang, cards: document.querySelectorAll(".node").length, title: document.querySelector("#ttl .sttl").textContent }));
+    ok(st.lang === "en" && st.cards > 3 && errors.length === before, "a stored language that is not en or fr (\"constructor\") opens the page in English (" + JSON.stringify(st) + ")");
+    await ctx.close();
+  }
+  if (!REAL) {
+    console.log("\n== the second-marriage label, in both languages");
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await ctx.newPage();
+    watch(page, "union label");
+    await page.goto(BASE);
+    await unlock(page);
+    const lab = () => page.evaluate(() => [...document.querySelectorAll("#world text.ulabel")].map(t => [...t.childNodes].filter(n => n.nodeName !== "title").map(n => n.textContent).join(""))
+      .find(x => /^(w\/|avec) /.test(x)) || "");
+    await page.waitForFunction(() => [...document.querySelectorAll("#world text.ulabel tspan.cfp")].length > 0, null, { timeout: 5000 }).catch(() => {});
+    const en = await lab();
+    await page.click("#lang");
+    await page.waitForTimeout(300);
+    const fr = await lab();
+    const ttl = await page.evaluate(() => ({ h1: document.querySelector("#ttl .sttl").textContent, drw: document.querySelector("#drw-h .sttl").textContent, lock: document.querySelector("#lock h2 .sttl").textContent, doc: document.title }));
+    await page.click("#lang");
+    await page.waitForTimeout(300);
+    const back = await page.evaluate(() => ({ h1: document.querySelector("#ttl .sttl").textContent, doc: document.title }));
+    ok(/^w\/ \S.* · 95%$/.test(en) && /^avec \S.* · 95\u202F%$/.test(fr), "a second marriage's line says w/ in English, avec in French, and the figure is 95 % there (" + en + " / " + fr + ")");
+    ok(ttl.h1 === "Arbre familial Nitschelm" && ttl.drw === ttl.h1 && ttl.lock === ttl.h1 && ttl.doc === ttl.h1 &&
+       back.h1 === "Nitschelm Family Tree" && back.doc === "Nitschelm Family Tree — Visual",
+      "the site's name follows the language in the top bar, the menu, the lock screen and the tab (" + JSON.stringify(ttl) + ")");
+    await ctx.close();
+  }
+  for (const [w, lang] of [[320, "en"], [320, "fr"], [390, "en"], [390, "fr"]]) {
+    if (REAL) break;
+    if (w === 320 && lang === "en") console.log("\n== phone journey row (site audit GAP4-3)");
+    const ctx = await browser.newContext({ viewport: { width: w, height: 760 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 });
+    await ctx.addInitScript(l => { try { localStorage.setItem("ft-lang", l); } catch (_) {} }, lang);
+    const page = await ctx.newPage();
+    watch(page, "journey row " + w + " " + lang);
+    await page.goto(BASE);
+    await unlock(page);
+    await page.tap('#dock [data-view="map"]');
+    await page.waitForTimeout(1500);
+    await page.fill("#search", "Branch4");
+    await page.waitForSelector("#suggest .it", { timeout: 3000 });
+    await page.click("#suggest .it");
+    await page.waitForTimeout(1200);
+    const r = await page.evaluate(() => {
+      const b = document.getElementById("mapback"), i = b.querySelector("i"), p = document.getElementById("playchip"), sp = p.querySelector("span");
+      const rb = b.getBoundingClientRect(), rp = p.getBoundingClientRect();
+      return { on: b.classList.contains("on"), name: i ? Math.round(i.getBoundingClientRect().width) : 0, full: i ? Math.round(i.scrollWidth) : 0,
+        playR: Math.round(rp.right), playW: Math.round(rp.width), vw: innerWidth, words: Math.round(sp.getBoundingClientRect().width), spoken: sp.textContent, overlap: rb.right > rp.left + 1 };
+    });
+    ok(r.on && r.name >= Math.min(60, r.full) && r.playR <= r.vw && !r.overlap && r.words <= 1 && r.spoken.length > 3,
+      w + " px, " + lang + ": during a journey the name chip shows the name and Play shows its icon only, on screen, its words kept for screen readers (" + JSON.stringify(r) + ")");
+    await shot(page, "jr-" + w + "-" + lang + ".png");
+    await ctx.close();
   }
   /* ---------------- phone ---------------- */
   {
