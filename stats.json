@@ -1,12 +1,12 @@
 {
  "v": 1,
- "updated": "2026-11-07",
+ "updated": "2026-11-08",
  "people": 422,
  "generations": 16,
  "recordsSince": 1577,
  "biographies": 116,
- "citations": 1247,
- "sources": 770,
+ "citations": 1248,
+ "sources": 771,
  "records": 104,
  "places": 212,
  "countries": 12,
@@ -16,5 +16,5 @@
  "investigations": 24,
  "questionsOpen": 28,
  "questionsAnswered": 23,
- "researchSources": 180
+ "researchSources": 181
 }
