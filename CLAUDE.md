@@ -79,21 +79,23 @@ without asking" (R-0381) and the 1 Aug daughters rule (R-0386).
 - **Daughters get cards; their children are not drawn.** A daughter's marriage is a union on her card.
 - **The daughters' lines already drawn are decided line by line** (R-0439): one yes/no card per line on Cory's
   decisions page (notes/decisions_page.md). Until a line is answered, its cards stay; never remove one without his
-  answer. The Schweitzer–Sartre line (c114–c122) came off the tree on 8 Oct 2026 (R-0539, superseding R-0440); it is told in c113's bio, and the cards are kept in TRIMMED-PEOPLE.md.
+  answer. The Schweitzer–Sartre line (c114–c122) came off the tree on 8 Oct 2026 (R-0539, superseding R-0440); it is told in c113's bio, and the cards are kept in TRIMMED-PEOPLE.md. The "Schweitzer" Filters button, which opened c111's whole branch, came off on 8 Nov 2026 (R-0696); the payload's "schw" anchor and branch id stay, and the page ignores them.
 - **No cards for stillborn children** (R-0441); a parent's note or bio may mention one.
 - **At most two marriages on a card** (R-0442), so cards keep their size. When more are known, the card keeps the
   marriage whose children are drawn, then the latest; the earlier ones are told in the bio only. A child whose
   parents did not marry hangs on a union with no spouse name and no note (c182 under c181, c294 under c004): no
   marriage sign, and it does not count as a marriage.
-- **The tree hides dead lines by default** (R-0444, R-0572, R-0575). A card is on a live line when the person is living
-  (dates "b. YYYY", or none) or has a living descendant on the tree; the "Hide dead lines" switch in Filters (on when
-  the tree opens, back on with Start over) leaves every other card out of every view the filters build: inside a
-  picked branch, and a branch where no one is living, even beside living ones under Show all (Cory, 17 Oct 2026:
-  "someone like this should be hidden when it is enabled"; "Example of filter not working still"). A note says so
-  when such a branch is picked; picked on its own (Origins aside), it turns the switch off, with a note that says
-  why. A card's pill opens its live children first and then the rest ("+N more"), and search shows anyone. In
-  index.html: `n.live`, `hideDead`, `firstKids`, `pickedAllDead`, `deadAutoOff`, `deadLeftOut`, `toast`;
-  tests/run.js "Filters" and tests/browser.js check it.
+- **The tree folds dead lines by default** (R-0697, Cory, 8 Nov 2026: "Do the fold option instead"; it replaced hiding
+  them, R-0444, R-0572, R-0575). A card is on a live line when the person is living (dates "b. YYYY", or none) or has a
+  living descendant on the tree. With the "Fold dead lines" switch in Filters on (when the tree opens, back on with
+  Start over) nobody is left out: among the children of a card with a living child, each run of brothers and sisters
+  on dead lines is ONE small grey card in their place, in birth order ("+N · no living descendants"), and a tap opens
+  them; inside a picked branch too, and a branch where no one is living, beside living ones under Show all, is folded
+  the same way, with a note. Picked on its own (Origins aside), such a branch turns the switch off, with a note that
+  says why. A card's pill counts its live children; a dead line, once opened, opens in full; search and a card's links
+  unfold the line they go to. In index.html: `n.live`, `foldDead`, `kidItems`, `folds`, `unfolded`, `unfoldRun`,
+  `firstKids`, `pickedAllDead`, `deadAutoOff`, `deadLeftOut`, `toast`; tests/run.js "Filters" and tests/browser.js
+  "fold dead lines" check it.
 - **Lines through a daughter are marked all the way down** (R-0446): below a daughter of the line every connector is
   dashed and every card says "through <her first name>" (index.html `viaF`, `viaTag`). Nothing to do per line: a line
   that stays is marked, one that goes takes its marks with it.

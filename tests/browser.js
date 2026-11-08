@@ -54,7 +54,9 @@ function person(name, years, g, extra) {
 }
 const kids = (...c) => c;
 /* the trunk: five generations; then one small family per branch, each head carrying its anchor */
-const BR = [["fr", "fr"], ["east", "us-east"], ["west", "us-west"], ["ohio", "us-ohio"], ["doubs", "fr-doubs"], ["colmar", "colmar"], ["paris", "fr-paris"], ["nl", "nl"], ["schw", "schw"]];
+/* the eighth line keeps the anchor and branch id of the real payload's leftover "schw" line, whose tile came off on
+   8 Nov 2026: the page lists neither, so it has no tile and its cards take the colour of the line above */
+const BR = [["fr", "fr"], ["east", "us-east"], ["west", "us-west"], ["ohio", "us-ohio"], ["doubs", "fr-doubs"], ["colmar", "colmar"], ["paris", "fr-paris"], ["schw", "schw"], ["nl", "nl"]];
 const g5 = person("Octavus Testmann", "1627–1694", "m", { profile: { headline: "Beekeeper", headline_fr: "Apiculteur", bio: ["Octavus kept bees in Alphaville.", "He had two wives."], bio_fr: ["Octavus élevait des abeilles à Alphaville.", "Il eut deux épouses."] } });
 g5.unions = [{ s: "Ottilie Probe", sy: "1650", c: BR.map(([key, bid], i) => {
   const h = person("Branch" + (i + 1) + " Testmann", (1670 + i) + "–" + (1730 + i), i % 2 ? "f" : "m", { anchor: key, branch: bid,
@@ -309,10 +311,12 @@ async function run() {
     page.on("pageerror", e => { errors.push(label + ": " + e.message); console.log("   PAGEERROR " + e.message + " | " + (e.stack || "").split("\n").slice(1, 3).join(" | ")); });
     page.on("console", m => { if (m.type() === "error" && !(expected404 && /status of 404/.test(m.text()))) errors.push(label + " console: " + m.text()); });
   };
-  /* ---------------- Hide dead lines (Cory, 3 Oct 2026, register R-0444) ----------------
-     Every branch head of the invented family has a dead son (1700s) and a living daughter (b. 195x). */
+  /* ---------------- Fold dead lines (Cory, 8 Nov 2026, register R-0697; "Hide dead lines" since 3 Oct, R-0444) ----------------
+     Every branch head of the invented family has a dead son (1700s) and a living daughter (b. 195x); the last one,
+     the Netherlands, has only the dead son. With the switch on nobody is left out: each run of brothers and sisters on
+     dead lines is one grey card in their place, "+N · no living descendants", and a tap opens them. */
   {
-    console.log("\n== desktop, hide dead lines");
+    console.log("\n== desktop, fold dead lines");
     const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const page = await ctx.newPage();
     watch(page, "dead lines");
@@ -322,52 +326,90 @@ async function run() {
     const shown = nm => page.evaluate(nm => [...document.querySelectorAll(".node")].some(e => { const x = e.querySelector(".nm"); return x && x.textContent === nm && e.getBoundingClientRect().width > 0; }), nm);
     const pillOf = nm => page.evaluate(nm => { const e = [...document.querySelectorAll(".node")].find(e => { const x = e.querySelector(".nm"); return x && x.textContent === nm; }); const p = e && e.querySelector("[data-pill]"); return p ? p.textContent : null; }, nm);
     const pill = nm => page.click(`.node:has(.nm:text-is("${nm}")) [data-pill]`);
+    /* the grey cards on screen, left to right: their label, who they hold, and the names of the cards beside them in their row */
+    const folds = () => page.evaluate(() => [...document.querySelectorAll(".foldc")].filter(e => e.getBoundingClientRect().width > 0).map(e => {
+      const r = e.getBoundingClientRect(), b = e.querySelector("button");
+      const row = [...document.querySelectorAll(".node")].map(n => ({ n, r: n.getBoundingClientRect() })).filter(x => x.r.width > 0 && Math.abs(x.r.top - r.top) < 2);
+      const left = row.filter(x => x.r.right <= r.left + 1).sort((a, c) => c.r.right - a.r.right)[0], right = row.filter(x => x.r.left >= r.right - 1).sort((a, c) => a.r.left - c.r.left)[0];
+      const nm = x => x ? x.n.querySelector(".nm").textContent : "";
+      return { text: b.textContent, who: b.title, left: nm(left), right: nm(right), w: Math.round(r.width), clipped: b.scrollWidth > b.clientWidth + 1 };
+    }));
     await page.click("#filtbtn");
     await page.waitForSelector("#deadsw", { state: "visible" });
-    ok((await page.getAttribute("#deadsw", "role")) === "switch" && (await page.getAttribute("#deadsw", "aria-checked")) === "true",
-      "Hide dead lines is a switch in Filters, on when the tree opens");
+    ok((await page.getAttribute("#deadsw", "role")) === "switch" && (await page.getAttribute("#deadsw", "aria-checked")) === "true" &&
+       (await page.textContent("#dead-l")) === "Fold dead lines",
+      "Fold dead lines is a switch in Filters, on when the tree opens");
     ok(await page.isHidden("#restart"), "…and with it on, the tree is as it opens (no Start over)");
+    ok(!(await page.$('.tile[data-br="schw"]')) && (await page.$$("#filters .tile")).length === BR.length,
+      "no Schweitzer tile: one tile per listed branch, Origins included (" + (await page.$$("#filters .tile")).length + ")");
     await shot(page, "dl1-filters.png");
     await page.keyboard.press("Escape");
     await page.waitForTimeout(300);
     ok(await page.isHidden("#filters"), "Escape closes the Filters panel");
     let t = await pillOf("Branch1 Testmann");
-    ok(t === "+1", "a card on a live line offers its living child first (" + t + ")");
+    ok(t === "+1", "a card on a live line counts its living child (" + t + ")");
     await pill("Branch1 Testmann");
     await page.waitForTimeout(500);
     t = await pillOf("Branch1 Testmann");
-    ok(await shown("Daughter1 Testmann") && !(await shown("Child1 Testmann")) && /^\+1 /.test(t || ""),
-      "one click shows the living daughter, and the pill offers the dead line (" + t + ")");
-    await pill("Branch1 Testmann");
+    let f = (await folds()).find(x => /Child1 Testmann/.test(x.who));
+    ok(await shown("Daughter1 Testmann") && !(await shown("Child1 Testmann")) && f && f.text === "+1 · no living descendants" && t === "− hide",
+      "one click shows the living daughter, and the dead son is a grey card beside her, so the pill offers nothing more (" + JSON.stringify(f) + ", pill " + t + ")");
+    ok(f && f.right === "Daughter1 Testmann" && !f.clipped, "the grey card stands in his place, in birth order, before his sister, its label whole (" + (f && f.w) + " px)");
+    await page.click('.foldc:has(button[title*="Child1 Testmann"]) button');
     await page.waitForTimeout(500);
-    ok(await shown("Child1 Testmann"), "a second click opens the dead line directly");
+    ok(await shown("Child1 Testmann") && !(await folds()).some(x => /Child1 Testmann/.test(x.who)), "a tap on the grey card opens him, in its place");
+    ok(await page.isVisible("#restart"), "…and Start over appears");
+    /* a grey card works from the keyboard too */
+    await pill("Branch3 Testmann");
+    await page.waitForTimeout(500);
+    await page.focus('.foldc:has(button[title*="Child3 Testmann"]) button');
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(500);
+    ok(await shown("Child3 Testmann"), "Enter on a focused grey card opens it");
+    await page.click("#lang");
+    await page.waitForTimeout(400);
+    await pill("Branch2 Testmann");
+    await page.waitForTimeout(500);
+    f = (await folds()).find(x => /Child2 Testmann/.test(x.who));
+    ok(f && f.text === "+1 · sans descendant vivant" && !f.clipped && (await page.textContent("#dead-l")) === "Replier les lignées éteintes",
+      "in French: \"" + (f && f.text) + "\", and the switch is « " + (await page.textContent("#dead-l")) + " »");
+    await page.click("#lang");
+    await page.waitForTimeout(400);
+    await page.click("#restart");
+    await page.waitForTimeout(600);
     await page.click("#filtbtn");
     await page.click("#deadsw");
     await page.waitForTimeout(600);
     t = await pillOf("Branch2 Testmann");
     ok((await page.getAttribute("#deadsw", "aria-checked")) === "false" && t === "+2", "switched off, a card offers all its children (" + t + ")");
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+    await pill("Branch2 Testmann");
+    await page.waitForTimeout(500);
+    ok(await shown("Child2 Testmann") && await shown("Daughter2 Testmann") && !(await folds()).length, "…and shows them all as cards, no grey card");
     ok(await page.isVisible("#restart"), "switched off, Start over appears");
     await page.click("#restart");
     await page.waitForTimeout(600);
     ok((await page.getAttribute("#deadsw", "aria-checked")) === "true", "Start over turns the switch back on");
-    /* Cory, 17 Oct 2026: with the switch on, a branch picked by its tile shows its living lines only */
+    /* Cory, 17 Oct 2026: with the switch on, a branch picked by its tile shows its living lines; the dead ones are folded */
     await page.click("#filtbtn");
     await page.click('.tile[data-br="east"]');
     await page.waitForTimeout(600);
-    t = await pillOf("Branch2 Testmann");
-    ok(await shown("Daughter2 Testmann") && !(await shown("Child2 Testmann")) && /^\+1 /.test(t || ""),
-      "switch on, a branch tile shows its living line and the pill offers the dead one (" + t + ")");
+    f = (await folds()).find(x => /Child2 Testmann/.test(x.who));
+    ok(await shown("Daughter2 Testmann") && !(await shown("Child2 Testmann")) && !!f,
+      "switch on, a branch tile shows its living line and folds the dead one (" + JSON.stringify(f) + ")");
     await page.keyboard.press("Escape");
     await page.waitForTimeout(300);
     await page.click("#restart");
     await page.waitForTimeout(600);
-    /* Cory, 17 Oct 2026 (R-0575): Show all with the switch on leaves out the branch where no one is living, and says so */
+    /* Cory, 17 Oct 2026 (R-0575): Show all with the switch on folds the branch where no one is living, and says so */
     await page.click("#filtbtn");
     await page.click("#fall");
     await page.waitForTimeout(600);
     const note2 = await page.isVisible("#toast") ? await page.textContent("#toastmsg") : "";
-    ok((await page.getAttribute("#deadsw", "aria-checked")) === "true" && /Schweitzer branch is left out/.test(note2) && !(await shown("Child9 Testmann")) && !(await shown("Branch9 Testmann")),
-      "Show all with the switch on: the all-dead branch stays out and a note says why (" + note2 + ")");
+    ok((await page.getAttribute("#deadsw", "aria-checked")) === "true" && /Netherlands branch is folded into a grey card/.test(note2) &&
+       !(await shown("Child9 Testmann")) && !(await shown("Branch9 Testmann")) && (await folds()).some(x => /Branch9 Testmann/.test(x.who)),
+      "Show all with the switch on: the all-dead branch is a grey card and a note says why (" + note2 + ")");
     await page.keyboard.press("Escape");
     await page.waitForTimeout(300);
     await page.click("#toast .tx");
@@ -375,10 +417,10 @@ async function run() {
     await page.waitForTimeout(600);
     /* Cory, 17 Oct 2026: picking only a branch where no one is living turns the switch off, with a note saying why */
     await page.click("#filtbtn");
-    await page.click('.tile[data-br="schw"]');
+    await page.click('.tile[data-br="nl"]');
     await page.waitForTimeout(600);
     const note = await page.isVisible("#toast") ? await page.textContent("#toastmsg") : "";
-    ok((await page.getAttribute("#deadsw", "aria-checked")) === "false" && /Schweitzer/.test(note) && (await page.getAttribute("#toast", "role")) === "status" &&
+    ok((await page.getAttribute("#deadsw", "aria-checked")) === "false" && /Netherlands/.test(note) && /folded/.test(note) && (await page.getAttribute("#toast", "role")) === "status" &&
        await shown("Child9 Testmann"),
       "picking only a branch where no one is living turns the switch off, shows the branch, and a note says why (" + note + ")");
     await page.keyboard.press("Escape");
@@ -399,10 +441,10 @@ async function run() {
     await page.waitForSelector("#suggest .it", { timeout: 3000 });
     await page.click("#suggest .it");
     await page.waitForTimeout(900);
-    ok(await shown("Child3 Testmann"), "search still shows a person on a dead line, with the switch on");
+    ok(await shown("Child3 Testmann") && !(await folds()).length, "search shows a person on a dead line as a card, with the switch on, folded nowhere");
     await page.click("#lang");
     await page.waitForTimeout(400);
-    ok((await page.textContent("#dead-l")) === "Masquer les lignées éteintes", "the switch is in French too");
+    ok((await page.textContent("#dead-l")) === "Replier les lignées éteintes", "the switch is in French too");
     await ctx.close();
   }
   /* ---------------- Play: the family over the years (Cory, 17 Oct 2026) ---------------- */
@@ -1454,7 +1496,9 @@ async function run() {
     const tjs = page0.match(/<script>([\s\S]*)<\/script>/)[1];
     const lit = (re, name) => vm.runInNewContext(tjs.match(re)[0].replace(/^const /, "var ") + "\n" + name);
     const SITE = lit(/const SITE = \{[\s\S]*?\n\};/, "SITE");
-    fs.writeFileSync(path.join(DIR, "data.json"), JSON.stringify(root));
+    /* a demo lists every branch its data uses (build-demo refuses one it does not): the leftover "schw" line is the family
+       build's own, so the demo's copy of the invented family goes without its anchor and branch id */
+    fs.writeFileSync(path.join(DIR, "data.json"), JSON.stringify(root, (k, v) => (k === "anchor" || k === "branch") && v === "schw" ? undefined : v));
     fs.writeFileSync(path.join(DIR, "research.json"), JSON.stringify(Object.assign({}, R, { decide: undefined })));
     fs.writeFileSync(path.join(DIR, "links.json"), JSON.stringify({ [idOf["Quintus Testmann"]]: 50, [idOf["Sextus Testmann"]]: 95 }));
     fs.writeFileSync(path.join(DIR, "lbl.txt"), "0AA~Alphaville~FR\n1CC~Gamma City~US\n");

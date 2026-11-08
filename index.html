@@ -14,7 +14,7 @@
 <style>
 :root{
   --paper:#F5F6F2; --panel:#FFFFFF; --ink:#1F2A33; --ink-soft:#5B6770; --rule:#C9CEC6;
-  --fr:#3E6B4F; --us-east:#34558B; --us-west:#B0432F;--us-ohio:#8A6A1F; --fr-doubs:#2F6B72; --colmar:#A33D6A; --fr-paris:#66701C; --schw:#6E4B7A; --nl:#C2601A; --you:#B8860B; --sel:#0E7C7B;
+  --fr:#3E6B4F; --us-east:#34558B; --us-west:#B0432F;--us-ohio:#8A6A1F; --fr-doubs:#2F6B72; --colmar:#A33D6A; --fr-paris:#66701C; --plum:#6E4B7A; --nl:#C2601A; --you:#B8860B; --sel:#0E7C7B;
   --onbrand:#FFFFFF;   /* text sitting ON a brand colour: white in both themes, deliberately */
   /* the cards' small badges carry white 8px text, so their colours stay these darker shades in both themes
      (4.5:1 or better; the dark theme's brighter --fr and --us-east gave 2.6:1, 20 Oct 2026) */
@@ -22,7 +22,7 @@
 }
 html.dark{
   --paper:#15191C; --panel:#1E2428; --ink:#E7EBEA; --ink-soft:#98A3A6; --rule:#3B4448;
-  --fr:#6FAE8A; --us-east:#7EA2DB; --us-west:#D97B62;--us-ohio:#D2AE5E; --fr-doubs:#6FB3BB; --colmar:#D98BAE; --fr-paris:#B5C25A; --schw:#B18BC4; --nl:#F2A15F; --you:#D9A93F; --sel:#4FC8C6;
+  --fr:#6FAE8A; --us-east:#7EA2DB; --us-west:#D97B62;--us-ohio:#D2AE5E; --fr-doubs:#6FB3BB; --colmar:#D98BAE; --fr-paris:#B5C25A; --plum:#B18BC4; --nl:#F2A15F; --you:#D9A93F; --sel:#4FC8C6;
 }
 html.dark .node .box{box-shadow:0 1px 2px rgba(0,0,0,.4)}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -308,6 +308,12 @@ html.dark #tip a{color:#0f5aa8} /* dark theme inverts the tooltip to a light bac
 .node.sel .box{outline:3px solid var(--sel);outline-offset:2px;box-shadow:0 0 0 6px rgba(14,124,123,.20),0 0 0 5px var(--paper),0 4px 14px rgba(14,124,123,.5)}
 html.dark .node.sel .box{box-shadow:0 0 0 5px var(--paper),0 1px 2px rgba(0,0,0,.4)}
 .node.dim{opacity:.16}
+/* a run of brothers and sisters on dead lines, folded into one small grey card in their place (Cory, 8 Nov 2026) */
+.foldc{position:absolute;display:flex}
+.foldc .foldb{flex:1;min-width:0;font:inherit;font-size:11px;line-height:1.2;color:var(--ink-soft);background:color-mix(in srgb,var(--ink-soft) 9%,var(--panel));border:1px dashed color-mix(in srgb,var(--ink-soft) 50%,transparent);border-radius:8px;padding:0 9px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.foldc .foldb:hover{border-style:solid;border-color:var(--sel);color:var(--sel)}
+.foldc .foldb:focus-visible{outline:2px solid var(--sel);outline-offset:2px}
+.foldc.dim{opacity:.16}
 #ruler{position:absolute;left:0;top:0;bottom:0;width:78px;pointer-events:none;z-index:4}
 #genlines{position:absolute;inset:0;pointer-events:none;z-index:0}
 #genlines .genline{position:absolute;left:0;right:0;border-top:1px dashed var(--rule);opacity:.75}
@@ -438,7 +444,7 @@ html.dark{--sea:#121A1F; --land:#222A2E; --coast:#3D474C; --bord:#39434A; --stat
 #mapsheet .cert,#profile .cert{display:inline-block;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;border-radius:8px;padding:1px 6px;vertical-align:1px;margin-left:5px}
 #mapsheet .cert.doc,#profile .cert.doc{background:rgba(62,107,79,.16);color:var(--fr)}
 #mapsheet .cert.inf,#profile .cert.inf{background:rgba(184,134,11,.18);color:var(--you)}
-#mapsheet .cert.apx,#profile .cert.apx{background:rgba(110,75,122,.16);color:var(--schw)}
+#mapsheet .cert.apx,#profile .cert.apx{background:rgba(110,75,122,.16);color:var(--plum)}
 #mapsheet .cert.alt,#profile .cert.alt{background:rgba(176,67,47,.16);color:var(--us-west)}
 #mapsheet .prow2{display:flex;flex-wrap:wrap;gap:6px}
 #mapsheet .pchip{display:flex;align-items:center;gap:6px;border:1px solid var(--rule);border-radius:18px;padding:3px 10px 3px 3px;background:var(--paper);cursor:pointer;font-size:11.5px;max-width:100%}
@@ -1214,7 +1220,7 @@ html.dark #playbar .pcap.royal{background:linear-gradient(180deg,#4A3A10,#33280A
   <div class="flegend treeonly"><span class="edgesample" aria-hidden="true"></span><span data-i18n="legend_edge">The colored edge on each card shows its branch.</span></div>
   <div class="flegend treeonly"><span class="dashsample" aria-hidden="true"></span><span data-i18n="legend_vf">A dashed line: the family goes on through a daughter.</span></div>
   <div class="fsep treeonly"></div>
-  <div class="fsw treeonly"><div class="grow"><div class="swl" id="dead-l" data-i18n="dead_hide">Hide dead lines</div><div class="swn" id="dead-n" data-i18n="dead_note">Leaves out people with no living descendant, in every branch. Search or a card’s + button still shows them; picking only branches where no one is living turns it off.</div></div><button type="button" id="deadsw" role="switch" aria-checked="true" aria-labelledby="dead-l" aria-describedby="dead-n"><span class="trk"><span class="knob"></span></span></button></div>
+  <div class="fsw treeonly"><div class="grow"><div class="swl" id="dead-l" data-i18n="dead_hide">Fold dead lines</div><div class="swn" id="dead-n" data-i18n="dead_note">Folds people with no living descendant into one grey card in their place among their brothers and sisters, in every branch; the grey card opens them. Search and a card’s links still go to anyone; picking only branches where no one is living turns it off.</div></div><button type="button" id="deadsw" role="switch" aria-checked="true" aria-labelledby="dead-l" aria-describedby="dead-n"><span class="trk"><span class="knob"></span></span></button></div>
   <div class="fsep maponly"></div>
   <div class="fsec maponly">
     <span class="flbl" id="pp-h" data-i18n="map_people">People</span>
@@ -1357,8 +1363,7 @@ const BRANCHES = [
   {key:"doubs",  id:"fr-doubs", color:"--fr-doubs"},
   {key:"colmar", id:"colmar",   color:"--colmar"},
   {key:"paris",  id:"fr-paris", color:"--fr-paris"},
-  {key:"nl",     id:"nl",       color:"--nl"},
-  {key:"schw",   id:"schw",     color:"--schw"}
+  {key:"nl",     id:"nl",       color:"--nl"}
 ];
 /* the map's "Go to" camera boxes, [[west,south],[east,north]] in degrees; each label is I18N map_<key> */
 const REGIONS = {
@@ -1370,7 +1375,7 @@ const REGIONS = {
 };
 const AV = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' fill='%23E9ECE6'/%3E%3Ccircle cx='12' cy='9' r='4' fill='%23AEB6AC'/%3E%3Cpath d='M4 22c0-4.4 3.6-7 8-7s8 2.6 8 7' fill='%23AEB6AC'/%3E%3C/svg%3E";
 const I18N = {
-  en:{search:"Search a name…", search_long:"Search the Nitschelm tree…", search_label:"Search a name", legacy:"Origins", fr:"France", east:"US East", west:"Oregon", ohio:"Ohio", doubs:"Besançon", colmar:"Colmar", paris:"Paris", schw:"Schweitzer", nl:"Netherlands",
+  en:{search:"Search a name…", search_long:"Search the Nitschelm tree…", search_label:"Search a name", legacy:"Origins", fr:"France", east:"US East", west:"Oregon", ohio:"Ohio", doubs:"Besançon", colmar:"Colmar", paris:"Paris", nl:"Netherlands",
       fit:"Fit to screen", zoom_in:"Zoom in", zoom_out:"Zoom out", start_over:"Start over", hide:"− hide", more_kids:"more", nomatch:"No match", living_tag:"Living", and:"and",
       play_btn:"Play the years", play_label:"The family over the years", play_play:"Play", play_pause:"Pause", play_again:"Play again from the start",
       play_year:"Year", play_speed:"%v (%n years a second). Change speed", play_speed1:"%v (1 year a second). Change speed", play_spd:"%n yr/s", play_spd1:"1 yr/s",
@@ -1384,10 +1389,10 @@ const I18N = {
       play_hero_1b:"Hear ye, hear ye! %n arrives in %p. Historians agree: it was all leading up to this.",
       play_joke:"That’s %y years of family history in %t. Same time next century?",
       play_joke_skip:"You skipped to the end, didn’t you? The ancestors noticed.", play_min:"%m min %s s", play_sec:"%s seconds",
-      dead_auto:"Hide dead lines is now off: no one in the %s branch is living, so the switch would have hidden all of it. You can switch it back on in Filters.",
-      dead_auto_n:"Hide dead lines is now off: no one in the %s branches is living, so the switch would have hidden all of them. You can switch it back on in Filters.",
-      dead_left:"Hide dead lines is on, so the %s branch is left out: no one in it is living. Switch it off in Filters to see it.",
-      dead_left_n:"Hide dead lines is on, so the %s branches are left out: no one in them is living. Switch it off in Filters to see them.", gen:"Gen", author:"Author", synced:"Data synced",
+      dead_auto:"Fold dead lines is now off: no one in the %s branch is living, so the switch would have folded all of it into one grey card. You can switch it back on in Filters.",
+      dead_auto_n:"Fold dead lines is now off: no one in the %s branches is living, so the switch would have folded all of them into grey cards. You can switch it back on in Filters.",
+      dead_left:"Fold dead lines is on, so the %s branch is folded into a grey card: no one in it is living. Open the grey card, or switch the fold off in Filters, to see it.",
+      dead_left_n:"Fold dead lines is on, so the %s branches are folded into grey cards: no one in them is living. Open a grey card, or switch the fold off in Filters, to see them.", gen:"Gen", author:"Author", synced:"Data synced",
       synced_note:"Source site note: the family site this tree syncs from sometimes rolls back to an older copy, so a few recent facts here can no longer be seen there.",
       hint:"Click a person to open their family and trace their line · click the background or “Start over” to go back to the start · drag / scroll to move", hint_m:"Tap a person to open their family and trace their line · tap the background to go back · drag to move, pinch to zoom",
       pwmsg:"This family tree is password protected.", pwbtn:"Unlock", pwerr:"Wrong password — try again.", pwph:"Password",
@@ -1401,7 +1406,7 @@ const I18N = {
       via_f_t:"This line goes on through %s, a daughter of the family",
       via_f_lb:"Through",
       conf_t:"How sure the link is: %p%", conf_o:"your figure; the records give %e%", conf_lb:"How sure",
-      dead_hide:"Hide dead lines", dead_note:"Leaves out people with no living descendant, in every branch. Search or a card’s + button still shows them; picking only branches where no one is living turns it off.",
+      fold_lbl:"+%n · no living descendants", dead_hide:"Fold dead lines", dead_note:"Folds people with no living descendant into one grey card in their place among their brothers and sisters, in every branch; the grey card opens them. Search and a card’s links still go to anyone; picking only branches where no one is living turns it off.",
       language:"Language", appearance:"Appearance", th_auto:"Auto", th_light:"Light", th_dark:"Dark",
       dark_mode:"Dark mode", light_mode:"Light mode", lang_switch:"Passer en français", tour_take:"Take the tour",
       site_title:"Nitschelm Family Tree", demo_tag:"", union_with:"w/", pct:"%p%",
@@ -1571,7 +1576,7 @@ const I18N = {
       rq_bio_from:"From Research",
       rq_bio_open:"Open in Research",
       intro_go_res:"Back to Research"},
-  fr:{search:"Rechercher un nom…", search_long:"Rechercher dans l'arbre Nitschelm…", search_label:"Rechercher un nom", legacy:"Origines", fr:"France", east:"USA Est", west:"Oregon", ohio:"Ohio", doubs:"Besançon", colmar:"Colmar", paris:"Paris", schw:"Schweitzer", nl:"Pays-Bas",
+  fr:{search:"Rechercher un nom…", search_long:"Rechercher dans l'arbre Nitschelm…", search_label:"Rechercher un nom", legacy:"Origines", fr:"France", east:"USA Est", west:"Oregon", ohio:"Ohio", doubs:"Besançon", colmar:"Colmar", paris:"Paris", nl:"Pays-Bas",
       fit:"Ajuster à l'écran", zoom_in:"Zoom avant", zoom_out:"Zoom arrière", start_over:"Recommencer", hide:"− masquer", more_kids:"de plus", nomatch:"Aucun résultat", living_tag:"En vie", and:"et",
       play_btn:"Faire défiler les années", play_label:"La famille au fil des années", play_play:"Lecture", play_pause:"Pause", play_again:"Rejouer depuis le début",
       play_year:"Année", play_speed:"%v (%n ans par seconde). Changer la vitesse", play_speed1:"%v (1 an par seconde). Changer la vitesse", play_spd:"%n ans/s", play_spd1:"1 an/s",
@@ -1585,10 +1590,10 @@ const I18N = {
       play_hero_1b:"Oyez, oyez ! %n arrive à %p. Les historiens sont formels : tout menait à ce moment.",
       play_joke:"Voilà %y ans d’histoire familiale en %t. Même heure le siècle prochain ?",
       play_joke_skip:"Vous avez sauté jusqu’à la fin, hein ? Les ancêtres ont remarqué.", play_min:"%m min %s s", play_sec:"%s secondes",
-      dead_auto:"« Masquer les lignées éteintes » est désactivé : personne n’est en vie dans la branche %s, que l’option aurait masquée en entier. Vous pouvez la réactiver dans Filtres.",
-      dead_auto_n:"« Masquer les lignées éteintes » est désactivé : personne n’est en vie dans les branches %s, que l’option aurait masquées en entier. Vous pouvez la réactiver dans Filtres.",
-      dead_left:"« Masquer les lignées éteintes » est activé : la branche %s est écartée, car personne n’y est en vie. Désactivez-le dans Filtres pour la voir.",
-      dead_left_n:"« Masquer les lignées éteintes » est activé : les branches %s sont écartées, car personne n’y est en vie. Désactivez-le dans Filtres pour les voir.", gen:"Gén", author:"Auteur", synced:"Données synchronisées",
+      dead_auto:"« Replier les lignées éteintes » est désactivé : personne n’est en vie dans la branche %s, que l’option aurait repliée en entier dans une fiche grise. Vous pouvez la réactiver dans Filtres.",
+      dead_auto_n:"« Replier les lignées éteintes » est désactivé : personne n’est en vie dans les branches %s, que l’option aurait repliées en entier dans des fiches grises. Vous pouvez la réactiver dans Filtres.",
+      dead_left:"« Replier les lignées éteintes » est activé : la branche %s est repliée dans une fiche grise, car personne n’y est en vie. Ouvrez la fiche grise, ou désactivez l’option dans Filtres, pour la voir.",
+      dead_left_n:"« Replier les lignées éteintes » est activé : les branches %s sont repliées dans des fiches grises, car personne n’y est en vie. Ouvrez une fiche grise, ou désactivez l’option dans Filtres, pour les voir.", gen:"Gén", author:"Auteur", synced:"Données synchronisées",
       synced_note:"Note sur la source : le site familial dont cet arbre se synchronise revient parfois à une copie plus ancienne ; certains faits récents n'y sont donc plus visibles.",
       hint:"Cliquez sur une personne pour ouvrir sa famille et suivre sa lignée · cliquez sur le fond ou « Recommencer » pour revenir au départ · glissez / molette pour naviguer", hint_m:"Touchez une personne pour ouvrir sa famille et suivre sa lignée · touchez le fond pour revenir · glissez pour naviguer, pincez pour zoomer",
       pwmsg:"Cet arbre généalogique est protégé par mot de passe.", pwbtn:"Déverrouiller", pwerr:"Mot de passe incorrect — réessayez.", pwph:"Mot de passe",
@@ -1602,7 +1607,7 @@ const I18N = {
       via_f_t:"Cette lignée continue par %s, une fille de la famille",
       via_f_lb:"Par",
       conf_t:"Certitude du lien : %p\u202F%", conf_o:"votre chiffre ; les sources donnent %e\u202F%", conf_lb:"Certitude",
-      dead_hide:"Masquer les lignées éteintes", dead_note:"Écarte les personnes sans descendant vivant, dans toutes les branches. La recherche ou le bouton + d’une fiche les montrent toujours ; choisir seulement des branches où personne n’est en vie le désactive.",
+      fold_lbl:"+%n · sans descendant vivant", dead_hide:"Replier les lignées éteintes", dead_note:"Replie les personnes sans descendant vivant en une fiche grise, à leur place parmi leurs frères et sœurs, dans toutes les branches ; la fiche grise les montre. La recherche et les liens d’une fiche mènent toujours à chacun ; choisir seulement des branches où personne n’est en vie le désactive.",
       language:"Langue", appearance:"Apparence", th_auto:"Auto", th_dark:"Sombre",
       th_light:"Clair", light_mode:"Mode clair", /* ft-allow-names: "clair" is the French word for light (the appearance switch), not a person */
       dark_mode:"Mode sombre", lang_switch:"Switch to English", tour_take:"Faire la visite",
@@ -2402,8 +2407,12 @@ function bornAt(p){
 }
 let idc = 0;
 const allNodes = [];
+/* a card's branch: its own, else its parent's. A branch id the page does not list keeps the parent's too: the
+   payload still marks one line "schw", whose tile came off on 8 Nov 2026 (Cory: "OK remove the button"), so its
+   cards that sit under no other branch head are coloured, and filtered on the map, as the line above them */
+const BRANCH_IDS = new Set(BRANCHES.map(x => x.id));
 function build(p, branch, parent, gen){
-  const b = p.branch || branch;
+  const b = BRANCH_IDS.has(p.branch) ? p.branch : branch;
   const n = { id:++idc, p, branch:b, parent, children:[], gen, open:false };
   allNodes.push(n);
   (p.unions||[]).forEach((u,ui)=>{
@@ -2418,9 +2427,9 @@ function build(p, branch, parent, gen){
 const root = build(DATA, "legacy", null, 0);
 (function cnt(n){ n.desc = n.children.length; n.children.forEach(c=>{ cnt(c); n.desc += c.desc; }); })(root);
 /* dead lines (Cory, 3 Oct 2026): a card is on a LIVE line when the person is living (dates "b. YYYY", or none
-   at all) or has a living descendant on the tree; every other card is on a dead line, which the filters hide,
-   inside a picked branch too (17 Oct 2026), unless "Hide dead lines" is switched off. liveDesc counts the live
-   cards below, for the pills. */
+   at all) or has a living descendant on the tree; every other card is on a dead line, which "Fold dead lines"
+   (8 Nov 2026; before, "Hide dead lines" left them out) folds into grey cards among their brothers and sisters,
+   inside a picked branch too. liveDesc counts the live cards below, for the pills. */
 const livingP = p => /^b\.\s*\d/.test(p.years || "") || !/\d/.test(p.years || "");
 (function live(n){ n.children.forEach(live); n.live = livingP(n.p) || n.children.some(c=>c.live);
   n.liveDesc = n.children.reduce((a,c)=>a + (c.live ? 1 + c.liveDesc : 0), 0); })(root);
@@ -2429,7 +2438,7 @@ const livingP = p => /^b\.\s*\d/.test(p.years || "") || !/\d/.test(p.years || ""
    the first one, where the line left the male line */
 (function via(n, d){ n.viaF = d; n.children.forEach(c => via(c, d || (n.p.g === "f" ? n : null))); })(root, null);
 
-/* expand a node and cascade through single-child runs until a fork or leaf (with dead lines hidden,
+/* expand a node and cascade through single-child runs until a fork or leaf (with dead lines folded,
    through runs of a single LIVE child, so the opening view goes on down to where the living lines part) */
 function openRun(n){
   n.open = true;
@@ -2437,10 +2446,10 @@ function openRun(n){
   while((k = firstKids(c)).length === 1){ c = k[0]; c.open = true; }
   return c;
 }
-/* the children one click on a closed card shows. With dead lines hidden, a card on a live line opens its live
-   children first and its pill then offers the rest ("+N more"); a dead line, once opened, opens in full. */
+/* the children one click on a closed card shows as cards. With dead lines folded, a card on a live line shows its
+   live children, the dead ones folded into grey cards between them; a dead line, once opened, opens in full. */
 function firstKids(n){
-  if(!hideDead || !n.live) return n.children;
+  if(!foldDead || !n.live) return n.children;
   const k = n.children.filter(c=>c.live);
   return k.length ? k : n.children;
 }
@@ -2456,13 +2465,35 @@ const BRANCH_HEADS = Object.fromEntries(BRANCHES.filter(b=>!b.trunk)
 function walkDown(n,f){ f(n); n.children.forEach(c=>walkDown(c,f)); }
 function openAll(n){ walkDown(n, x=>{ if(x.children.length) x.open=true; }); }
 const activeFilters = new Set(["legacy"]);
-let hideDead = true; /* "Hide dead lines" (Cory, 3 Oct 2026): on by default; Start over turns it back on */
+let foldDead = true; /* "Fold dead lines" (Cory, 8 Nov 2026; "Hide dead lines" since 3 Oct): on by default; Start over turns it back on */
 let visSet = null; /* explicit whitelist of visible nodes; keeps branch paths narrow */
 let treeMoved = false; /* a line opened or closed by hand since the filters last laid the tree out (shows Start over) */
 function allowSubtree(n){ if(visSet) walkDown(n, x=>visSet.add(x.id)); }
 function allowPathUp(n){ if(!visSet) return; let a=n; while(a){ visSet.add(a.id); a=a.parent; } }
+/* Fold dead lines (Cory, 8 Nov 2026, of the switch that hid people: "Do the fold option instead"). Nobody is left
+   out: among the children of a card with a living child, each run of brothers and sisters on dead lines (no living
+   person among them or below them) is drawn as ONE small grey card in their place, in their order, "+N · no living
+   descendants", and a tap opens them (unfolded). A run stops at a living child, at one the view leaves out, and
+   where the children of one marriage end. A dead line, once opened, opens in full; search and a card's own links
+   unfold the line they go to; the filters fold everything again. */
+const unfolded = new Set();
+function folds(c){ return foldDead && !c.live && !unfolded.has(c.id) && !!c.parent && c.parent.children.some(k => k.live); }
+/* what an open card shows below it, in order: its children's cards, and a {fold} item for each folded run */
+function kidItems(n){
+  if(!n.open) return [];
+  const out = []; let run = null;
+  n.children.forEach(c => {
+    if(visSet && !visSet.has(c.id)){ run = null; return; }
+    if(!folds(c)){ run = null; out.push(c); return; }
+    if(run && run.unionIdx === c.unionIdx) run.kids.push(c);
+    else { run = { fold:true, parent:n, kids:[c], unionIdx:c.unionIdx, unionSpouse:c.unionSpouse, gen:c.gen }; out.push(run); }
+  });
+  return out;
+}
+function unfoldLine(n){ let a = n; while(a){ unfolded.add(a.id); a = a.parent; } }
 function setOpenFromFilters(){
   treeMoved = false;
+  unfolded.clear();
   allNodes.forEach(n=>n.open=false);
   visSet = new Set([root.id]);
   if(activeFilters.has("legacy")){
@@ -2481,16 +2512,13 @@ function setOpenFromFilters(){
     openAll(n);
     allowSubtree(n);
   });
-  if(hideDead){
-    /* leave out every card on a dead line, in every view the filters build (Cory, 17 Oct 2026: "someone like this
-       should be hidden when it is enabled"; and of a card in a branch where no one is living that Show all still
-       brought in: "Example of filter not working still"). A card's pill and search still reach anyone. Picking only
-       such branches turns the switch off with a note (deadAutoOff); picking them beside living ones says why they show
-       nothing (deadLeftOut). */
-    allNodes.forEach(x=>{ if(!x.live) visSet.delete(x.id); });
-  }
+  /* with the switch on, every card on a dead line in these views is drawn folded (kidItems), in every branch: Cory,
+     17 Oct 2026, of such cards that a picked branch and Show all still drew: "someone like this should be hidden when
+     it is enabled", "Example of filter not working still"; folded since 8 Nov 2026. Picking only branches where no one
+     is living turns the switch off with a note (deadAutoOff); picking them beside living ones says where they went
+     (deadLeftOut). */
 }
-function initView(){ activeFilters.clear(); activeFilters.add("legacy"); hideDead = true; setOpenFromFilters(); }
+function initView(){ activeFilters.clear(); activeFilters.add("legacy"); foldDead = true; setOpenFromFilters(); }
 initView();
 /* the picked branches (Origins aside) when every one of them is a line where no one is living, else null */
 function pickedAllDead(){
@@ -2503,19 +2531,20 @@ function listJoin(a){
   const and = " " + T("and") + " ";
   return a.length === 2 ? a.join(and) : a.slice(0, -1).join(", ") + (LANG === "fr" ? "" : ",") + and + a[a.length - 1];
 }
-/* branches where no one is living, just picked beside living ones while the switch is on: a note says why they show
-   nothing (the switch stays on). Returns the note, or null. */
+/* branches where no one is living, just picked beside living ones while the switch is on: a note says they are folded
+   into a grey card (the switch stays on). Returns the note, or null. */
 function deadLeftOut(before){
-  if(!hideDead) return null;
+  if(!foldDead) return null;
   const ks = [...activeFilters].filter(k => k !== "legacy" && BRANCH_HEADS[k] && !BRANCH_HEADS[k].live && !before.has(k));
   return ks.length ? T(ks.length > 1 ? "dead_left_n" : "dead_left").replace("%s", listJoin(ks.map(k => T(k)))) : null;
 }
 /* Cory, 17 Oct 2026: "if someone selects branch(s) that have NO living person and everyone will be filtered out,
-   turn off the filter automatically and give a popup explaining you did that and why". Returns the note to show. */
+   turn off the filter automatically and give a popup explaining you did that and why" (folded, such a branch alone
+   would be one grey card). Returns the note to show. */
 function deadAutoOff(){
-  const ks = hideDead && pickedAllDead();
+  const ks = foldDead && pickedAllDead();
   if(!ks) return null;
-  hideDead = false;
+  foldDead = false;
   return T(ks.length > 1 ? "dead_auto_n" : "dead_auto").replace("%s", listJoin(ks.map(k => T(k))));
 }
 
@@ -2529,7 +2558,8 @@ allNodes.forEach(n=>{
 /* ---------------- Layout (visible nodes only; y = true generation) ---------------- */
 const COARSE = window.matchMedia && matchMedia("(pointer:coarse)").matches;
 const PILL_H = COARSE ? 28 : 20;
-let nodes=[], edges=[];
+let nodes=[], edges=[], foldItems=[];
+const FOLD_W = 184, FOLD_H = 30;   /* the grey card of a folded run: narrower and lower than a card */
 function visChildren(n){ return n.open ? n.children.filter(c=>!visSet || visSet.has(c.id)) : []; }
 /* uniform card height: size every card to fit the busiest one (the 4 remarriage cards) */
 const UNIFORM_H = Math.max(...allNodes.map(n=>{
@@ -2538,15 +2568,20 @@ const UNIFORM_H = Math.max(...allNodes.map(n=>{
 }));
 function nodeHeight(){ return UNIFORM_H; }
 function layout(){
-  nodes=[]; edges=[];
+  nodes=[]; edges=[]; foldItems=[];
   let cursor = 0;
+  const mid = k => k.x + (k.fold ? FOLD_W : NODE_W)/2;
   (function place(n){
     n.h = nodeHeight(n);
-    const kids = visChildren(n);
+    const kids = kidItems(n);
     if(!kids.length){ n.x = cursor; cursor += NODE_W + GAP_X; }
     else{
-      kids.forEach(place);
-      n.x = (kids[0].x + kids[kids.length-1].x)/2;
+      kids.forEach(k=>{
+        if(!k.fold) return place(k);
+        k.x = cursor; k.y = k.gen * LEVEL_H; k.h = FOLD_H; cursor += FOLD_W + GAP_X;
+        foldItems.push(k);
+      });
+      n.x = (mid(kids[0]) + mid(kids[kids.length-1]))/2 - NODE_W/2;
     }
     n.y = n.gen * LEVEL_H;
     nodes.push(n);
@@ -2588,14 +2623,15 @@ function render(){
   world.innerHTML = "";
   cards.innerHTML = "";
   edges.forEach(([a,b])=>{
-    const x1=a.x+NODE_W/2, y1=a.y+a.h, x2=b.x+NODE_W/2, y2=b.y;
+    const x1=a.x+NODE_W/2, y1=a.y+a.h, x2=b.x+(b.fold ? FOLD_W : NODE_W)/2, y2=b.y;
     const midY = y1 + (y2-y1)/2;
     const path = document.createElementNS("http://www.w3.org/2000/svg","path");
     path.setAttribute("d",`M${x1},${y1} V${midY} H${x2} V${y2}`);
-    path.setAttribute("class", b.viaF ? "edge vf" : "edge");
-    path.dataset.a=a.id; path.dataset.b=b.id;
+    const bn = b.fold ? b.kids[0] : b;   /* a grey card's line is its first person's */
+    path.setAttribute("class", bn.viaF ? "edge vf" : "edge");
+    path.dataset.a=a.id; path.dataset.b=bn.id;
     world.appendChild(path);
-    const two = b.unionSpouse && (a.p.unions||[]).filter(u=>u.s).length>1, cf = confFor(b.p.id);
+    const two = b.unionSpouse && (a.p.unions||[]).filter(u=>u.s).length>1, cf = b.fold ? null : confFor(b.p.id);
     if(two || cf){
       const t = document.createElementNS("http://www.w3.org/2000/svg","text");
       t.setAttribute("x", x2+8); t.setAttribute("y", y2-9); /* clear of the selection outline+glow */
@@ -2621,7 +2657,7 @@ function render(){
          open, some hidden → +N more   reveal this generation's remaining children
          open, all shown   → − hide                                            */
     const hiddenKids = visSet ? n.children.filter(c=>!visSet.has(c.id)).length : 0;
-    const fk = firstKids(n), fd = hideDead && n.live ? n.liveDesc : n.desc;   /* what the next click shows */
+    const fk = firstKids(n), fd = foldDead && n.live ? n.liveDesc : n.desc;   /* what the next click shows as cards */
     const pillTxt = !n.open ? "+"+fk.length+(fd>fk.length?" → "+fd:"")
                   : hiddenKids ? "+"+hiddenKids+" "+T("more_kids")
                   : T("hide");
@@ -2632,6 +2668,17 @@ function render(){
     d.innerHTML = `<div class="box" style="--bc:${BC[n.branch]}"><div class="hd"><img class="av${p.g==="f"?" g-f":p.g==="m"?" g-m":""}${p.profile?" hasbio":""}${p.img?" hasimg":""}" src="${esc(p.img||AV)}" alt="" loading="lazy"><div class="hdt"><div class="nm">${esc(p.name)}</div><div class="yrs">${esc(fmtYears(p.years))}${bornAt(p)}${ni}${badge}${resLangReady ? rqBadgeHTML(p) : ""}${viaTag(n)}</div></div></div>${sp}${prow}</div>`;
     cards.appendChild(d);
     n.el = d;
+  });
+  foldItems.forEach(f=>{
+    const d = document.createElement("div");
+    d.className = "foldc";
+    d.style.left = f.x+"px"; d.style.top = f.y+"px";
+    d.style.width = FOLD_W+"px"; d.style.height = FOLD_H+"px";
+    const lbl = T("fold_lbl").replace("%n", f.kids.length);
+    const who = f.kids.map(k => k.p.name + (k.p.years ? " (" + fmtYears(k.p.years) + ")" : "")).join(", ");
+    d.innerHTML = `<button type="button" class="foldb" data-fold="1" title="${esc(who)}" aria-label="${esc(lbl)}: ${esc(who)}">${esc(lbl)}</button>`;
+    cards.appendChild(d);
+    f.el = d;
   });
   markTips();
   renderRuler();
@@ -2658,7 +2705,7 @@ function renderRuler(){
   ruler.innerHTML = "";
   genlines.innerHTML = "";
   rulerLabels = [];
-  const gens = [...new Set(nodes.map(n=>n.gen))].sort((a,b)=>a-b);
+  const gens = [...new Set(nodes.map(n=>n.gen).concat(foldItems.map(f=>f.gen)))].sort((a,b)=>a-b);
   gens.forEach(g=>{
     const d = document.createElement("div");
     d.className = "g";
@@ -2700,6 +2747,7 @@ function scheduleApply(){ if(raf)return; raf=requestAnimationFrame(()=>{raf=null
 function bbox(){
   let minX=1e9,maxX=-1e9,minY=1e9,maxY=-1e9;
   nodes.forEach(n=>{minX=Math.min(minX,n.x);maxX=Math.max(maxX,n.x+NODE_W);minY=Math.min(minY,n.y);maxY=Math.max(maxY,n.y+n.h);});
+  foldItems.forEach(f=>{minX=Math.min(minX,f.x);maxX=Math.max(maxX,f.x+FOLD_W);maxY=Math.max(maxY,f.y+f.h);});
   return {minX,maxX,minY,maxY};
 }
 const rulerW = ()=> ruler.getBoundingClientRect().width;
@@ -2853,7 +2901,7 @@ let hlPinned = false; /* search selections survive background clicks */
 function clearHL(){
   hlNode = null;
   hlPinned = false;
-  document.querySelectorAll(".node").forEach(el=>el.classList.remove("lit","dim","sel"));
+  document.querySelectorAll(".node,.foldc").forEach(el=>el.classList.remove("lit","dim","sel"));
   document.querySelectorAll(".edge").forEach(el=>el.classList.remove("lit","dim"));
   hideTip();
   syncChrome();
@@ -2874,6 +2922,7 @@ function highlight(n, withTip){
     m.el.classList.toggle("dim", !set.has(m.id));
     m.el.classList.toggle("sel", m===n);
   });
+  foldItems.forEach(f=>{ if(f.el){ const on = f.kids.some(k=>set.has(k.id)); f.el.classList.toggle("lit", on); f.el.classList.toggle("dim", !on); } });
   document.querySelectorAll(".edge").forEach(el=>{
     const on = set.has(+el.dataset.a) && set.has(+el.dataset.b);
     el.classList.toggle("lit", on); el.classList.toggle("dim", !on);
@@ -3351,7 +3400,7 @@ cards.addEventListener("mouseout",()=>{ if(!tipTouch) hideTip(); }); /* hover to
    key press does not make) */
 cards.addEventListener("click", e=>{
   if(e.detail !== 0) return;
-  const b = e.target.closest(".node button"); if(!b) return;
+  const b = e.target.closest(".node button, .foldc button"); if(!b) return;
   if(b.dataset.bio) bioOpener = b;
   const r = b.getBoundingClientRect();
   handleTap(b, r.left + r.width/2, r.top + r.height/2);
@@ -3373,8 +3422,8 @@ function toggleNode(n){
   const bx=n.x, by=n.y;
   const hidden = visSet ? n.children.filter(c=>!visSet.has(c.id)) : [];
   if(!n.open){
-    n.open = true;                                   /* ONE generation per click */
-    if(visSet) firstKids(n).forEach(c=>visSet.add(c.id));
+    n.open = true;                                   /* ONE generation per click (the dead lines in it folded) */
+    if(visSet) n.children.forEach(c=>visSet.add(c.id));
   } else if(hidden.length){
     hidden.forEach(c=>visSet.add(c.id));             /* the rest of this generation */
   } else {
@@ -3386,7 +3435,21 @@ function toggleNode(n){
   apply();
 }
 
+/* a tap on a grey card opens the people folded in it; the first of them lands where the grey card was */
+function unfoldRun(f){
+  treeMoved = true;
+  const had = f.el && f.el.contains(document.activeElement);
+  const bx = f.x, by = f.y, k0 = f.kids[0];
+  f.kids.forEach(k=>unfolded.add(k.id));
+  render();
+  tx += (bx-k0.x)*scale; ty += (by-k0.y)*scale;
+  apply();
+  const btn = had && k0.el && k0.el.querySelector("button");
+  if(btn) btn.focus({preventScroll:true});
+}
 function handleTap(target, cx, cy){
+  const fe = target && target.closest ? target.closest(".foldc") : null;
+  if(fe){ const f = foldItems.find(x=>x.el===fe); if(f) unfoldRun(f); return; }
   const el = target && target.closest ? target.closest(".node") : null;
   if(!el){
     /* double-tap empty space on touch = zoom in at that point */
@@ -3450,6 +3513,7 @@ function growLine(n){
    person's line is open and centred — never collapse what the reader was looking at */
 function goToKeep(n){
   treeMoved = true;
+  unfoldLine(n);
   if(visSet){ let a = n; while(a){ visSet.add(a.id); a = a.parent; } }
   let a = n.parent; while(a){ a.open = true; a = a.parent; }
   n.open = true;
@@ -3460,6 +3524,7 @@ function goToKeep(n){
 }
 function goTo(n, andHighlight){
   treeMoved = true;
+  unfoldLine(n);
   if(andHighlight){
     /* search focus: drop every open line and show ONLY the person and their
        direct ancestry, straight up to the progenitor */
@@ -3511,7 +3576,7 @@ Object.keys(REGIONS).forEach(k=>{
 });
 /* the tree is "as it opens" with only Origins on, nothing picked and no line opened or closed by
    hand; Start over appears otherwise (a background tap clears a pick, not the lines it opened) */
-function treeDirty(){ return treeMoved || !hideDead || !(activeFilters.size === 1 && activeFilters.has("legacy")) || !!hlNode; }
+function treeDirty(){ return treeMoved || !foldDead || !(activeFilters.size === 1 && activeFilters.has("legacy")) || !!hlNode; }
 /* dots on the Filters buttons: one per branch shown; many dots overlap rather than overflow */
 function fitDots(d, n){
   if(n < 2){ d.style.removeProperty("--dotgap"); return; }
@@ -3523,7 +3588,7 @@ function syncChrome(){
   const map = isMap();
   const on = map ? (k=>MF.branch.has(k)) : (k=>activeFilters.has(k));
   tilesEl.querySelectorAll(".tile").forEach(t=>t.setAttribute("aria-pressed", on(t.dataset.br) ? "true" : "false"));
-  document.getElementById("deadsw").setAttribute("aria-checked", hideDead ? "true" : "false");
+  document.getElementById("deadsw").setAttribute("aria-checked", foldDead ? "true" : "false");
   const act = BRANCHES.filter(b=>on(b.key));
   document.querySelectorAll(".filtbtn").forEach(btn=>{
     const d = btn.querySelector(".dots");
@@ -3558,9 +3623,9 @@ tilesEl.addEventListener("click", e=>{
 });
 document.getElementById("fall").onclick  = ()=>applyBranches(set=>BRANCHES.forEach(b=>set.add(b.key)));
 document.getElementById("fnone").onclick = ()=>applyBranches(set=>set.clear());
-/* Hide dead lines: re-lays the tree from the filters, as a branch tile does; a search's single line stays as it is */
+/* Fold dead lines: re-lays the tree from the filters, as a branch tile does; a search's single line stays as it is */
 document.getElementById("deadsw").onclick = ()=>{
-  hideDead = !hideDead;
+  foldDead = !foldDead;
   if(activeFilters.size){ setOpenFromFilters(); render(); startView(); } else render();
   syncChrome();
 };

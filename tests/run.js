@@ -611,7 +611,11 @@ const T = get("T"), I18N = get("I18N"), SYNCED = get("SYNCED");
 const esc = get("esc"), BC = get("BC"), noteText = get("noteText");
 const openAll = get("openAll"), AV = get("AV"), BRANCH_HEADS = get("BRANCH_HEADS");
 const BRANCHES = get("BRANCHES");
-const visChildren = get("(n)=> n.open ? n.children.filter(c=>!visSet || visSet.has(c.id)) : []");
+/* the cards an open card DRAWS below it: kidItems gives them in order, with a {fold} item for each run of dead lines
+   folded into a grey card (Cory, 8 Nov 2026); a folded person is not a drawn card */
+const kidItems = get("kidItems");
+const visChildren = n => kidItems(n).filter(k => !k.fold);
+function foldsOf() { const fs = []; (function w(n) { kidItems(n).forEach(k => { if (k.fold) fs.push(k); else w(k); }); })(root); return fs; }
 
 function visCount() {
   let c = 0;
@@ -665,8 +669,8 @@ ok(/^\d{4}-\d{2}-\d{2}$/.test(SYNCED), "SYNCED is YYYY-MM-DD (" + SYNCED + ")");
     "the bar names the button from those strings and the text it shows");
 }
 /* anchors: branch navigation ids live INSIDE the encrypted data */
-ok(["trunk", "fr", "east", "west", "schw"].every(a => allNodes.some(n => n.p.anchor === a)),
-  "all 5 navigation anchors present in encrypted data");
+ok(["trunk", "fr", "east", "west"].every(a => allNodes.some(n => n.p.anchor === a)),
+  "all 4 navigation anchors present in encrypted data");
 ok(Object.keys(BRANCH_HEADS).every(k => BRANCH_HEADS[k]), "all " + Object.keys(BRANCH_HEADS).length + " branch heads resolve via anchors");
 /* people are referenced structurally, never by name, to keep this file PII-free */
 const creator = allNodes.find(n => /creator of this website/i.test(n.p.note || ""));
@@ -827,55 +831,61 @@ ok(root.desc === allNodes.length - 1, "root.desc === everyone else (" + root.des
 
 /* ---------- 7. Filters (regression: 'east shows too many cards') ---------- */
 section("Filters");
-/* "Hide dead lines" (Cory, 3 Oct 2026, register R-0444) is on when the tree opens; the checks below that
- * describe the filters themselves run in that state, and the switch has its own checks after them. */
-const setHide = v => vm.runInNewContext("hideDead = " + (v ? "true" : "false"), ctx);
+/* "Fold dead lines" (Cory, 8 Nov 2026, register R-0697; it replaced "Hide dead lines", R-0444, R-0572, R-0575) is on when
+ * the tree opens; the checks below that describe the filters themselves run in that state, and the switch has its own
+ * checks after them. visCount() counts the cards DRAWN: a person folded into a grey card is not one. */
+const setFold = v => vm.runInNewContext("foldDead = " + (v ? "true" : "false"), ctx);
 initView();
 const legacyN = visCount();
 ok(activeFilters.size === 1 && activeFilters.has("legacy"), "default = legacy only");
-ok(get("hideDead") === true, "default = dead lines hidden (Cory, 3 Oct 2026: \"Default on meaning filtered out\")");
+ok(get("foldDead") === true, "default = dead lines folded (Cory, 8 Nov 2026: \"Do the fold option instead\")");
 ok(legacyN > 5 && legacyN < 20, "legacy shows the trunk (" + legacyN + ")");
 
 activeFilters.delete("legacy"); activeFilters.add("east"); setOpenFromFilters();
 const eastHead = BRANCH_HEADS.east;
-/* with the switch on, a branch whose line reaches a living person shows its living lines (Cory, 17 Oct 2026) */
+/* with the switch on, a branch whose line reaches a living person draws its living lines as cards (Cory, 17 Oct 2026) */
 const expectEast = (eastHead.live ? liveSize(eastHead) : subtreeSize(eastHead)) + depth(eastHead);
 ok(visCount() === expectEast,
-  "east-only = branch + direct line only, no sibling heads (" + visCount() + " = " + expectEast + ", its living lines)");
-setHide(false); setOpenFromFilters();
+  "east-only = branch + direct line only, no sibling heads (" + visCount() + " = " + expectEast + ", its living lines as cards)");
+setFold(false); setOpenFromFilters();
 ok(visCount() === subtreeSize(eastHead) + depth(eastHead),
   "east-only with the switch off = the whole branch + direct line (" + visCount() + ")");
-setHide(true); setOpenFromFilters();
+setFold(true); setOpenFromFilters();
 
 /* every branch in BRANCHES, the trunk included — derived, so a new branch is covered the day it is added */
 BRANCHES.forEach(b => activeFilters.add(b.key));
 /* Since 3 Oct 2026 (scope rule: the whole male line) a line can carry brothers and sisters who are
  * on no branch: a branch view shows its direct line narrowly, and the parent's pill shows "the rest of
- * this generation". So with every filter on and "Hide dead lines" off, every LINE and every BRANCH must be
- * shown in full; with the switch on (Cory, 17 Oct 2026, R-0575) every LIVING card of the lines and branches,
- * and no card on a dead line at all. Either way, whatever is left out must hang off a shown card, one pill
- * click away — nothing unreachable. */
-[false, true].forEach(hide => {
-  setHide(hide); setOpenFromFilters();
+ * this generation". So with every filter on and "Fold dead lines" off, every LINE and every BRANCH must be
+ * drawn in full; with the switch on every LIVING card of the lines and branches is drawn, and every card on a
+ * dead line among them is folded: in a grey card, or below a person who is (Cory, 8 Nov 2026). Either way,
+ * whatever is not drawn hangs off a drawn card, one tap away — nothing unreachable. */
+[false, true].forEach(fold => {
+  setFold(fold); setOpenFromFilters();
   const shown = new Set(); (function w(n) { shown.add(n); visChildren(n).forEach(w); })(root);
   const heads = Object.values(BRANCH_HEADS).filter(Boolean);
   const trunkHead = allNodes.find(n => n.p.anchor === "trunk");
   const lines = new Set(); heads.concat(trunkHead ? [trunkHead] : []).forEach(h => { let a = h; while (a) { lines.add(a); a = a.parent; } });
   const inBranch = n => { let a = n; while (a) { if (heads.includes(a)) return true; a = a.parent; } return false; };
-  const inDeadBranch = n => { let a = n; while (a) { if (heads.includes(a) && !a.live) return true; a = a.parent; } return false; };
-  const want = n => (lines.has(n) || inBranch(n)) && (!hide || n.live);
+  const want = n => (lines.has(n) || inBranch(n)) && (!fold || n.live);
   const missing = allNodes.filter(n => !shown.has(n) && want(n));
-  const extra = hide ? [...shown].filter(n => !n.live) : [];
+  const extra = fold ? [...shown].filter(n => !n.live) : [];
+  const inFold = new Set(); shown.forEach(n => kidItems(n).forEach(k => { if (k.fold) k.kids.forEach(c => inFold.add(c)); }));
+  const underFold = n => { let a = n; while (a) { if (inFold.has(a)) return true; a = a.parent; } return false; };
+  const lost = fold ? allNodes.filter(n => (lines.has(n) || inBranch(n)) && !n.live && !underFold(n)) : [];
   const offRoots = allNodes.filter(n => !shown.has(n) && n.parent && shown.has(n.parent));
   const offTotal = offRoots.reduce((a, n) => a + subtreeSize(n), 0);
-  ok(!missing.length && !extra.length && shown.size === visCount() && shown.size + offTotal === allNodes.length,
-    (hide ? "switch on: legacy + all branches = the living cards of every line and branch, and no card on a dead line ("
-          : "switch off: legacy + all branches = every line and every branch in full (") + BRANCHES.length + " filters, " + shown.size +
-    " cards); the other " + offTotal + " hang off a shown card, a pill click away" +
+  ok(!missing.length && !extra.length && !lost.length && (fold ? inFold.size > 0 : inFold.size === 0) &&
+     shown.size === visCount() && shown.size + offTotal === allNodes.length,
+    (fold ? "switch on: legacy + all branches = the living cards of every line and branch, each dead line folded into one of " +
+            foldsOf().length + " grey cards ("
+          : "switch off: legacy + all branches = every line and every branch in full, no grey card (") + BRANCHES.length + " filters, " + shown.size +
+    " cards); the other " + offTotal + " hang off a drawn card, a tap away" +
     (missing.length ? " — MISSING: " + missing.map(n => n.p.id).join(", ") : "") +
-    (extra.length ? " — SHOWN ON A DEAD LINE: " + extra.map(n => n.p.id).join(", ") : ""));
+    (extra.length ? " — DRAWN ON A DEAD LINE: " + extra.map(n => n.p.id).join(", ") : "") +
+    (lost.length ? " — DEAD AND NOT FOLDED: " + lost.map(n => n.p.id).join(", ") : ""));
 });
-setHide(true);
+setFold(true);
 
 BRANCHES.forEach(b => activeFilters.delete(b.key));
 setOpenFromFilters();
@@ -883,11 +893,28 @@ ok(visCount() === 1, "all filters off = root only");
 initView();
 ok(visCount() === legacyN, "reset restores default view");
 
+/* The Schweitzer tile (Cory, 8 Nov 2026, R-0696: "OK remove the button"). It opened c111's whole line,
+ * named for a daughter's line that came off the tree on 8 Oct (R-0539). The payload keeps its "schw" anchor and branch
+ * id; the page lists neither, so those cards take the line above them, and every living one sits under a tile. */
+{
+  const head = allNodes.find(n => n.p.anchor === "schw");
+  const tiles = Object.values(BRANCH_HEADS).filter(Boolean);
+  const under = n => { let a = n; while (a) { if (tiles.includes(a)) return true; a = a.parent; } return false; };
+  const sub = []; if (head) (function w(x) { sub.push(x); x.children.forEach(w); })(head);
+  const livingP = p => /^b\.\s*\d/.test(p.years || "") || !/\d/.test(p.years || "");
+  ok(!BRANCHES.some(b => b.key === "schw" || b.id === "schw") && !("schw" in BRANCH_HEADS) && !("schw" in I18N.en) && !("schw" in I18N.fr) &&
+     !/--schw\b/.test(html), "no Schweitzer tile: not in BRANCHES, the branch heads, either language or the colours");
+  ok(head && head.branch === head.parent.branch && sub.every(n => n.branch !== "schw"),
+    "the payload's leftover schw line is coloured as the line above it (" + sub.filter(n => n.branch === head.parent.branch).length + " of its " + sub.length + " cards)");
+  ok(head && sub.filter(n => livingP(n.p)).every(under),
+    "every living card under it sits under a tile of its own (" + sub.filter(n => livingP(n.p)).length + ")");
+}
+
 /* Dead lines. A card is on a LIVE line when the person is living (dates "b. YYYY", or none at all) or has a
  * living descendant on the tree; recomputed here from that definition, not read from the page. Cory, 3 Oct
- * 2026: "Any individual that is not a trace to a living person is filtered out" — and "Someone can still
- * search directly or open a line directly": a branch picked by its tile shows in full (checked above, with
- * the switch on), a card's pill opens the rest, and search (goTo) never consults the switch. */
+ * 2026 (R-0444): "Someone can still search directly or open a line directly". Cory, 8 Nov 2026 (R-0697): "Do the
+ * fold option instead": with the switch on nobody is left out; each run of brothers and sisters on dead lines is ONE
+ * grey card in their place, "+N · no living descendants", and a tap opens them. Search (goTo) unfolds its line. */
 {
   const livingP = p => /^b\.\s*\d/.test(p.years || "") || !/\d/.test(p.years || "");
   const liveOf = new Map();
@@ -896,69 +923,122 @@ ok(visCount() === legacyN, "reset restores default view");
   ok(allNodes.every(n => n.live === liveOf.get(n)) && root.live,
     "every card knows whether its line reaches a living person (" + nLive + " on live lines, " + (allNodes.length - nLive) + " on dead lines)");
   const shownOf = () => { const s = new Set(); (function w(n) { s.add(n); visChildren(n).forEach(w); })(root); return s; };
+  const visSetNow = () => get("visSet");
   initView();
-  const on = shownOf();
-  ok([...on].every(n => n.live), "the opening view shows no card on a dead line (" + on.size + " cards)");
+  const on = shownOf(), fo = foldsOf();
+  ok([...on].every(n => n.live), "the opening view draws no card on a dead line (" + on.size + " cards)");
+  ok(fo.length > 0 && fo.every(f => f.kids.length > 0 && f.kids.every(k => !k.live) && on.has(f.parent) && f.parent.children.some(c => c.live)),
+    "…it folds them: " + fo.length + " grey cards, each under a drawn card with a living child, holding " +
+    fo.reduce((a, f) => a + f.kids.length, 0) + " people on dead lines");
+  ok(fo.every(f => {
+      const flat = kidItems(f.parent).flatMap(k => k.fold ? k.kids : [k]), vis = f.parent.children.filter(c => visSetNow().has(c.id));
+      return flat.length === vis.length && flat.every((c, i) => c === vis[i]);
+    }), "each grey card stands in its people's place among their brothers and sisters, in birth order, and leaves nobody out");
+  ok(fo.every(f => f.kids.every((k, i) => i === 0 || f.parent.children.indexOf(k) === f.parent.children.indexOf(f.kids[i - 1]) + 1)) &&
+     fo.every(f => { const it = kidItems(f.parent), i = it.findIndex(k => k.fold && k.kids[0] === f.kids[0]), nx = it[i + 1];
+       return i >= 0 && !(nx && nx.fold && nx.unionIdx === f.unionIdx); }),
+    "a grey card holds one whole run of consecutive brothers and sisters (two side by side only where one marriage's children end)");
+  ok(fo.every(f => f.kids.every(k => k.unionIdx === f.unionIdx)), "a run never mixes the children of two marriages");
   const firstKids = get("firstKids");
   const deepest = [...on].filter(n => n.open).sort((a, b) => b.gen - a.gen)[0];
   ok(deepest && firstKids(deepest).length !== 1,
     "…and runs down the trunk to where the living lines part (generation " + (deepest ? deepest.gen + 1 : "?") + ")");
-  setHide(false); setOpenFromFilters();
+  setFold(false); setOpenFromFilters();
   const off = shownOf();
-  ok([...off].filter(n => n.live).every(n => on.has(n)) && [...off].some(n => !n.live),
-    "switched off, it shows the brothers and sisters on dead lines along the trunk as well (" + off.size + " cards)");
+  const offDead = [...off].filter(n => !n.live && on.has(n.parent));
+  ok([...off].filter(n => n.live).every(n => on.has(n)) && offDead.length > 0 && offDead.every(n => fo.some(f => f.kids.includes(n))) && foldsOf().length === 0,
+    "switched off, it draws as cards the brothers and sisters on dead lines that the grey cards held (" + offDead.length + "), and no grey card (" + off.size + " cards)");
   const mixed = allNodes.find(n => n.live && n.children.some(c => c.live) && n.children.some(c => !c.live));
-  ok(mixed && firstKids(mixed).length === mixed.children.length, "switched off, one click opens every child");
-  setHide(true);
+  ok(mixed && firstKids(mixed).length === mixed.children.length, "switched off, one click opens every child as a card");
+  setFold(true);
   ok(mixed && firstKids(mixed).length === mixed.children.filter(c => c.live).length && firstKids(mixed).every(c => c.live),
-    "switched on, one click opens the live children first; the pill then offers the rest");
+    "switched on, one click draws the live children as cards (the pill's count)…");
+  {
+    const vs = visSetNow(), wasOpen = mixed.open, had = mixed.children.map(c => vs.has(c.id));
+    mixed.open = true; mixed.children.forEach(c => vs.add(c.id));          /* what toggleNode does */
+    const it = kidItems(mixed), flat = it.flatMap(k => k.fold ? k.kids : [k]);
+    ok(flat.length === mixed.children.length && it.filter(k => !k.fold).every(c => c.live) && it.some(k => k.fold),
+      "…and folds the dead ones between them, so its pill offers nothing more (" + it.length + " items for " + mixed.children.length + " children)");
+    mixed.open = wasOpen; mixed.children.forEach((c, i) => { if (!had[i]) vs.delete(c.id); });
+  }
   const deadOne = allNodes.find(n => !n.live && n.children.length);
-  ok(deadOne && firstKids(deadOne).length === deadOne.children.length, "a dead line, once opened, opens in full");
-  /* Cory, 17 Oct 2026, of dead cards the Schweitzer tile showed with the switch on: "someone like this should be
-   * hidden when it is enabled". A picked branch shows its living lines; a card's pill offers the dead ones. */
-  const schw = BRANCH_HEADS.schw;
-  activeFilters.clear(); activeFilters.add("schw"); setOpenFromFilters();
-  const sw = shownOf();
-  ok(schw && schw.live && [...sw].every(n => n.live) && visCount() === liveSize(schw) + depth(schw) &&
-     [...sw].some(n => n.open && n.children.some(c => !sw.has(c))),
-    "switch on, a branch picked by its tile shows its living lines only, the dead ones a pill away (the Schweitzer tile: " +
-    visCount() + " of " + (subtreeSize(schw) + depth(schw)) + " cards)");
-  setHide(false); setOpenFromFilters();
-  ok(visCount() === subtreeSize(schw) + depth(schw), "switched off, the same tile shows the whole branch (" + visCount() + " cards)");
-  setHide(true);
+  {
+    const vs = visSetNow(), wasOpen = deadOne.open; deadOne.open = true; deadOne.children.forEach(c => vs.add(c.id));
+    ok(firstKids(deadOne).length === deadOne.children.length && kidItems(deadOne).every(k => !k.fold),
+      "a dead line, once opened, opens in full: no grey card below it");
+    deadOne.open = wasOpen;
+  }
+  /* the case Cory was shown (8 Nov 2026): c012's children are c013, c030, c031 and c036; c030 has no living
+   * descendant, so she is "+1 · no living descendants" between c013 and c031 */
+  {
+    const par = allNodes.find(n => n.p.id === "c012"), id = n => n && n.p.id;
+    const tile = Object.entries(BRANCH_HEADS).find(([, h]) => { let a = par; while (a) { if (a === h) return true; a = a.parent; } return false; });
+    activeFilters.clear(); activeFilters.add(tile[0]); setOpenFromFilters();
+    const it = kidItems(par), fi = it.findIndex(k => k.fold);
+    ok(par && par.open && fi > 0 && it[fi].kids.length === 1 && id(it[fi].kids[0]) === "c030" && id(it[fi - 1]) === "c013" && id(it[fi + 1]) === "c031",
+      "c030 is one grey card between c013 and c031 (" + it.map(k => k.fold ? "[+" + k.kids.length + "]" : id(k)).join(" ") + ")");
+    const lbl = n => T("fold_lbl").replace("%n", n);
+    get('LANG = "fr"'); const fr1 = lbl(1); get('LANG = "en"');
+    ok(lbl(1) === "+1 · no living descendants" && fr1 === "+1 · sans descendant vivant" && lbl(3) === "+3 · no living descendants",
+      "its label: \"" + lbl(1) + "\" / \"" + fr1 + "\"");
+    get("unfolded").add(it[fi].kids[0].id);                                 /* what a tap on it does (unfoldRun) */
+    const it2 = kidItems(par);
+    ok(it2.every(k => !k.fold) && it2.map(id).join() === "c013,c030,c031,c036", "opened, she is a card in her place (" + it2.map(id).join(" ") + ")");
+    setOpenFromFilters();
+    ok(kidItems(par).some(k => k.fold), "the filters fold her again");
+    setFold(false); setOpenFromFilters();
+    ok(kidItems(par).every(k => !k.fold) && kidItems(par).length === 4, "switched off, all four are cards");
+    setFold(true);
+  }
+  /* a branch picked by its tile draws its living lines; its dead ones are grey cards (Cory, 17 Oct 2026, R-0572;
+   * folded since 8 Nov 2026) */
+  const west = BRANCH_HEADS.west;
+  activeFilters.clear(); activeFilters.add("west"); setOpenFromFilters();
+  const sw = shownOf(), swf = foldsOf();
+  ok(west && west.live && [...sw].every(n => n.live) && visCount() === liveSize(west) + depth(west) && swf.length > 0,
+    "switch on, a branch picked by its tile draws its living lines, the dead ones in grey cards (the Oregon tile: " +
+    visCount() + " of " + (subtreeSize(west) + depth(west)) + " cards, " + swf.length + " grey cards)");
+  setFold(false); setOpenFromFilters();
+  ok(visCount() === subtreeSize(west) + depth(west) && foldsOf().length === 0, "switched off, the same tile draws the whole branch (" + visCount() + " cards)");
+  setFold(true);
   /* Cory, 17 Oct 2026: picked on their own, branches where no one is living turn the switch off, with a note that
-   * says why; with a living branch beside them (Show all) they show in full with the switch on (checked above) */
+   * says why; beside a living branch (Show all) they are folded with the switch on (R-0575; folded since 8 Nov) */
   const deadPicks = Object.entries(BRANCH_HEADS).filter(([k, h]) => h && !h.live);
   if (deadPicks.length) {
     const [dk, dh] = deadPicks[0], deadAutoOff = get("deadAutoOff"), T2 = get("T");
     const inSub = () => { const sh = shownOf(); let all = true, any = false; (function w(x) { if (sh.has(x)) any = true; else all = false; x.children.forEach(w); })(dh); return { all, any }; };
-    activeFilters.clear(); activeFilters.add("legacy"); activeFilters.add(dk); setHide(true);
+    activeFilters.clear(); activeFilters.add("legacy"); activeFilters.add(dk); setFold(true);
     const note = deadAutoOff(); setOpenFromFilters();
-    ok(get("hideDead") === false && note && note.includes(T2(dk)) && inSub().all,
+    ok(get("foldDead") === false && note && note.includes(T2(dk)) && inSub().all,
       "Origins + a branch where no one is living (" + dk + "): the switch turns itself off and a note names the branch; the branch shows in full");
-    setHide(true); setOpenFromFilters();
-    ok(!inSub().any && get("deadAutoOff")() !== null, "switched back on by hand, it hides that branch (and a second pick would turn it off again)");
-    setHide(true);
+    setFold(true); setOpenFromFilters();
+    ok(!inSub().any && foldsOf().some(f => f.kids.includes(dh)) && get("deadAutoOff")() !== null,
+      "switched back on by hand, it folds that branch into a grey card (and a second pick would turn it off again)");
+    setFold(true);
     if (deadPicks.length > 1) {
       activeFilters.clear(); deadPicks.forEach(([k]) => activeFilters.add(k));
       const n2 = deadAutoOff();
       ok(n2 && deadPicks.every(([k]) => n2.includes(T2(k))) && n2 === T2("dead_auto_n").replace("%s", get("listJoin")(deadPicks.map(([k]) => T2(k)))),
         "several such branches: one note names them all (" + n2 + ")");
-      setHide(true);
+      setFold(true);
     }
-    activeFilters.clear(); activeFilters.add("legacy"); activeFilters.add("schw");
-    ok(deadAutoOff() === null && get("hideDead") === true, "a living branch beside them: the switch stays on");
-    /* Cory, 17 Oct 2026, of a card in the Ohio branch that Show all still showed: "Example of filter not working
-     * still" (R-0575): beside a living branch they are left out too, and a note says why */
+    activeFilters.clear(); activeFilters.add("legacy"); activeFilters.add("west");
+    ok(deadAutoOff() === null && get("foldDead") === true, "a living branch beside them: the switch stays on");
     const deadLeftOut = get("deadLeftOut"), before = new Set(activeFilters);
     BRANCHES.forEach(b => activeFilters.add(b.key)); setOpenFromFilters();
-    const n3 = deadLeftOut(before), sh3 = shownOf();
-    ok(n3 && deadPicks.every(([k]) => n3.includes(T2(k))) && deadPicks.every(([, h]) => !sh3.has(h)) && get("hideDead") === true,
-      "Show all with the switch on: the branches where no one is living are left out, and one note names them (" + n3 + ")");
+    const n3 = deadLeftOut(before), sh3 = shownOf(), f3 = foldsOf();
+    ok(n3 && deadPicks.every(([k]) => n3.includes(T2(k))) && deadPicks.every(([, h]) => !sh3.has(h) && f3.some(f => { let a = h; while (a) { if (f.kids.includes(a)) return true; a = a.parent; } return false; })) && get("foldDead") === true,
+      "Show all with the switch on: the branches where no one is living are folded into grey cards, and one note names them (" + n3 + ")");
     ok(deadLeftOut(new Set(activeFilters)) === null, "…and the note comes only when such a branch is just picked");
   } else ok(true, "no branch without a living line to check (every branch reaches a living person)");
-  setHide(false); initView();
-  ok(get("hideDead") === true && visCount() === legacyN, "Start over turns the switch back on");
+  {
+    const strs = ["dead_hide", "dead_note", "dead_left", "dead_left_n", "dead_auto", "dead_auto_n", "fold_lbl"];
+    ok(I18N.en.dead_hide === "Fold dead lines" && I18N.fr.dead_hide === "Replier les lignées éteintes" &&
+       strs.every(k => I18N.en[k] && I18N.fr[k]) && !strs.some(k => /\bhid(e|es|den)\b|left out|leaves out|masqu|écart/i.test(I18N.en[k] + " " + I18N.fr[k])),
+      "the switch is \"" + I18N.en.dead_hide + "\" / \"" + I18N.fr.dead_hide + "\", and none of its notes says anyone is hidden or left out");
+  }
+  setFold(false); initView();
+  ok(get("foldDead") === true && visCount() === legacyN, "Start over turns the switch back on");
 }
 
 /* Every branch must be selectable and visibly so. Regression from 20 Sep 2026: three branches
@@ -985,7 +1065,7 @@ ok(visCount() === legacyN, "reset restores default view");
   ok(allNodes.every(n => ids.includes(n.branch)), "every card's branch id is listed in BRANCHES");
   ok(Object.keys(BRANCH_HEADS).join() === BRANCHES.filter(b => !b.trunk).map(b => b.key).join(),
     "branch heads are derived from BRANCHES, in its order");
-  ok(!/\.b-(leg|fr|east|west|ohio|doubs|colmar|paris|schw)\b/.test(html), "no per-branch CSS classes remain (one generic rule)");
+  ok(!/\.b-(leg|fr|east|west|ohio|doubs|colmar|paris|nl|schw)\b/.test(html), "no per-branch CSS classes remain (one generic rule)");
 }
 
 /* ---------- 7b. Lines through a daughter (Cory, 3 Oct 2026) ----------
@@ -999,7 +1079,7 @@ section("Lines through a daughter");
   const sw = allNodes.filter(n => /^c1(1[4-9]|2[0-2])$/.test(n.p.id));
   ok(sw.length === 0, "the Schweitzer line's nine cards (c114–c122) are off the tree, told in c113's bio instead (R-0539; " + sw.length + " found)");
   ok(allNodes.filter(n => n.viaF).every(n => n.viaF.p.g === "f" && !n.viaF.viaF), "each mark names the daughter where the line left the male line");
-  ok(/path\.setAttribute\("class", b\.viaF \? "edge vf" : "edge"\)/.test(js) && /\.edge\.vf\{stroke-dasharray:/.test(html), "their connectors are dashed");
+  ok(/path\.setAttribute\("class", bn\.viaF \? "edge vf" : "edge"\)/.test(js) && /\.edge\.vf\{stroke-dasharray:/.test(html), "their connectors are dashed");
   ok(/\$\{viaTag\(n\)\}<\/div>/.test(js), "each such card carries the tag");
   ok(["legend_vf", "via_f", "via_f_t", "via_f_lb"].every(k => I18N.en[k] && I18N.fr[k] && !/nitschelm/i.test(I18N.en[k] + I18N.fr[k])),
     "its strings exist in English and French, without the family name (the demo is built from this page)");
