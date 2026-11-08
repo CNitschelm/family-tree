@@ -447,6 +447,40 @@ async function run() {
     ok((await page.textContent("#dead-l")) === "Replier les lignées éteintes", "the switch is in French too");
     await ctx.close();
   }
+  {
+    /* far out (under half size) a card's chips fade: too small to read or hit (Cory, 8 Nov 2026: Show all on a desktop made
+       them 15 x 5 px); a click there reaches the card, the keyboard still reaches them, and a focused chip shows */
+    console.log("\n== desktop, far out: the chips fade");
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await ctx.newPage();
+    watch(page, "far out");
+    await page.goto(BASE);
+    await unlock(page);
+    await page.waitForTimeout(800);
+    const st = () => page.evaluate(() => { const c = document.querySelector(".node .pill.biochip"), cs = c && getComputedStyle(c);
+      return { far: document.getElementById("cards").classList.contains("far"), op: cs && cs.opacity, pe: cs && cs.pointerEvents }; });
+    const s0 = await st();
+    ok(!s0.far && s0.op === "1" && s0.pe !== "none", "at the opening zoom the chips show");
+    for (let i = 0; i < 15 && !(await st()).far; i++) { await page.click("#zout"); await page.waitForTimeout(250); }
+    const s1 = await st();
+    ok(s1.far && s1.op === "0" && s1.pe === "none", "zoomed out under half size, the chips fade and let a click through to the card");
+    const pos = await page.evaluate(() => { const r = document.querySelector(".node .pill.biochip").getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+    await page.mouse.click(pos.x, pos.y);
+    await page.waitForTimeout(600);
+    ok(!(await page.evaluate(() => getComputedStyle(document.getElementById("profile")).display === "flex")), "a click where a faded Bio chip sits does not open the bio");
+    let focused = false;
+    for (let i = 0; i < 60 && !focused; i++) { await page.keyboard.press("Tab"); focused = await page.evaluate(() => !!(document.activeElement && document.activeElement.matches(".node .pill.biochip"))); }
+    ok(focused && (await page.evaluate(() => getComputedStyle(document.activeElement).opacity)) === "1", "the keyboard still reaches a faded chip, and it shows while focused");
+    await page.keyboard.press("Enter");
+    await page.waitForSelector("#profile .phead", { timeout: 3000 }).catch(() => {});
+    ok(await page.evaluate(() => getComputedStyle(document.getElementById("profile")).display === "flex"), "…and Enter on it opens the bio");
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(400);
+    for (let i = 0; i < 15 && (await st()).far; i++) { await page.click("#zin"); await page.waitForTimeout(250); }
+    const s2 = await st();
+    ok(!s2.far && s2.op === "1", "zoomed back in, the chips show again");
+    await ctx.close();
+  }
   /* ---------------- Play: the family over the years (Cory, 17 Oct 2026) ---------------- */
   {
     console.log("\n== desktop, play");

@@ -314,6 +314,11 @@ html.dark .node.sel .box{box-shadow:0 0 0 5px var(--paper),0 1px 2px rgba(0,0,0,
 .foldc .foldb:hover{border-style:solid;border-color:var(--sel);color:var(--sel)}
 .foldc .foldb:focus-visible{outline:2px solid var(--sel);outline-offset:2px}
 .foldc.dim{opacity:.16}
+/* far out (under FAR_Z) a card's chips are too small to read or hit: they fade and let a tap through to the card, which
+   still opens the family; the keyboard still reaches them, and a focused chip shows (Cory, 8 Nov 2026: Show all on a
+   desktop made them 15 x 5 px) */
+#cards.far .node .pill{opacity:0;pointer-events:none}
+#cards.far .node .pill:focus-visible{opacity:1}
 #ruler{position:absolute;left:0;top:0;bottom:0;width:78px;pointer-events:none;z-index:4}
 #genlines{position:absolute;inset:0;pointer-events:none;z-index:0}
 #genlines .genline{position:absolute;left:0;right:0;border-top:1px dashed var(--rule);opacity:.75}
@@ -2567,23 +2572,41 @@ const UNIFORM_H = Math.max(...allNodes.map(n=>{
   return 42 + Math.min(sp,2)*14 + (sp>2?14:0) + PILL_H;
 }));
 function nodeHeight(){ return UNIFORM_H; }
+/* Each row is filled left to right in birth order, and a card or a grey card (a folded run) goes as far left as its own
+   row allows: GAP_X after whatever is already on that row. A card with drawn children sits over its cards, not its grey
+   cards (unless it has no other), so a line of single children runs straight down; if that puts it too far left on its
+   row, its whole branch moves right. A grey card has no children, so it fills only its row: one before a card goes into
+   the room on that card's left, and its branch moves right only for what is missing. (Cory, 8 Nov 2026: with grey cards
+   laid out like cards, after their brothers' whole branches, the opening view shrank and the main line zigzagged.) */
 function layout(){
   nodes=[]; edges=[]; foldItems=[];
-  let cursor = 0;
+  const rowRight = {};   /* gen -> right edge of the last card or grey card on that row */
+  const mark = (g, r) => { if(!(rowRight[g] >= r)) rowRight[g] = r; };
+  const from = g => (g in rowRight) ? rowRight[g] + GAP_X : 0;
   const mid = k => k.x + (k.fold ? FOLD_W : NODE_W)/2;
+  const putFold = (k, x) => { k.x = x; k.y = k.gen * LEVEL_H; k.h = FOLD_H; mark(k.gen, x + FOLD_W); foldItems.push(k); };
   (function place(n){
     n.h = nodeHeight(n);
     const kids = kidItems(n);
-    if(!kids.length){ n.x = cursor; cursor += NODE_W + GAP_X; }
+    if(!kids.length) n.x = from(n.gen);
     else{
+      let pend = [];   /* grey cards waiting for the card after them */
       kids.forEach(k=>{
-        if(!k.fold) return place(k);
-        k.x = cursor; k.y = k.gen * LEVEL_H; k.h = FOLD_H; cursor += FOLD_W + GAP_X;
-        foldItems.push(k);
+        if(k.fold){ pend.push(k); return; }
+        const left = from(k.gen), ni = nodes.length, fi = foldItems.length;
+        place(k);
+        const d = left + pend.length * (FOLD_W + GAP_X) - k.x;
+        if(d > 0) nodes.slice(ni).concat(foldItems.slice(fi)).forEach(m=>{ m.x += d; mark(m.gen, m.x + (m.fold ? FOLD_W : NODE_W)); });
+        let x = k.x;
+        for(let i = pend.length - 1; i >= 0; i--){ x -= GAP_X + FOLD_W; putFold(pend[i], x); }
+        pend = [];
       });
-      n.x = (mid(kids[0]) + mid(kids[kids.length-1]))/2 - NODE_W/2;
+      if(pend.length){ let x = from(pend[0].gen); pend.forEach(k=>{ putFold(k, x); x += FOLD_W + GAP_X; }); }
+      const real = kids.filter(k=>!k.fold), over = real.length ? real : kids;
+      n.x = (mid(over[0]) + mid(over[over.length-1]))/2 - NODE_W/2;
     }
     n.y = n.gen * LEVEL_H;
+    mark(n.gen, n.x + NODE_W);
     nodes.push(n);
     kids.forEach(k=>edges.push([n,k]));
   })(root);
@@ -2735,7 +2758,9 @@ function positionRuler(){
 
 /* ---------------- Pan / zoom ---------------- */
 let tx=0, ty=0, scale=1;
+const FAR_Z = .5;   /* below this zoom a card's chips fade (see #cards.far) */
 function apply(){
+  cards.classList.toggle("far", scale < FAR_Z);
   world.setAttribute("transform",`translate(${tx},${ty}) scale(${scale})`);
   cards.style.transform = `translate(${tx}px,${ty}px) scale(${scale})`;
   positionRuler();
@@ -3468,8 +3493,8 @@ function handleTap(target, cx, cy){
   if(!n)return;
   const avImg = target.closest(".av.hasimg");
   if(avImg){ openLightbox(n.p.imgL || avImg.currentSrc || avImg.src, n.p.name, false, avImg.currentSrc || avImg.src); return; } /* the magnifier cursor promises full size */
-  const chip = target.closest(".pill") || [...el.querySelectorAll(".pill")].find(c=>{
-    const r = c.getBoundingClientRect(); return cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom; });
+  const chip = target.closest(".pill") || (cards.classList.contains("far") ? null : [...el.querySelectorAll(".pill")].find(c=>{
+    const r = c.getBoundingClientRect(); return cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom; }));
   if((chip && chip.dataset.bio) || (target.closest(".av") && n.p.profile)){ openProfile(n); return; }
   if(chip && chip.dataset.pill){ toggleNode(n); return; }
   if(!n.open && n.children.length){ hlPinned=false; toggleNode(n); highlight(n); return; } /* tap = open their family */

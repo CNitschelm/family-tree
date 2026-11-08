@@ -590,6 +590,8 @@ try {
     "const DATA = " + dataJson + ";",
     grab("let idc = 0;", "/* expand a node"),           // build()
     grab("function openRun", "/* generation ruler"),    // filters/visibility
+    grab("const NODE_W", "\n"), "const PILL_H = 20;",
+    grab("let nodes=[], edges=[], foldItems=[];", "\n/* ---------------- Render"),   // layout()
     grab("function esc(", "const BC"),                  // esc()
     grab("const BC =", "\nfunction render"),            // branch colors
     grab("const norm", "function renderSuggest"),       // search
@@ -1066,6 +1068,52 @@ ok(visCount() === legacyN, "reset restores default view");
   ok(Object.keys(BRANCH_HEADS).join() === BRANCHES.filter(b => !b.trunk).map(b => b.key).join(),
     "branch heads are derived from BRANCHES, in its order");
   ok(!/\.b-(leg|fr|east|west|ohio|doubs|colmar|paris|nl|schw)\b/.test(html), "no per-branch CSS classes remain (one generic rule)");
+}
+
+/* ---------- 7a. Tree layout (Cory, 8 Nov 2026) ----------
+ * Each row filled left to right in birth order, every card and grey card as far left as its row allows; a parent over
+ * its cards (not its grey cards) so a line of single children runs straight; a grey card beside the brother or sister
+ * before or after it, never after a whole branch. Checked on the opening view, Show all, and with the fold off. */
+section("Tree layout");
+{
+  const layout = get("layout"), NODE_W = get("NODE_W"), GAP_X = get("GAP_X"), FOLD_W = get("FOLD_W");
+  const setFoldL = v => vm.runInNewContext("foldDead = " + (v ? "true" : "false"), ctx);
+  const check = label => {
+    layout();
+    const ns = get("nodes"), fs = get("foldItems");
+    const its = ns.map(n => ({ o: n, x: n.x, w: NODE_W, g: n.gen })).concat(fs.map(f => ({ o: f, x: f.x, w: FOLD_W, g: f.gen })));
+    const rows = {}; its.forEach(i => (rows[i.g] = rows[i.g] || []).push(i));
+    Object.values(rows).forEach(r => r.sort((a, b) => a.x - b.x));
+    const clash = Object.values(rows).filter(r => r.some((a, i) => i && a.x < r[i - 1].x + r[i - 1].w + GAP_X - 0.01)).length;
+    ok(clash === 0, label + ": no card or grey card nearer than the gap to the next on its row (" + ns.length + " cards, " + fs.length + " grey cards)");
+    const fam = n => ns.filter(k => k.parent === n).map(k => ({ x: k.x, i: n.children.indexOf(k) }))
+      .concat(fs.filter(f => f.parent === n).map(f => ({ x: f.x, i: n.children.indexOf(f.kids[0]) }))).sort((a, b) => a.i - b.i);
+    ok(ns.every(n => fam(n).every((k, i, a) => i === 0 || k.x > a[i - 1].x)), label + ": each family's cards and grey cards run left to right in birth order");
+    const parents = ns.filter(n => ns.some(k => k.parent === n) || fs.some(f => f.parent === n));
+    ok(parents.every(n => {
+        const ks = ns.filter(k => k.parent === n).sort((a, b) => a.x - b.x);
+        const c = ks.length ? (ks[0].x + ks[ks.length - 1].x + NODE_W) / 2
+                            : (() => { const g = fs.filter(f => f.parent === n).sort((a, b) => a.x - b.x); return (g[0].x + g[g.length - 1].x + FOLD_W) / 2; })();
+        return Math.abs(n.x + NODE_W / 2 - c) < 0.01;
+      }), label + ": every parent sits over its cards, not its grey cards (" + parents.length + ")");
+    ok(ns.every(n => { const ks = ns.filter(k => k.parent === n); return ks.length !== 1 || Math.abs(ks[0].x - n.x) < 0.01; }),
+      label + ": a parent with one card below runs straight down to it");
+    const loose = fs.filter(f => {
+      const r = rows[f.gen], i = r.findIndex(x => x.o === f), prev = r[i - 1], next = r[i + 1];
+      return !((prev && Math.abs(f.x - (prev.x + prev.w + GAP_X)) < 0.01) || (next && next.o.parent === f.parent && Math.abs(next.x - (f.x + FOLD_W + GAP_X)) < 0.01) || (!prev && f.x === 0));
+    });
+    ok(loose.length === 0, label + ": every grey card sits beside its neighbour on its row, not after a whole branch" + (loose.length ? " (" + loose.length + " loose)" : ""));
+    return { ns, fs };
+  };
+  activeFilters.clear(); activeFilters.add("legacy"); setFoldL(true); setOpenFromFilters();
+  const { ns } = check("opening view");
+  const trunk = []; { let n = root; while (n) { trunk.push(n); const ks = ns.filter(k => k.parent === n); n = ks.length === 1 ? ks[0] : null; } }
+  ok(trunk.length >= 3 && trunk.every(n => Math.abs(n.x - root.x) < 0.01),
+    "opening view: the line from the root runs straight down to where it first parts (" + trunk.length + " cards)");
+  BRANCHES.forEach(b => activeFilters.add(b.key)); setOpenFromFilters(); check("Show all");
+  setFoldL(false); setOpenFromFilters(); check("Show all, fold off");
+  activeFilters.clear(); activeFilters.add("legacy"); setOpenFromFilters(); check("opening view, fold off");
+  setFoldL(true); initView(); layout();
 }
 
 /* ---------- 7b. Lines through a daughter (Cory, 3 Oct 2026) ----------

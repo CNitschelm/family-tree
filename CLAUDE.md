@@ -95,7 +95,11 @@ without asking" (R-0381) and the 1 Aug daughters rule (R-0386).
   says why. A card's pill counts its live children; a dead line, once opened, opens in full; search and a card's links
   unfold the line they go to. In index.html: `n.live`, `foldDead`, `kidItems`, `folds`, `unfolded`, `unfoldRun`,
   `firstKids`, `pickedAllDead`, `deadAutoOff`, `deadLeftOut`, `toast`; tests/run.js "Filters" and tests/browser.js
-  "fold dead lines" check it.
+  "fold dead lines" check it. Layout (`layout`, the same day): each row fills left to right in birth order, every card and
+  grey card as far left as its row allows; a parent sits over its cards, not its grey cards, so a line of single children
+  runs straight; a grey card sits beside its brother or sister, never after a whole branch. Under half size (`FAR_Z`) a
+  card's chips fade (`#cards.far`): a click reaches the card, the keyboard still reaches them. tests/run.js "Tree layout"
+  and tests/browser.js "far out" check it.
 - **Lines through a daughter are marked all the way down** (R-0446): below a daughter of the line every connector is
   dashed and every card says "through <her first name>" (index.html `viaF`, `viaTag`). Nothing to do per line: a line
   that stays is marked, one that goes takes its marks with it.
