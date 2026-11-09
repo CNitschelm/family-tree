@@ -49,6 +49,15 @@ onto_main() { # $1 = repo. Cloud sessions start each clone on a session branch o
   git -C "$r" rev-parse -q --verify '@{upstream}' >/dev/null 2>&1 || git -C "$r" branch -q --set-upstream-to=origin/main main
 }
 ahead_of_up() { git -C "$1" rev-list --count '@{upstream}..HEAD' 2>/dev/null || echo 1; }
+reach_back() { # $1 = repo. The platform's clones are shallow, and a routine's can start on an older main than GitHub's,
+  # with origin/main fetched shallow as well. Once GitHub's main is more commits ahead than the clone holds, the two
+  # histories do not meet: a main that is only behind looks diverged ("50 ahead, 50 behind", 9 Nov 2026) and is never
+  # pulled. Fetch origin/main back to a day before the clone's own commit, so that it is seen as behind; a clone's real
+  # local work still shows as ahead.
+  [ "$(git -C "$1" rev-parse --is-shallow-repository 2>/dev/null)" = true ] || return 0
+  local t; t="$(git -C "$1" log -1 --format=%ct HEAD 2>/dev/null)" || return 0
+  git -C "$1" fetch -q --shallow-since="$(date -u -d "@$(( t - 86400 ))" +%Y-%m-%dT%H:%M:%SZ)" origin main 2>/dev/null || true
+}
 
 echo "cloud-setup — $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 LIB="$(cd "$(dirname "$0")" && pwd)/cloud-lib.sh"
@@ -116,7 +125,7 @@ git config core.hooksPath githooks
 say "site: main at $(git rev-parse --short HEAD), full history ($(git rev-list --count HEAD) commits), commit hook on"
 
 # ------------------------------------------------------------------ 2. the private state repo
-if [ -e "$PRIV/.git" ]; then onto_main "$PRIV" || die "could not put family-tree-private on main"; fi
+if [ -e "$PRIV/.git" ]; then onto_main "$PRIV" || die "could not put family-tree-private on main"; reach_back "$PRIV"; fi
 if [ ! -e "$PRIV/.git" ]; then
   git clone -q "$PRIV_URL" "$PRIV" || die "could not clone $PRIV_URL — is family-tree-private one of this session's repositories?"
 elif ! tracks "$PRIV"; then
@@ -196,7 +205,7 @@ if ! state_ok; then   # a session may be between its state push and its queue pu
 fi
 
 # ------------------------------------------------------------------ 3. the source archive
-if [ -e "$SRC/.git" ]; then onto_main "$SRC" || say "NOTE: could not put family-tree-sources on main"; fi
+if [ -e "$SRC/.git" ]; then onto_main "$SRC" || say "NOTE: could not put family-tree-sources on main"; reach_back "$SRC"; fi
 if [ ! -e "$SRC/.git" ]; then
   git clone -q --depth 1 "$SRC_URL" "$SRC" || die "could not clone $SRC_URL — is family-tree-sources one of this session's repositories?"
 elif tracks "$SRC" && clean_tracked "$SRC" && [ "$(ahead_of_up "$SRC")" = 0 ]; then

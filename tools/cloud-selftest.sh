@@ -441,6 +441,21 @@ mkdir -p "$T/R2/home" && quiet git clone --depth 1 "file://$GHS" "$T/R2/family-t
 check "setup run from the copy inside a site clone sets up that clone" sh -c "cd '$T/R2/home' && HOME='$T/R2/home' FT_SKIP_DECRYPT=1 FT_SKIP_TOOLS=1 bash '$T/R2/family-tree/tools/cloud-setup.sh'"
 grep -q "FT_DIR=\"$(cd -P "$T/R2/family-tree" && pwd)\"" "$T/R2/home/.ft-env" && test -L "$T/R2/family-tree/research.json" \
   && ok "…its ~/.ft-env names that clone, and the links are in it" || no "R2 layout"
+# a routine whose platform clones start on an older main than GitHub's, and whose origin/main the platform fetched
+# shallow, so that the two histories do not meet (9 Nov 2026: "50 ahead, 50 behind", the private clone never pulled)
+mkdir -p "$T/R3/home" && quiet git clone --depth 1 "file://$GHP" "$T/R3/family-tree-private" \
+  && quiet git clone --depth 1 "file://$GHA" "$T/R3/family-tree-sources"
+rm -rf "$T/r3p" "$T/r3a" && quiet git clone "file://$GHP" "$T/r3p" && quiet git clone "file://$GHA" "$T/r3a" \
+  && mkdir -p "$T/r3p/_work/r3" "$T/r3a/archive/r3" && for i in 1 2 3; do
+    echo "$i" >> "$T/r3p/_work/r3/NOTES.md" && git -C "$T/r3p" add -A && gnohook -C "$T/r3p" commit -qm "Save research notes"
+    echo "$i" >> "$T/r3a/archive/r3/copy.md" && git -C "$T/r3a" add -A && gnohook -C "$T/r3a" commit -qm "Add a copy"; done \
+  && quiet git -C "$T/r3p" push -q origin HEAD:main && quiet git -C "$T/r3a" push -q origin HEAD:main \
+  && quiet git -C "$T/R3/family-tree-private" fetch -q --depth 1 origin main && quiet git -C "$T/R3/family-tree-sources" fetch -q --depth 1 origin main
+test "$(git -C "$T/R3/family-tree-private" rev-list --count origin/main..HEAD)" = 1 \
+  && ok "a routine's shallow clones can start on an older main whose history does not meet GitHub's" || no "R3: the stale clones"
+check "…setup still runs" sh -c "cd '$T/R3' && HOME='$T/R3/home' FT_SITE_URL='file://$GHS' FT_SKIP_DECRYPT=1 FT_SKIP_TOOLS=1 bash '$TOOLS/cloud-setup.sh'"
+test "$(git -C "$T/R3/family-tree-private" rev-parse HEAD)" = "$(gp rev-parse main)" && ok "…and brings the private clone up to GitHub's main" || no "R3: private clone not pulled"
+test "$(git -C "$T/R3/family-tree-sources" rev-parse HEAD)" = "$(git --git-dir="$GHA" rev-parse main)" && ok "…and the source archive too" || no "R3: sources not pulled"
 kq() { cloud K && work K; }
 check "session K queues one more commit" kq
 quiet cloud HH; quiet cloud W
