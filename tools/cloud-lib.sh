@@ -221,3 +221,35 @@ ft_conflict() {
 
 # ft_ready: cloud-setup.sh finished in this session (it removes the mark when it starts, writes it last).
 ft_ready() { [ -f "$HOME/.ft-ready" ]; }
+
+# ft_linkconf_sync <site clone>: keep the % on each parent-child line current (Cory, 9 Nov 2026). Runs
+# tools/linkconf.js sync, which does nothing when neither the ledger (ledger/link-confidence.json) nor the
+# tree's links changed since the last build (owner.bin gets a random iv at every build, so it is never
+# rebuilt for nothing); otherwise it retires the links gone from the tree, rates the new ones from their
+# cards' sources and builds. What it rebuilt (media/owner.bin, media/links.bin, stats.json) is committed here,
+# one neutral line; the ledger goes with the private state. Call it only on a clean site tree. Returns
+#   0  current, or rebuilt and committed; also when there is no .owner-key (a NOTE: never make a new key)
+#   1  lines with no figure: FT_LINKCONF_MSG is "<n> lines have no figure: <ids>"
+#   2  sync failed otherwise, or the commit failed (FT_LINKCONF_MSG says what)
+ft_linkconf_sync() {
+  local ft="$1" out rc=0 files="media/owner.bin media/links.bin stats.json"
+  FT_LINKCONF_MSG=""
+  if [ ! -s "$ft/.owner-key" ]; then
+    echo "NOTE: no .owner-key (FT_OWNER_KEY): the line figures were not checked (linkconf.js never makes a new owner key)"
+    return 0
+  fi
+  out="$(cd "$ft" && node tools/linkconf.js sync 2>&1)" || rc=$?
+  printf '%s\n' "$out" | sed 's/^/  /'
+  if [ "$rc" = 1 ] && FT_LINKCONF_MSG="$(printf '%s\n' "$out" | grep -m 1 -E '^[0-9]+ lines? ha(s|ve) no figure: ')"; then
+    return 1
+  elif [ "$rc" != 0 ]; then
+    FT_LINKCONF_MSG="tools/linkconf.js sync failed (exit $rc): $(printf '%s\n' "$out" | grep -v '^$' | tail -n 1)"
+    return 2
+  fi
+  # shellcheck disable=SC2086
+  [ -z "$(git -C "$ft" status --porcelain -- $files)" ] && return 0
+  # shellcheck disable=SC2086
+  { git -C "$ft" add -- $files && git -C "$ft" commit -q -m "Update link figures" -- $files; } \
+    || { FT_LINKCONF_MSG="the rebuilt line figures could not be committed"; return 2; }
+  echo "linkconf: committed the new line figures ($(git -C "$ft" rev-parse --short HEAD))"
+}

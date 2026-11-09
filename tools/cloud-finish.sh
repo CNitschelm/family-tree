@@ -21,6 +21,9 @@
 #     file sits outside family-tree-private (it would vanish with the machine), if a link was replaced by
 #     a real file (a tool rewrote it by rename), or if the source archive has uncommitted changes
 #  2. stops if site files are changed but not committed (the change loop commits them: gate + hook)
+# 2b. keeps the line figures current: with .owner-key here, tools/linkconf.js sync (only when the ledger or
+#     the tree's links changed since the last build) and a commit of what it rebuilt; it stops when a line
+#     has no figure ("<n> lines have no figure: <ids>"); without .owner-key, a NOTE and nothing else
 #  3. finds this session's own site commits (those on top of the newest published or queued commit)
 #     and stops BEFORE pushing anything when they cannot go out: other site work came in under them, a
 #     commit a queue rebuild dropped, a message the airlock refuses or that names someone, a payload the
@@ -141,6 +144,20 @@ fi
 [ -z "$(git -C "$FT" status --porcelain --untracked-files=no)" ] \
   || die "site files are changed but not committed. Finish the change loop (gate, then commit) first, or put them
   back (git -C \"$FT\" checkout -- index.html stats.json media)."
+
+# ------------------------------------------------------------------ 2b. the line figures keep themselves current (9 Nov 2026)
+# The % on each parent-child line froze for a month once (Oct-Nov 2026): cards came onto the tree and nothing
+# rated their links. tools/linkconf.js sync, when the ledger or the tree's links changed since the last build,
+# retires links gone from the tree, rates new ones from their cards' sources and rebuilds media/owner.bin and
+# media/links.bin; ft_linkconf_sync commits them with stats.json as one more site commit (checked in 3 like any
+# other), and the ledger goes with the state in 4. A link it cannot rate stops the finish, so it is seen.
+lrc=0; ft_linkconf_sync "$FT" || lrc=$?
+case $lrc in
+  0) ;;
+  1) die "$FT_LINKCONF_MSG. Rate each by hand in ledger/link-confidence.json (notes/link_confidence.md: the
+  scale_pct and its evidence), then run this again. $NOTES_HINT" ;;
+  *) die "$FT_LINKCONF_MSG (the output is above). The line figures could not be brought up to date. $NOTES_HINT" ;;
+esac
 
 # ------------------------------------------------------------------ 3. this session's own site commits, and whether they can go out
 git -C "$FT" fetch -q origin main || die "cannot reach GitHub (fetch the public main)"

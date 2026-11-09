@@ -525,6 +525,108 @@ section("Public numbers");
   }
 }
 
+/* ---------- the line figures keep themselves current (9 Nov 2026) ----------
+ * From 7 Oct to 9 Nov 2026 the % on the tree's lines froze: cards came onto the tree, nothing rated their links,
+ * and linkconf.js build refuses until every link is rated. tools/linkconf.js sync rates new links from their
+ * cards' sources, retires links gone from the tree, and builds; cloud-finish.sh runs it (cloud-lib.sh,
+ * ft_linkconf_sync) and commits what it rebuilt. Run here on a throwaway tree with a test password, so it runs
+ * in CI too, before (and without) the real one. */
+section("Line figures (linkconf sync)");
+{
+  const os = require("os"), cp = require("child_process"), crypto = require("crypto");
+  const P0 = require("../tools/payload.js");
+  const T = fs.mkdtempSync(path.join(os.tmpdir(), "ft-linkconf-"));
+  const PWT = "a test password", SALT = crypto.randomBytes(16).toString("base64"), ITER = 1000;
+  fs.mkdirSync(path.join(T, "tools")); fs.mkdirSync(path.join(T, "ledger")); fs.mkdirSync(path.join(T, "media"));
+  ["linkconf.js", "payload.js", "stats.js", "cloud-lib.sh"].forEach(f => fs.copyFileSync(path.join(ROOT, "tools", f), path.join(T, "tools", f)));
+  const ownerKey = crypto.randomBytes(32).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  fs.writeFileSync(path.join(T, ".owner-key"), ownerKey + "\n");
+  const card = (id, g, name, years, labels) => ({ id, name, years, g, src: labels.map(l => ({ l })), unions: [] });
+  const ORIG = "Baptism, 3 May 1701 — original register, test parish baptisms (test archive), view 9, entry 4: the child of the father " +
+    "(this link is the image of view 9; the register in the archive’s viewer: https://example.invalid/viewer/9) https://example.invalid/a";
+  const root = card("t00", "m", "First Card", "1670–1730", ["Compiled tree on a family website"]);
+  root.unions = [{ s: "Spouse Card", c: [
+    card("t01", "m", "Second Card", "1699–1760", ["Compiled tree on a family website"]),
+    card("t02", "f", "Third Card", "1701–?", [ORIG]),
+    card("t03", "m", "Fourth Card", "1703–?", ["Test registers (Baradel) — his baptism act n° 12"]),
+  ] }];
+  const seal = data => {
+    const s = P0.sealData(data, PWT, { salt: SALT, iter: ITER });
+    P0.writeMedia(T, s.media);
+    fs.writeFileSync(path.join(T, "index.html"), "<!DOCTYPE html>\n<html><script>\n" + s.line + "\n</script></html>\n");
+    fs.writeFileSync(path.join(T, "data.json"), JSON.stringify(data, null, 1));
+  };
+  seal(root);
+  const entry = (n, parent, child, pct) => ({ n, parent, parent_name: "x", parent_years: "", child, child_name: "x", child_years: "",
+    kind: "father-son", level: pct >= 90 ? "high" : pct >= 70 ? "medium" : "low", basis: "compiled", why: "a test entry", checked: "2026-10-05", pct });
+  fs.writeFileSync(path.join(T, "ledger", "link-confidence.json"), JSON.stringify({ what: "test", scale: {}, scale_pct: "test",
+    links: [entry(3, "t00", "t01", 60), entry(7, "t00", "t-gone", 85)], retired: [Object.assign(entry(12, "t00", "t-old", 50), { retired: "2026-11-01", retiredWhy: "test" })] }, null, 1) + "\n");
+  const env = { ...process.env, FT_PASSWORD: PWT, GIT_AUTHOR_NAME: "test", GIT_AUTHOR_EMAIL: "test@example.invalid",
+    GIT_COMMITTER_NAME: "test", GIT_COMMITTER_EMAIL: "test@example.invalid" };
+  const git = (...a) => cp.execFileSync("git", ["-C", T, ...a], { env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  git("init", "-q"); git("config", "core.hooksPath", "/dev/null"); git("config", "commit.gpgsign", "false");
+  fs.writeFileSync(path.join(T, ".gitignore"), "ledger/\ndata.json\n.owner-key\n");
+  git("add", "-A"); git("commit", "-qm", "Start");
+  /* exactly what cloud-finish.sh runs at step 2b */
+  const finishStep = () => {
+    const r = cp.spawnSync("bash", ["-c", '. "$1/tools/cloud-lib.sh"; rc=0; ft_linkconf_sync "$1" || rc=$?; echo "RC=$rc MSG=$FT_LINKCONF_MSG"', "-", T], { env, encoding: "utf8" });
+    const m = (r.stdout || "").match(/RC=(\d+) MSG=(.*)\n?$/);
+    return { rc: m ? +m[1] : -1, msg: m ? m[2] : "", out: (r.stdout || "") + (r.stderr || "") };
+  };
+  const sync = () => cp.spawnSync("node", [path.join(T, "tools", "linkconf.js"), "sync"], { env, encoding: "utf8" });
+  const ledger = () => JSON.parse(fs.readFileSync(path.join(T, "ledger", "link-confidence.json"), "utf8"));
+  const sha = f => { try { return crypto.createHash("sha256").update(fs.readFileSync(path.join(T, f))).digest("hex"); } catch (_) { return null; } };
+  const head = () => git("rev-parse", "HEAD");
+  try {
+    let r = finishStep();
+    let L = ledger();
+    const a = L.links.find(x => x.child === "t02"), b = L.links.find(x => x.child === "t03");
+    const today = new Date().toISOString().slice(0, 10);
+    ok(r.rc === 0 && a && a.pct === 99 && a.basis === "original" && a.level === "high" && a.auto === true && a.checked === today &&
+      a.kind === "father-daughter" && a.parent === "t00" && a.child_name === "Third Card" && a.n === 13,
+      "a new child card with an act read in the original is rated 99 by itself (basis original, auto, n after the highest, retired included)");
+    ok(a && a.why.startsWith("Baptism, 3 May 1701 — original register") && !/https?:|example\.invalid|this link is/.test(a.why) && /Read in the original: the act names the parent\./.test(a.why),
+      "its reason is made from the card's source label, without addresses or the \"(this link is …)\" aside");
+    ok(b && b.pct === 95 && b.basis === "index" && b.auto === true && b.n === 14 && /: the transcription with act number names the parent\. Not read in the original\./.test(b.why),
+      "a Baradel or SaiRePa transcription with an act number gives 95, basis index");
+    const g = (L.retired || []).find(x => x.child === "t-gone");
+    ok(!L.links.some(x => x.child === "t-gone") && g && g.retired === today && /no longer on the tree/.test(g.retiredWhy) && g.pct === 85 && g.why === "a test entry",
+      "an entry whose child left the tree moves to the retired list, whole, with the date and why");
+    let S = JSON.parse(fs.readFileSync(path.join(T, "stats.json"), "utf8"));
+    ok(S.links === 3 && L.links.length === 3 && L.retired.length === 2, "stats.json counts only the links on the tree, not the retired ones");
+    ok(sha("media/owner.bin") && sha("media/links.bin") && git("log", "-1", "--format=%s") === "Update link figures" &&
+      git("show", "--name-only", "--format=", "HEAD").split("\n").sort().join(" ") === "media/links.bin media/owner.bin stats.json",
+      "the finish step commits what it rebuilt: media/owner.bin, media/links.bin and stats.json, one neutral line");
+    const before = [sha("media/owner.bin"), sha("media/links.bin"), sha("stats.json"), head()];
+    r = finishStep();
+    ok(r.rc === 0 && /nothing changed since the last build/.test(r.out) && before.join() === [sha("media/owner.bin"), sha("media/links.bin"), sha("stats.json"), head()].join(),
+      "with nothing changed, the finish step leaves media/owner.bin alone (no rebuild, no commit)");
+    fs.unlinkSync(path.join(T, "ledger", "link-confidence.stamp"));
+    r = finishStep();
+    ok(r.rc === 0 && /nothing rebuilt/.test(r.out) && before.join() === [sha("media/owner.bin"), sha("media/links.bin"), sha("stats.json"), head()].join() &&
+      fs.existsSync(path.join(T, "ledger", "link-confidence.stamp")),
+      "with no stamp, it opens the two files, finds the same figures and leaves them alone");
+    root.unions[0].c.push(card("t04", "m", "Fifth Card", "1705–?", ["Compiled tree on a family website (no sources)"]));
+    seal(root); git("add", "-A"); git("commit", "-qm", "Add a card");
+    const before2 = [sha("media/owner.bin"), sha("media/links.bin"), head()];
+    r = finishStep();
+    ok(r.rc === 1 && r.msg === "1 line has no figure: t04" && before2.join() === [sha("media/owner.bin"), sha("media/links.bin"), head()].join(),
+      "a card with only a compiled source stops it: \"1 line has no figure: t04\", nothing built");
+    ok(sync().status === 1 && !ledger().links.some(x => x.child === "t04"), "linkconf.js sync exits 1 for it, and leaves it unrated");
+    fs.unlinkSync(path.join(T, ".owner-key"));
+    const s2 = sync();
+    r = finishStep();
+    ok(s2.status === 2 && !fs.existsSync(path.join(T, ".owner-key")) && r.rc === 0 && /NOTE: no \.owner-key/.test(r.out),
+      "without .owner-key, sync never makes one (exit 2) and the finish step skips with a note");
+  } catch (e) { ok(false, "line figures test ran (" + String(e.message).split("\n")[0] + ")"); }
+  fs.rmSync(T, { recursive: true, force: true });
+  const fin = fs.readFileSync(path.join(ROOT, "tools", "cloud-finish.sh"), "utf8");
+  const i2 = fin.indexOf("# ------------------------------------------------------------------ 2. the site is committed"),
+    iS = fin.indexOf('ft_linkconf_sync "$FT"'), i3 = fin.indexOf("# ------------------------------------------------------------------ 3. this session");
+  ok(i2 > 0 && iS > i2 && i3 > iS && /1\) die "\$FT_LINKCONF_MSG\./.test(fin),
+    "cloud-finish.sh runs the line figures' step after the site is committed and before its own commits are checked, and stops on a line with no figure");
+}
+
 section("Decrypt DATA");
 let PW = (process.env.FT_PASSWORD || "").trim();
 if (!PW) { try { PW = fs.readFileSync(path.join(ROOT, ".password"), "utf8").trim(); } catch (_) {} }

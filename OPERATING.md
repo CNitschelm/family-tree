@@ -59,9 +59,24 @@ node checks/gate.js                          # 6. proves the payload is the ledg
 node tools/research.js log|set|answer …      # 8. the research state this session changed (any time;
                                              #    it rebuilds media/research*.bin — commit them too)
                                              # 9. changelog entry (family-tree-private/CHANGE-LOG-COMMITS.md)
-bash tools/cloud-finish.sh "<line>" "<who>"  # 10. the state, then the site into the queue; it releases
-                                             #     the lock. The airlock publishes the queue; verify it
+bash tools/cloud-finish.sh "<line>" "<who>"  # 10. the line figures (below), the state, then the site into
+                                             #     the queue; it releases the lock. The airlock publishes
+                                             #     the queue; verify it
 ```
+
+**The line figures keep themselves current (9 Nov 2026).** The % on each parent-child line comes from
+`ledger/link-confidence.json` (private) through `tools/linkconf.js build`, which refuses until every link on
+the tree is rated. Nothing ran it by itself, so from 7 Oct to 9 Nov 2026 the figures froze while cards came
+onto the tree. Now `cloud-finish.sh` (step 2b, after the site is committed) runs `node tools/linkconf.js
+sync` whenever `.owner-key` is here: when the ledger or the tree's links changed since the last build (a
+hash, `ledger/link-confidence.stamp`) it moves entries whose link left the tree to the file's `retired` list,
+rates each new link from its child card's own sources (an act read in the original: 99; a SaiRePa or Baradel
+transcription with an act number: 95; those entries carry `auto: true`), rebuilds `media/owner.bin` and
+`media/links.bin`, and commits them with `stats.json` ("Update link figures"); the ledger goes with the state.
+Nothing changed: nothing is rebuilt (owner.bin would get a new random iv). A link it cannot rate stops the
+finish: **FINISH STOPPED: "<n> lines have no figure: <ids>"**. Rate each by hand in the ledger (its
+`scale_pct`; `notes/link_confidence.md`) and finish again. Without `.owner-key` (no `FT_OWNER_KEY`) it is
+skipped with a NOTE: never let a tool make a new owner key.
 
 The source archive is the clone of `CNitschelm/family-tree-sources` next to this folder; the working
 state is the clone of `CNitschelm/family-tree-private` next to it (CLAUDE.md, "Three clones, one folder"). A
@@ -296,7 +311,7 @@ changes the site does not have.
 | `research.json`, `.research-stamp`, `ledger/research-deny.txt` | the research state (the one source of the Research view), what `research.js build` last wrote, and names never to publish | no (family-tree-private; `.research-stamp` is rebuilt) |
 | `history.json` | Play's history notes: each with the page it was read on and the words that support it (only the captions, years and source go into media/history.bin) | no (family-tree-private) |
 | `data.json`, `.password`, `.data-stamp`, `.gate-stamp` | working copy, password, provenance stamps | no (rebuilt each session; the password is the environment variable `FT_PASSWORD`) |
-| `ledger/` | `register.jsonl` (settled questions), `changes.jsonl` (every applied change), `pending/` (change files), `history/` (payload history cache), `LOCK` | no (family-tree-private) |
+| `ledger/` | `register.jsonl` (settled questions), `changes.jsonl` (every applied change), `pending/` (change files), `history/` (payload history cache), `LOCK`, `link-confidence.json` (the line figures' ratings, with the `retired` list) and `link-confidence.stamp` (the hash of their last build) | no (family-tree-private) |
 | `OPEN-ITEMS.md` | the live commit and what is genuinely open — short | no (family-tree-private) |
 | `CHANGE-LOG-COMMITS.md`, `bio-research-notes.md` | the story of each deploy; the research log | no (family-tree-private) |
 | `AUDIT-2026-09/`, `history/` | the records the register was built from; older reports | no (family-tree-archive; `history/` in family-tree-private) |
@@ -321,6 +336,7 @@ changes the site does not have.
 | `tools/cloud-lib.sh` | what the three scripts above share (the queue's verdict, a safe push of the private repo, the newest site commit, the ready mark) |
 | `tools/cloud-verify.sh`, `tools/cloud-nettest.sh`, `tools/cloud-selftest.sh` | one-off checks: the backup arrived and the tools work; what the network reaches; the rehearsal of the scripts above on throwaway copies |
 | `tools/stats.js` | write `stats.json` (or `--check` it) from data.json, research.json and the link ratings |
+| `tools/linkconf.js` | the line figures: `check`, `show`, `list`, `override`, `build`, and `sync` (run by `cloud-finish.sh`: retire, rate from the cards' sources, build only when something changed) |
 | `tools/research.js` | the Research view's data: `status`, `show`, `validate`, `build`, `check`, `link`, and the update commands |
 | `tools/mapfile.js` | the map's base layers: `check`, `write <layers.json>` (a new hashed file; keep the old one a deploy) |
 | `checks/run.js` | prose linter (report only; the gate fails on new HIGH findings) |
