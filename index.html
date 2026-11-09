@@ -1094,6 +1094,7 @@ body.playing #playchip,body.playing #mappins,body.playing #maplegend,body.playin
 #playfaces .halo{position:absolute;inset:-3px;border-radius:50%;border:2px solid var(--born);opacity:0;pointer-events:none}
 #playfaces .halo.first{border-color:var(--ink-soft)}
 #playfaces .halo.died{border-color:var(--rest);border-width:1.5px}
+#playfaces .pfneck{position:absolute;left:0;top:0;border-radius:50%;opacity:.6;transform-origin:0 50%;pointer-events:none;z-index:3;filter:blur(.4px)}
 #playfaces .pl{position:absolute;left:calc(100% + 5px);top:50%;transform:translateY(-50%);display:none;white-space:nowrap;font-size:11px;font-weight:600;color:var(--ink);
   background:color-mix(in srgb,var(--paper) 84%,transparent);padding:1px 6px;border-radius:5px;pointer-events:none}
 #playfaces .pl.l{left:auto;right:calc(100% + 5px)}
@@ -1396,7 +1397,7 @@ const I18N = {
       play_year:"Year", play_speed:"%v (%n years a second). Change speed", play_speed1:"%v (1 year a second). Change speed", play_spd:"%n yr/s", play_spd1:"1 yr/s",
       play_follow:"Follow the family again", play_close:"Close the playback", play_people:"%n people", play_person:"1 person",
       play_lg_born:"Born", play_lg_move:"Moved", play_lg_died:"Died", play_source:"Source",
-      play_help:"A green ring is a recorded birth or baptism; a plain ring, the first record of someone whose birthplace we don’t have. A face glides when the next record is somewhere else and fades at a death; one that fades with no ring has no known date of death. Between records, people stay where they were last recorded.",
+      play_help:"A green ring is a recorded birth or baptism; a plain ring, the first record of someone whose birthplace we don’t have. A child buds off its parent’s face when the parent is on the map. A face glides when the next record is somewhere else and fades at a death; one that fades with no ring has no known date of death. Between records, people stay where they were last recorded.",
       play_m_first:"First on the map: %n, %p", play_m_country:"First of the family in %c: %n, %p", play_m_bornin:"First of the family born in %c: %n, %p",
       play_m_count:"%k people of the family have now appeared on the map", play_m_far:"Farthest yet from %o: %n, %p, %d km away",
       play_end:"Today: %n living family members on the map, in %c countries.", play_end_1:"Today: %n living family members on the map, in one country.",
@@ -1597,7 +1598,7 @@ const I18N = {
       play_year:"Année", play_speed:"%v (%n ans par seconde). Changer la vitesse", play_speed1:"%v (1 an par seconde). Changer la vitesse", play_spd:"%n ans/s", play_spd1:"1 an/s",
       play_follow:"Suivre à nouveau la famille", play_close:"Fermer la lecture", play_people:"%n personnes", play_person:"1 personne",
       play_lg_born:"Naissances", play_lg_move:"Déplacements", play_lg_died:"Décès", play_source:"Source",
-      play_help:"Un cercle vert marque une naissance ou un baptême enregistrés ; un cercle simple, le premier acte d’une personne dont on ignore le lieu de naissance. Un visage se déplace quand l’acte suivant est ailleurs et s’efface à un décès ; celui qui s’efface sans cercle n’a pas de date de décès connue. Entre deux actes, chacun reste là où il a été enregistré en dernier.",
+      play_help:"Un cercle vert marque une naissance ou un baptême enregistrés ; un cercle simple, le premier acte d’une personne dont on ignore le lieu de naissance. Un enfant se détache du visage de son parent quand celui-ci est sur la carte. Un visage se déplace quand l’acte suivant est ailleurs et s’efface à un décès ; celui qui s’efface sans cercle n’a pas de date de décès connue. Entre deux actes, chacun reste là où il a été enregistré en dernier.",
       play_m_first:"Première trace sur la carte : %n, %p", play_m_country:"Premier membre de la famille %c : %n, %p", play_m_bornin:"Première naissance de la famille %c : %n, %p",
       play_m_count:"%k membres de la famille sont désormais apparus sur la carte", play_m_far:"Plus loin que jamais de %o : %n, %p, à %d km",
       play_end:"Aujourd’hui : %n membres de la famille en vie sur la carte, dans %c pays.", play_end_1:"Aujourd’hui : %n membres de la famille en vie sur la carte, dans un seul pays.",
@@ -5282,12 +5283,19 @@ function mapEscape(){
    moves and deaths shows where the quiet years are. The camera follows the pins, never set places: it fits
    everyone on the map plus whatever appears in the next five seconds, so it starts moving about five seconds
    before a birth in a new area and settles before it, eased and speed-limited ("dont make it jolty"). Dragging
-   the map hands the camera to the visitor; Follow gives it back. */
+   the map hands the camera to the visitor; Follow gives it back.
+   Children split off their parents like a dividing cell (Cory, 9 Nov 2026: "instead of people popping up randomly,
+   have them 'spawn' like a cell does from their parent"): when a person's parent on the tree is on the map as they
+   appear, the parent's face swells a little, a bud grows on its edge and pinches off, and the child glides on the
+   usual arc to their own first place (to their own slot when it is the parent's place), arriving when the record
+   says, where the green or plain ring shows. With no parent on the map (the root, a parent not shown yet or already
+   faded) a face pops in as before; deaths are unchanged. */
 
 /* ---- play model: pure functions of the pins (tests/run.js runs this part on the real data) ---- */
 const PLAY_SPEEDS = [1, 2, 5, 10];        /* years a second */
 const PLAY_LOOK = 5, PLAY_LINGER = 2.5;   /* seconds the camera looks ahead, and keeps a place after it empties */
 const PLAY_TRAVEL = 1.6, PLAY_POP = .9, PLAY_FADE = 1.8, PLAY_FADE_Q = 2.6;   /* seconds a move, a pop, a fade and a quiet fade take */
+const PLAY_BUD = .8, PLAY_SLOT = .7;      /* seconds a bud takes to grow and pinch off, and a glide to a slot at the parent's own place */
 const PLAY_LIFE = 50, PLAY_AFTER = 5;     /* death date unknown: the face fades 50 years after the first record, or 5 after the last */
 const PLAY_MIN_KM = 30;                   /* the closest the camera comes: a view about 30 km across */
 const PLAY_STEPS = [100, 200, 300, 400, 500, 750, 1000];   /* "N people of the family have appeared" */
@@ -5361,8 +5369,51 @@ function playMilestones(events){
   });
   return out.sort((a, b) => a.t - b.t);
 }
+/* each track's parent on the tree (when the parent is in the playback too) and its children, in the order they appear */
+function playLink(tracks){
+  const by = new Map(tracks.map(tr => [tr.n, tr]));
+  tracks.forEach(tr => { tr.par = tr.n.parent ? by.get(tr.n.parent) || null : null; tr.kids = []; });
+  tracks.forEach(tr => { if(tr.par) tr.par.kids.push(tr); });
+  tracks.forEach(tr => tr.kids.sort((a, b) => a.t0 - b.t0 || a.n.id - b.n.id));
+}
+/* the place a person is at, or setting out from, at time t (null when not yet recorded or after their end) */
+function playPlace(tr, t){
+  if(t < tr.t0 || (tr.end !== null && t > tr.end)) return null;
+  let i = 0;
+  while(i + 1 < tr.stops.length && tr.stops[i + 1].t <= t) i++;
+  return tr.stops[i].k;
+}
+/* how a person splits off their parent at this speed: {s, b, a, par} — the bud starts at s, pinches off at b, and the
+   child arrives at its first place at a, when its record says (a brother or sister still budding: up to two buds later,
+   so twins and children of one year split off one after another). null: they pop in, because no parent is on the map
+   for the whole bud (not yet popped in, fading or gone), or their first move would leave before they arrive. Worked out
+   for all of a parent's children at once, per speed. */
+function playSpawn(tr, speed){
+  const par = tr.par;
+  if(!par || tr.solo) return null;
+  if(!par._sp || par._sp.speed !== speed){
+    const m = new Map(), B = PLAY_BUD * speed;
+    let free = -Infinity;
+    par.kids.forEach(k => {
+      if(k.solo) return;
+      const G = (k.stops[0].k === playPlace(par, k.t0) ? PLAY_SLOT : PLAY_TRAVEL) * speed;
+      let s = k.t0 - G - B;
+      s += Math.min(Math.max(0, free - s), 2 * B);
+      const b = s + B, a = b + G;
+      const ps = playAt(par, s, speed), pb = playAt(par, b, speed), nx = k.stops[1];
+      if(!ps || !pb || ps.spawn || ps.pop < 1 || ps.end >= 0 || pb.end >= 0) return;
+      if(nx && a > Math.max(k.t0, nx.t - PLAY_TRAVEL * speed)) return;
+      if(k.end !== null && k.end < a) return;
+      m.set(k, {s, b, a, par});
+      free = b;
+    });
+    par._sp = {speed, m};
+  }
+  return par._sp.m.get(tr) || null;
+}
 function playModel(nodes, rowsFor, livingFor, now){
   const tracks = nodes.map(n => playTrack(n, rowsFor(n), livingFor(n), now)).filter(Boolean);
+  playLink(tracks);
   const events = playEvents(tracks);
   const t0 = events.length ? Math.floor(events[0].t) - 1 : Math.floor(now) - 1;
   const t1 = Math.max(now, events.length ? events[events.length - 1].t + .5 : now);
@@ -5377,13 +5428,17 @@ function playHist(events, t0, t1, step){
 }
 /* where a person is at time t, or null when they are not on the map */
 function playAt(tr, t, speed){
-  if(t < tr.t0) return null;
+  const sp = playSpawn(tr, speed);
+  if(t < (sp ? sp.s : tr.t0)) return null;
   const fade = (tr.endKind === "faded" ? PLAY_FADE_Q : PLAY_FADE) * speed;
   if(tr.end !== null && t >= tr.end + fade) return null;
   let i = 0;
   while(i + 1 < tr.stops.length && tr.stops[i + 1].t <= t) i++;
   const s = tr.stops[i], nx = tr.stops[i + 1];
-  const st = {k:s.k, since:s.t, i, pop:(t - tr.t0) / (PLAY_POP * speed), end:tr.end !== null && t >= tr.end ? (t - tr.end) / fade : -1, move:null};
+  const st = {k:s.k, since:s.t, i, pop:(t - (sp ? sp.a : tr.t0)) / (PLAY_POP * speed), end:tr.end !== null && t >= tr.end ? (t - tr.end) / fade : -1, move:null,
+    spawned:!!sp, spawn:null};
+  /* splitting off: p runs 0 to 1 from the bud to the arrival, the bud being its first `bud`; from the parent's place */
+  if(sp && t < sp.a) st.spawn = {p:(t - sp.s) / (sp.a - sp.s), bud:(sp.b - sp.s) / (sp.a - sp.s), par:sp.par, from:playPlace(sp.par, t)};
   if(nx){
     const dep = Math.max(s.t, nx.t - PLAY_TRAVEL * speed);
     if(t >= dep) st.move = {from:s.k, to:nx.k, p:(t - dep) / Math.max(1e-6, nx.t - dep)};
@@ -5401,6 +5456,7 @@ function playBox(tracks, t, look, linger){
   };
   tracks.forEach(tr => {
     if(tr.t0 > t + look || (tr.end !== null && tr.end + linger < t)) return;
+    if(tr.par && tr.t0 >= t){ const k = playPlace(tr.par, tr.t0); if(k) add(k); }   /* a child about to split off: its parent's place too */
     tr.stops.forEach((s, i) => {
       const nx = tr.stops[i + 1], until = nx ? nx.t : (tr.end !== null ? tr.end : Infinity);
       if(s.t <= t + look && until >= t - linger) add(s.k);
@@ -5466,6 +5522,7 @@ function playBuild(){
   PLAY.model = playModel(allNodes.filter(passes), rowsOf, n => livingP(n.p), playNow());
   const m = PLAY.model;
   PLAY.hero = PLAY_HERO ? m.tracks.find(tr => tr.n.p.id === PLAY_HERO) || null : null;
+  if(PLAY.hero) PLAY.hero.solo = true;   /* his entrance is the coronation, a pop-in: he does not split off */
   PLAY.t = Math.min(m.t1, Math.max(m.t0, PLAY.t));
   pbRange.min = m.t0; pbRange.max = m.t1; pbRange.step = .1;
   facesEl.innerHTML = ""; PLAY.faces.clear(); PLAY.more = [];
@@ -5591,6 +5648,7 @@ function playFace(tr){
   facesEl.appendChild(el);
   return {el, halo:el.firstChild, lbl:el.lastChild, x:0, y:0, mv:-1, ox:0, oy:0, ring:"", lblOn:false};
 }
+function playDrop(f){ f.el.remove(); if(f.neck) f.neck.remove(); }
 function playFaces(dt){
   const m = PLAY.model, t = PLAY.t, sp = PLAY.speed;
   /* a phone showing half the world has no room for full crowds: smaller faces, smaller crowds, fewer names */
@@ -5610,6 +5668,9 @@ function playFaces(dt){
     else { const a = atPlace.get(st.k); if(a) a.push(st); else atPlace.set(st.k, [st]); }
   });
   PLAY.onMap = onMap; PLAY.faceSize = size;
+  /* a parent swells a little while a bud grows on it */
+  const swell = new Map();
+  if(!REDUCED) live.forEach(st => { const w = st.spawn; if(w && w.p < w.bud) swell.set(w.par, Math.max(swell.get(w.par) || 0, Math.sin(Math.PI * w.p / w.bud))); });
   const groups = [];
   [...atPlace].sort((a, b) => b[1].length - a[1].length).forEach(([k, arr]) => {
     const [x, y] = playPt(k);
@@ -5688,7 +5749,7 @@ function playFaces(dt){
   movers.forEach(st => { if(st.fold) st.hide = true; });   /* their trail still draws the move */
   PLAY.crowd = groups.reduce((a, c) => Math.max(a, gap * Math.sqrt(Math.min(CAP, c.items.length))), 0) + size / 2;   /* the camera keeps room round the pins for every face a crowd can hold, whatever it shows now, so the two never chase each other */
   /* faces that have left the map */
-  PLAY.faces.forEach((f, tr) => { if(!live.has(tr)){ f.el.remove(); PLAY.faces.delete(tr); } });
+  PLAY.faces.forEach((f, tr) => { if(!live.has(tr)){ playDrop(f); PLAY.faces.delete(tr); } });
   const k = PLAY.snap || REDUCED ? 1 : 1 - Math.exp(-dt / .09);
   /* each "+N": beside its crowd, or on the place itself when no one there is drawn; names keep off them */
   const big = groups.filter(c => c.more > 0), chips = [];
@@ -5706,7 +5767,8 @@ function playFaces(dt){
   const order = movers.concat([...live.values()].filter(st => !st.move));   /* names: the travellers first */
   order.forEach(st => {
     const tr = st.tr;
-    if(st.fold){ const g = PLAY.faces.get(tr); if(g){ g.el.remove(); PLAY.faces.delete(tr); } return; }   /* counted in a +N, never drawn */
+    let bud = null;
+    if(st.fold){ const g = PLAY.faces.get(tr); if(g){ playDrop(g); PLAY.faces.delete(tr); } return; }   /* counted in a +N, never drawn */
     let f = PLAY.faces.get(tr);
     const fresh = !f;
     if(fresh){ f = playFace(tr); PLAY.faces.set(tr, f); }
@@ -5716,6 +5778,24 @@ function playFaces(dt){
       else if(f.mv !== st.i){ f.mv = st.i; f.ox = f.x - a[0]; f.oy = f.y - a[1]; }   /* leave from where the face stood */
       const p = REDUCED ? 0 : easeInOut(Math.min(1, st.move.p)), q = playArc(a, b, p);
       f.x = q[0] + f.ox * (1 - p); f.y = q[1] + f.oy * (1 - p);
+    } else if(st.spawn && !REDUCED){
+      /* splitting off: a bud grows out of the parent's face towards the child's own slot, the membrane between them
+         thins and pinches off, and the child glides on the journeys' arc to its slot, growing to full size */
+      const w = st.spawn, pf = PLAY.faces.get(w.par), P = pf && pf.el.style.display !== "none" ? [pf.x, pf.y] : playPt(w.from || st.k);
+      const R = (pf && pf.size || size) / 2;
+      let dx = st.x - P[0], dy = st.y - P[1], d = Math.hypot(dx, dy);
+      if(d < 1){ dx = .8; dy = -.6; d = 1; }
+      const ux = dx / d, uy = dy / d;
+      if(w.p < w.bud){
+        const u = w.p / w.bud, e = easeInOut(u), r = R * (.55 + 1.1 * e);
+        f.x = P[0] + ux * r; f.y = P[1] + uy * r;
+        bud = {sc:.16 + .44 * easeOut(u), op:Math.min(1, u * 4), u, x0:P[0] + ux * R * .45, y0:P[1] + uy * R * .45, a:Math.atan2(uy, ux), len:r - R * .45};
+      } else {
+        const g = (w.p - w.bud) / (1 - w.bud), q = playArc([P[0] + ux * R * 1.65, P[1] + uy * R * 1.65], [st.x, st.y], easeInOut(g));
+        f.x = q[0]; f.y = q[1];
+        bud = {sc:.6 + .4 * easeOut(g), op:1};
+      }
+      busy = true;
     } else {
       f.mv = -1;
       if(fresh) { f.x = st.x; f.y = st.y; }
@@ -5726,8 +5806,11 @@ function playFaces(dt){
     if(tr === PLAY.hero && PLAY.party) pop = Math.min(1, PLAY.party.e / .6);   /* the year stands still, his entrance does not */
     if(fresh) f.fi = PLAY.snap || REDUCED || pop < 1 ? 1 : 0;   /* a face back on the map mid-life (alone again) fades in */
     if(f.fi < 1){ f.fi = Math.min(1, f.fi + dt / .35); busy = true; }
-    let sc = REDUCED || pop >= 1 ? 1 : .35 + .65 * easeBack(pop), op = 1, gray = 0, ring = "", rs = 1, ro = 0;
-    if(pop < 1 && !REDUCED){ ring = tr.born ? "born" : "first"; rs = 1 + .9 * easeOut(pop); ro = .9 * (1 - pop); }
+    let sc = REDUCED || pop >= 1 || st.spawned ? 1 : .35 + .65 * easeBack(pop), op = 1, gray = 0, ring = "", rs = 1, ro = 0;
+    if(pop < 1 && !REDUCED && !st.spawn){ ring = tr.born ? "born" : "first"; rs = 1 + .9 * easeOut(pop); ro = .9 * (1 - pop); }   /* after a split, the ring on arrival */
+    if(bud){ sc = bud.sc; op = bud.op; }
+    else if(st.spawn) op = Math.min(1, st.spawn.p * 1.5);   /* reduced motion: a plain fade in its own place */
+    if(swell.has(tr)) sc *= 1 + .1 * swell.get(tr);
     if(st.end >= 0){
       const p = Math.min(1, st.end);
       op = 1 - easeInOut(p); gray = p;
@@ -5747,17 +5830,29 @@ function playFaces(dt){
     if(f.size !== fs){ f.size = fs; el.style.width = el.style.height = fs + "px"; el.style.margin = (-fs / 2) + "px 0 0 " + (-fs / 2) + "px"; }
     if(!st.hide){
       marks.push([f.x - fs / 2 - 1, f.y - fs / 2 - 1, fs + 2, fs + 2]);
-      if(st.g && !st.move) st.g.bot = Math.max(st.g.bot === undefined ? -Infinity : st.g.bot, f.y + fs / 2);
+      if(st.g && !st.move && !bud) st.g.bot = Math.max(st.g.bot === undefined ? -Infinity : st.g.bot, f.y + fs / 2);
     }
     el.style.transform = `translate(${f.x.toFixed(1)}px,${f.y.toFixed(1)}px) scale(${sc.toFixed(3)})`;
     if(f.fi < 1) op *= easeOut(f.fi);
     el.style.opacity = op < 1 ? op.toFixed(3) : "";
     el.style.filter = gray ? `grayscale(${gray.toFixed(2)})` : "";
+    /* the membrane between a bud and its parent: it stretches as the bud grows, then thins to nothing */
+    const nk = bud && bud.u !== undefined && !st.hide ? bud : null;
+    if(nk && !f.neck){ f.neck = document.createElement("i"); f.neck.className = "pfneck"; f.neck.style.background = BC[tr.n.branch] || "var(--ink-soft)"; facesEl.appendChild(f.neck); }
+    if(f.neck){
+      f.neck.style.display = nk ? "" : "none";
+      if(nk){
+        const th = R0 => R0 * (nk.u < .5 ? easeOut(nk.u / .5) : 1 - easeInOut((nk.u - .5) / .5));
+        const h = Math.max(.1, th(size * .42));
+        f.neck.style.width = Math.max(1, nk.len).toFixed(1) + "px"; f.neck.style.height = h.toFixed(1) + "px";
+        f.neck.style.transform = `translate(${nk.x0.toFixed(1)}px,${(nk.y0 - h / 2).toFixed(1)}px) rotate(${nk.a.toFixed(3)}rad)`;
+      }
+    }
     if(f.ring !== ring){ f.ring = ring; f.halo.className = "halo" + (ring ? " " + ring : ""); }
     f.halo.style.transform = `scale(${rs.toFixed(3)})`; f.halo.style.opacity = ro.toFixed(3);
     /* in a list, everyone's name; elsewhere a name while someone arrives or travels, where it does not cover another */
     let on = false, left = false;
-    if(st.slot){ on = !st.hide && st.end < 0 && !(tr === PLAY.hero && PLAY.party); left = st.slot.l; }
+    if(st.slot){ on = !st.hide && st.end < 0 && !st.spawn && !(tr === PLAY.hero && PLAY.party); left = st.slot.l; }   /* a name once split off */
     else if(!st.hide && st.end < 0 && (st.move || (pop > .45 && pop < 1.8)) && named < NAMES && !(tr === PLAY.hero && PLAY.party)){
       const wpx = tr.n.p.name.length * 6.3 + 14;
       left = f.x + size / 2 + 3 + wpx > mapEl.clientWidth - 6;   /* near the right edge the name goes on the left */
@@ -5767,7 +5862,7 @@ function playFaces(dt){
     }
     if(on !== f.lblOn){ f.lblOn = on; f.lbl.style.display = on ? "block" : ""; }
     if(on && left !== f.lblL){ f.lblL = left; f.lbl.classList.toggle("l", left); }
-    el.style.zIndex = tr === PLAY.hero ? (PLAY.party ? 6 : 5) : st.move ? 4 : on ? 3 : st.end >= 0 ? 1 : 2;   /* a named face over its neighbours, so its name shows */
+    el.style.zIndex = tr === PLAY.hero ? (PLAY.party ? 6 : 5) : st.move || bud ? 4 : on ? 3 : st.end >= 0 ? 1 : 2;   /* a named face over its neighbours, so its name shows */
   });
   /* "+N" beside a crowd too big to draw in full */
   while(PLAY.more.length < big.length){ const s = document.createElement("span"); s.className = "pfmore"; facesEl.appendChild(s); PLAY.more.push(s); }

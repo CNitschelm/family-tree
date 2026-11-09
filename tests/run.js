@@ -1547,11 +1547,76 @@ section("Play");
     return !b || x < b.x0 - 1e-12 || x > b.x1 + 1e-12 || y < b.y0 - 1e-12 || y > b.y1 + 1e-12;
   })());
   ok(!missed.length, "every arrival is in the camera's view two seconds before it happens" + (missed.length ? " — not: " + missed.length : ""));
-  const at = pg("playAt"), tr = M.tracks.find(x => x.stops.length > 1 && x.end !== null);
+  const at = pg("playAt"), tr = M.tracks.find(x => x.stops.length > 1 && x.end !== null && !pg("playSpawn")(x, sp));
   if (tr) {
     const mid = tr.stops[1].t - .01;
     ok(at(tr, tr.t0 - .01, sp) === null && at(tr, mid, sp) && at(tr, mid, sp).move && at(tr, mid, sp).move.to === tr.stops[1].k &&
-       at(tr, tr.end + 10 * sp, sp) === null, "a face appears at its first record, travels to its next place, and is gone after its fade");
+       at(tr, tr.end + 10 * sp, sp) === null, "a face that pops in appears at its first record, travels to its next place, and is gone after its fade");
+  }
+  /* children split off their parents like a dividing cell (Cory, 9 Nov 2026: "instead of people popping up randomly, have
+     them 'spawn' like a cell does from their parent"), on the real data, at every speed. Checked against the play model
+     as it was before (a pop-in at the first record), written out again here. */
+  {
+    const POP = pg("PLAY_POP"), TRAVEL = pg("PLAY_TRAVEL"), FADE = pg("PLAY_FADE"), FADE_Q = pg("PLAY_FADE_Q"), BUD = pg("PLAY_BUD");
+    const spawnOf = pg("playSpawn"), placeOf = pg("playPlace");
+    const before = (tr, t, speed) => {   /* playAt as it was: a pop-in at the first record */
+      if (t < tr.t0) return null;
+      const fade = (tr.endKind === "faded" ? FADE_Q : FADE) * speed;
+      if (tr.end !== null && t >= tr.end + fade) return null;
+      let i = 0; while (i + 1 < tr.stops.length && tr.stops[i + 1].t <= t) i++;
+      const s = tr.stops[i], nx = tr.stops[i + 1];
+      const st = { k: s.k, i, pop: (t - tr.t0) / (POP * speed), end: tr.end !== null && t >= tr.end ? (t - tr.end) / fade : -1, move: null };
+      if (nx) { const dep = Math.max(s.t, nx.t - TRAVEL * speed); if (t >= dep) st.move = { from: s.k, to: nx.k, p: (t - dep) / Math.max(1e-6, nx.t - dep) }; }
+      return st;
+    };
+    const same = (a, b, pop) => (a === null) === (b === null) && (a === null || (a.k === b.k && a.i === b.i && Math.abs(a.end - b.end) < 1e-9 &&
+      JSON.stringify(a.move) === JSON.stringify(b.move) && (!pop || Math.abs(a.pop - b.pop) < 1e-9)));
+    const SPEEDS = pg("PLAY_SPEEDS");
+    let spawned = 0, bad = [], popBad = [], deathBad = [], staggered = 0, stagBad = [], camBad = [], roots = 0;
+    for (const speed of SPEEDS) {
+      M.tracks.forEach(tr => {
+        const w = spawnOf(tr, speed);
+        const times = [tr.t0 - .01, tr.t0, tr.t0 + .3 * speed, tr.t0 + 3 * speed, ...tr.stops.map(s => s.t + .01)];
+        if (tr.end !== null) times.push(tr.end - .01, tr.end + .5 * speed, tr.end + 10 * speed);
+        if (!w) {   /* a pop-in, exactly as before */
+          if (!tr.par) roots++;
+          if (times.some(t => !same(at(tr, t, speed), before(tr, t, speed), true))) popBad.push(tr.n.p.id + "@" + speed);
+          return;
+        }
+        spawned++;
+        /* it starts at its parent, who is on the map (popped in, not fading) for the whole bud, and arrives when its
+           record says (or a little later, behind a brother or sister): at its own first place, where its ring then shows */
+        const ps = at(w.par, w.s, speed), pb = at(w.par, w.b, speed), s0 = at(tr, w.s, speed), sa = at(tr, w.a, speed);
+        if (!(at(tr, w.s - .001, speed) === null && ps && pb && ps.pop >= 1 && ps.end < 0 && pb.end < 0 && s0 && s0.spawn && s0.spawn.p === 0 &&
+              s0.spawn.par === tr.par && s0.spawn.from === ps.k && s0.spawn.from === placeOf(w.par, w.s) && w.a >= tr.t0 - 1e-9 &&
+              w.a <= tr.t0 + 2 * BUD * speed + 1e-9 && sa && !sa.spawn && sa.k === tr.stops[0].k && Math.abs(sa.pop) < 1e-9 && (!sa.move || sa.move.p < 1e-9)))
+          bad.push(tr.n.p.id + "@" + speed);
+        /* after it arrives, everything is as before, its end too */
+        const after = times.filter(t => t >= w.a);
+        if (after.some(t => !same(at(tr, t, speed), before(tr, t, speed), false))) deathBad.push(tr.n.p.id + "@" + speed);
+        /* the camera holds the parent's place two seconds before the bud starts */
+        const bx = box(M.tracks, w.s - 2 * speed, LOOK * speed, LINGER * speed), g = G[ps.k], x = pg("prjX")(g.lon), y = pg("prjY")(g.lat);
+        if (!bx || x < bx.x0 - 1e-12 || x > bx.x1 + 1e-12 || y < bx.y0 - 1e-12 || y > bx.y1 + 1e-12) camBad.push(tr.n.p.id + "@" + speed);
+      });
+      /* brothers and sisters close together split off one after another: a bud starts when the one before has pinched
+         off, or two buds late at most (then they overlap rather than wait for years at the fastest speed) */
+      M.tracks.forEach(p => {
+        const ks = (p.kids || []).map(k => [k, spawnOf(k, speed)]).filter(x => x[1]);
+        for (let i = 1; i < ks.length; i++) {
+          const [k, w] = ks[i], prev = ks[i - 1][1], lateBy = w.a - k.t0;
+          if (prev.b > k.t0 - (w.a - w.s) + 1e-9) { staggered++; if (!(w.s >= prev.b - 1e-9 || Math.abs(lateBy - 2 * BUD * speed) < 1e-9)) stagBad.push(k.n.p.id + "@" + speed); }
+          else if (Math.abs(lateBy) > 1e-9) stagBad.push(k.n.p.id + " late for nothing @" + speed);
+        }
+      });
+    }
+    ok(spawned > 200 * SPEEDS.length * .5 && roots > 0, "children split off their parents at every speed (" + spawned + " splits over " + SPEEDS.length + " speeds; the rest pop in)");
+    ok(!bad.length, "a child that splits off starts at its parent's place, with the parent on the map for the whole bud, and arrives at its own first place when its record says" + (bad.length ? " — not: " + bad.slice(0, 6).join(", ") : ""));
+    ok(!popBad.length, "with no parent on the map (the root, a parent not shown yet or faded), the pop-in is exactly as before" + (popBad.length ? " — not: " + popBad.slice(0, 6).join(", ") : ""));
+    ok(!deathBad.length, "after a split everything is as before: places, moves and the death or quiet fade" + (deathBad.length ? " — not: " + deathBad.slice(0, 6).join(", ") : ""));
+    ok(staggered > 0 && !stagBad.length, "twins and children of one year split off one after another (" + staggered + " staggered)" + (stagBad.length ? " — not: " + stagBad.slice(0, 6).join(", ") : ""));
+    ok(!camBad.length, "the camera holds the parent's place two seconds before a bud starts" + (camBad.length ? " — not: " + camBad.slice(0, 6).join(", ") : ""));
+    ok(/if\(PLAY\.hero\) PLAY\.hero\.solo = true;/.test(js) && /const PLAY_BUD = [\d.]+, PLAY_SLOT = [\d.]+;/.test(js) && /else if\(st\.spawn\) op = Math\.min\(1, st\.spawn\.p \* 1\.5\);/.test(js),
+      "his coronation stays a pop-in; reduced motion turns a split into a plain fade in the child's own place");
   }
   ok(/function playBuild\(\)\{\n  PLAY\.model = playModel\(allNodes\.filter\(passes\), rowsOf,/.test(js) && /function refreshMap\(refit\)\{\n  if\(playOn\(\)\)\{ playBuild\(\);/.test(js),
     "the page builds Play from the pins the map's filters show, each time it opens and when the filters change");

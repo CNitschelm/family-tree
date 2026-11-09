@@ -514,6 +514,11 @@ async function run() {
     const y2 = +(await page.textContent("#pbyear"));
     ok(y1 >= 1494 && y1 <= 1496 && y2 > y1, "it starts the year before the first record and the years run (" + y1 + " → " + y2 + ")");
     ok((await page.$$("#playfaces .pf")).length >= 1, "faces come onto the map");
+    /* children split off their parents like a dividing cell (Cory, 9 Nov 2026): a bud on a parent's face, the membrane
+       between them, then the child on its own */
+    let split = false;
+    try { await page.waitForFunction(() => [...document.querySelectorAll("#playfaces .pfneck")].some(n => n.style.display !== "none" && parseFloat(n.style.width) > 1), null, { timeout: 20000 }); split = true; } catch (_) {}
+    ok(split, "a child splits off its parent: a bud grows on the parent's face, joined by a membrane that pinches off");
     await page.click("#pbplay");
     await page.waitForTimeout(300);
     const y3 = await page.textContent("#pbyear");
