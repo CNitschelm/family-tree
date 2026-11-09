@@ -220,6 +220,7 @@ const reqLog = [];
 /* for the loading checks: a file that is missing for now (a 404 that may be cached, as Pages serves them),
    and a file that is slow to arrive */
 const FAIL = new Set(), DELAY = new Map();
+let LASTMOD = null;   /* a Last-Modified header for every file, as GitHub Pages sends the deploy's time (the footer's date) */
 const server = http.createServer((req, res) => {
   const u = decodeURIComponent(req.url.split("?")[0]);
   if (FAIL.has(u)) { reqLog.push({ u, s: 404 }); res.writeHead(404, { "Content-Type": "text/plain", "Cache-Control": "max-age=600" }); return res.end("missing"); }
@@ -231,6 +232,7 @@ const server = http.createServer((req, res) => {
     reqLog.push({ u, s: 200 });
     const head = { "Content-Type": types[path.extname(f)] || "application/octet-stream", "Content-Encoding": "gzip", ETag: etag, "Cache-Control": "max-age=600" };
     if (u.startsWith("/demo/")) head["Content-Security-Policy"] = DEMO_CSP;   /* the demo's folder: the policy its server sends */
+    if (LASTMOD) head["Last-Modified"] = LASTMOD;
     res.writeHead(200, head);
     res.end(zlib.gzipSync(body));
   };
@@ -660,21 +662,26 @@ async function run() {
   /* ---------------- every control's name holds its words, and the footer's date has its month's name (18 Oct 2026) ----------------
      The Play bar's speed button showed "10 yr/s" but was named "Speed: 10 years a second"; the map's markers showed
      "26" and "Alphaville +1" (or "1" and "Alphaville") in an order their names did not follow. The footer said "Data synced
-     2026-10-04": Cory wants the month by name ("4 Oct 2026"; "4 oct. 2026" in French). */
+     2026-10-04": Cory wants the month by name ("4 Oct 2026"; "4 oct. 2026" in French). Since 9 Nov 2026 it says "Updated" and
+     the day of the last deploy, from the server's Last-Modified (GitHub Pages stamps every file of a deploy): the desktop
+     run is served with one, the phone run without, where SYNCED stands in. */
   for (const [label, opts] of [["desktop", { viewport: { width: 1280, height: 800 } }], ["phone", { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }]]) {
     console.log("\n== " + label + ", label in name and the footer's date");
     const ctx = await browser.newContext(opts);
     const page = await ctx.newPage();
     watch(page, "names " + label);
+    LASTMOD = label === "desktop" ? "Tue, 03 Mar 2026 10:00:00 GMT" : null;
     await page.goto(BASE);
+    LASTMOD = null;
     await unlock(page);
     await page.waitForTimeout(600);
     const phone = label === "phone", view = v => phone ? page.tap('#dock [data-view="' + v + '"]') : page.click(v === "map" ? "#vt-map" : v === "research" ? "#vt-res" : "#vt-tree");
     for (const lang of ["en", "fr"]) {
       if (lang === "fr") { await page.evaluate(() => document.getElementById("lang").click()); await page.waitForTimeout(500); }
-      const want = await page.evaluate(lang => { const [y, m, d] = SYNCED.split("-").map(Number);
+      const want = await page.evaluate(([lang, iso]) => { const [y, m, d] = iso.split("-").map(Number);
         const mon = lang === "fr" ? ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."] : ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-        return (lang === "fr" ? "Données synchronisées " : "Data synced ") + (lang === "fr" && d === 1 ? "1er" : d) + " " + mon[m - 1] + " " + y; }, lang);
+        return (lang === "fr" ? "Mis à jour " : "Updated ") + (lang === "fr" && d === 1 ? "1er" : d) + " " + mon[m - 1] + " " + y; },
+        [lang, label === "desktop" ? "2026-03-03" : await page.evaluate(() => SYNCED)]);
       const foot = await page.evaluate(() => [document.getElementById("synctxt").textContent, document.getElementById("dsync").textContent]);
       ok(foot[0] === want && foot[1] === want, label + " " + lang + ": the footer and the menu say " + JSON.stringify(foot[0]) + " (" + want + ")");
       const bad = [];
@@ -1565,7 +1572,7 @@ async function run() {
       await page.waitForFunction(() => document.getElementById("intro").style.display === "flex" && !!document.querySelector("#istart .istc"), null, { timeout: 15000 });
       ok(true, label + ": the demo opens itself and shows its welcome, with the start buttons (the bios came from media/)");
       const foot = await page.evaluate(() => document.getElementById("synctxt").textContent);
-      ok(foot === "Data synced 27 Sep 2026", label + ": the demo's footer gives its date with the month's name (" + foot + ")");
+      ok(foot === "Updated 27 Sep 2026", label + ": the demo's footer gives its date with the month's name (" + foot + ")");
       await page.click("#introgo");
       await page.waitForTimeout(300);
       const t = await page.evaluate(() => { const b = [...document.querySelectorAll(".node")].find(x => (x.querySelector(".nm") || {}).textContent === "Probus Testmann");

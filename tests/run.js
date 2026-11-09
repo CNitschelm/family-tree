@@ -755,8 +755,25 @@ ok(/^\d{4}-\d{2}-\d{2}$/.test(SYNCED), "SYNCED is YYYY-MM-DD (" + SYNCED + ")");
   const MONFR = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
   ok(!!rd && say("en") === d + " " + MON[m - 1] + " " + y && say("fr") === (d === 1 ? "1er" : d) + " " + MONFR[m - 1] + " " + y,
     "the sync date reads with its month's name (" + (rd ? say("en") + " / " + say("fr") : "no rDate") + ")");
-  ok(/st\.textContent = ds\.textContent = T\("synced"\)\s*\+\s*" "\s*\+\s*rDate\(SYNCED\)/.test(code) && !/T\("synced"\)\s*\+\s*" "\s*\+\s*SYNCED\b/.test(code),
-    "the footer and the menu show that date, not SYNCED's digits");
+  ok(/st\.textContent = ds\.textContent = T\("synced"\)\s*\+\s*" "\s*\+\s*rDate\(lastDeploy\(\)\)/.test(code) && !/T\("synced"\)\s*\+\s*" "\s*\+\s*SYNCED\b/.test(code),
+    "the footer and the menu show the last deploy's date with its month's name, not digits");
+}
+/* "Updated <the day of the last deploy>" (Cory, 9 Nov 2026: "ideally its just the last deploy simple as that"). The footer
+   said "Data synced 4 Oct 2026" for a month: SYNCED was kept by a sync task that no longer runs. The page now reads its own
+   Last-Modified (document.lastModified), which GitHub Pages sets on every file of a deploy; SYNCED only stands in when a
+   server sends none, and the browser then gives the current time. */
+{
+  const lastDeploy = get("lastDeploy"), en = I18N.en || {}, fr = I18N.fr || {};
+  ok(en.synced === "Updated" && fr.synced === "Mis à jour", "the footer's label: \"Updated\" / \"Mis à jour\"");
+  ok(en.synced_note === "When this site was last updated." && fr.synced_note === "Date de la dernière mise à jour du site.",
+    "its hover note says what the date is, in English and French (the old upstream-rollback note is gone)");
+  const day = Date.parse("11/09/2026 10:30:23");
+  ok(lastDeploy("11/09/2026 10:30:23", day + 86400e3 * 3) === "2026-11-09" && lastDeploy("Mon, 09 Nov 2026 10:30:23 GMT", Date.parse("2026-12-01T00:00:00Z")).slice(0, 7) === "2026-11",
+    "lastDeploy gives the day the server's Last-Modified names (document.lastModified's form and the header's)");
+  const now = Date.parse("03/04/2027 08:00:00");
+  ok(lastDeploy("03/04/2027 08:00:00", now) === SYNCED && lastDeploy("03/04/2027 08:00:02", now) === SYNCED && lastDeploy("", now) === SYNCED && lastDeploy("not a date", now) === SYNCED,
+    "with no Last-Modified (the browser then gives the current time) or an unreadable one, SYNCED stands in");
+  ok(!/automated sync task/.test(html) && !/syncs from sometimes rolls back/.test(html), "nothing says a sync task keeps the date any more");
 }
 /* the Play bar's speed button (WCAG 2.5.3, label in name; 18 Oct 2026): its spoken name starts with the words on it,
    "10 yr/s", in both languages, and says "1 year", never "1 years" */

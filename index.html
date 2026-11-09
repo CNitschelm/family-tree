@@ -218,7 +218,7 @@ html.dark .idots i.on{background:var(--you)}
 #tip a{color:#9FD3FF;text-decoration:underline}
 html.dark #tip a{color:#0f5aa8} /* dark theme inverts the tooltip to a light background */
 .tsrc{margin-top:5px;padding-top:5px;border-top:1px solid rgba(255,255,255,.25);font-size:10.5px;line-height:1.6}
-#synctxt{border-bottom:1px dotted var(--ink-soft);cursor:help} /* hover shows the source-rollback note */
+#synctxt{border-bottom:1px dotted var(--ink-soft);cursor:help} /* hover says what the date is */
 #profile{position:fixed;inset:0;background:rgba(21,25,28,.55);display:none;align-items:center;justify-content:center;z-index:60;padding:18px}
 #profile .pcard{background:var(--panel);color:var(--ink);border:1px solid var(--rule);border-radius:14px;max-width:520px;width:100%;max-height:86vh;max-height:84dvh;overflow:auto;overscroll-behavior:contain;padding:26px 28px;box-shadow:0 12px 40px rgba(0,0,0,.35);position:relative}
 #profile .pclose{position:absolute;top:10px;right:14px;font-size:22px;cursor:pointer;color:var(--ink-soft);background:none;border:none}
@@ -1332,7 +1332,17 @@ html.dark #playbar .pcap.royal{background:linear-gradient(180deg,#4A3A10,#33280A
 
 <script>
 /* ---------------- DATA (verbatim from astrosurf.com/nitschelm, updated 2026-07-14) ---------------- */
-const SYNCED = "2026-10-04"; /* maintained by the automated sync task: update only when DATA changes */
+const SYNCED = "2026-11-09"; /* the day of the last deploy of this file's code: shown only when the server gives no date (lastDeploy) */
+/* "Updated <date>" in the footer and the menu: the day the site was last deployed (Cory, 9 Nov 2026: "ideally its just
+   the last deploy simple as that"). GitHub Pages stamps every file of a deploy with the deploy's time (Last-Modified), and
+   the browser gives it as document.lastModified, in local time. Without that header a browser gives the current time
+   instead; then SYNCED stands in. lm and now are for the tests. */
+function lastDeploy(lm, now){
+  const t = Date.parse(lm == null ? document.lastModified : lm), n = now == null ? Date.now() : now;
+  if (!isFinite(t) || Math.abs(n - t) < 5000) return SYNCED;
+  const d = new Date(t), p = x => String(x).padStart(2, "0");
+  return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+}
 /* ---------------- SITE: what differs between the builds made from this one file ----------------
    This file IS the family build. tools/build-demo.js makes the public demo from it,
    swapping only: this block, BRANCHES, REGIONS, the I18N strings its config names, the build
@@ -1397,8 +1407,8 @@ const I18N = {
       dead_auto:"Fold dead lines is now off: no one in the %s branch is living, so the switch would have folded all of it into one grey card. You can switch it back on in Filters.",
       dead_auto_n:"Fold dead lines is now off: no one in the %s branches is living, so the switch would have folded all of them into grey cards. You can switch it back on in Filters.",
       dead_left:"Fold dead lines is on, so the %s branch is folded into a grey card: no one in it is living. Open the grey card, or switch the fold off in Filters, to see it.",
-      dead_left_n:"Fold dead lines is on, so the %s branches are folded into grey cards: no one in them is living. Open a grey card, or switch the fold off in Filters, to see them.", gen:"Gen", author:"Author", synced:"Data synced",
-      synced_note:"Source site note: the family site this tree syncs from sometimes rolls back to an older copy, so a few recent facts here can no longer be seen there.",
+      dead_left_n:"Fold dead lines is on, so the %s branches are folded into grey cards: no one in them is living. Open a grey card, or switch the fold off in Filters, to see them.", gen:"Gen", author:"Author", synced:"Updated",
+      synced_note:"When this site was last updated.",
       hint:"Click a person to open their family and trace their line · click the background or “Start over” to go back to the start · drag / scroll to move", hint_m:"Tap a person to open their family and trace their line · tap the background to go back · drag to move, pinch to zoom",
       pwmsg:"This family tree is password protected.", pwbtn:"Unlock", pwerr:"Wrong password — try again.", pwph:"Password",
       stats_people:"people", stats_gens:"generations", stats_since:"records since",
@@ -1598,8 +1608,8 @@ const I18N = {
       dead_auto:"« Replier les lignées éteintes » est désactivé : personne n’est en vie dans la branche %s, que l’option aurait repliée en entier dans une fiche grise. Vous pouvez la réactiver dans Filtres.",
       dead_auto_n:"« Replier les lignées éteintes » est désactivé : personne n’est en vie dans les branches %s, que l’option aurait repliées en entier dans des fiches grises. Vous pouvez la réactiver dans Filtres.",
       dead_left:"« Replier les lignées éteintes » est activé : la branche %s est repliée dans une fiche grise, car personne n’y est en vie. Ouvrez la fiche grise, ou désactivez l’option dans Filtres, pour la voir.",
-      dead_left_n:"« Replier les lignées éteintes » est activé : les branches %s sont repliées dans des fiches grises, car personne n’y est en vie. Ouvrez une fiche grise, ou désactivez l’option dans Filtres, pour les voir.", gen:"Gén", author:"Auteur", synced:"Données synchronisées",
-      synced_note:"Note sur la source : le site familial dont cet arbre se synchronise revient parfois à une copie plus ancienne ; certains faits récents n'y sont donc plus visibles.",
+      dead_left_n:"« Replier les lignées éteintes » est activé : les branches %s sont repliées dans des fiches grises, car personne n’y est en vie. Ouvrez une fiche grise, ou désactivez l’option dans Filtres, pour les voir.", gen:"Gén", author:"Auteur", synced:"Mis à jour",
+      synced_note:"Date de la dernière mise à jour du site.",
       hint:"Cliquez sur une personne pour ouvrir sa famille et suivre sa lignée · cliquez sur le fond ou « Recommencer » pour revenir au départ · glissez / molette pour naviguer", hint_m:"Touchez une personne pour ouvrir sa famille et suivre sa lignée · touchez le fond pour revenir · glissez pour naviguer, pincez pour zoomer",
       pwmsg:"Cet arbre généalogique est protégé par mot de passe.", pwbtn:"Déverrouiller", pwerr:"Mot de passe incorrect — réessayez.", pwph:"Mot de passe",
       stats_people:"personnes", stats_gens:"générations", stats_since:"actes depuis",
@@ -3893,8 +3903,8 @@ function applyLang(){
   langB.title = T("lang_switch"); langB.setAttribute("aria-label", other + " — " + T("lang_switch"));
   applyTheme();
   const st = document.getElementById("synctxt"), ds = document.getElementById("dsync");
-  st.textContent = ds.textContent = T("synced")+" "+rDate(SYNCED);   /* "4 Oct 2026", "4 oct. 2026": the month by name, as Research writes dates (18 Oct 2026) */
-  st.title = ds.title = T("synced_note"); /* the upstream family site occasionally serves an older copy of itself */
+  st.textContent = ds.textContent = T("synced")+" "+rDate(lastDeploy());   /* "Updated 9 Nov 2026", "Mis à jour 9 nov. 2026": the month by name, as Research writes dates (18 Oct 2026) */
+  st.title = ds.title = T("synced_note");
   const gens = new Set(allNodes.map(n=>n.gen)).size;
   let minY = 9999;
   allNodes.forEach(n=>{

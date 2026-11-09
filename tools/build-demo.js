@@ -17,7 +17,8 @@
  *   slots     → the <!--build:NAME-->…<!--/build:NAME--> spans in the markup. A value may pull
  *               a file in with {{include:<file>}}. Every slot in the template needs a value,
  *               and every value needs a slot: a new slot fails the build until it is decided.
- *   synced, dataNote → the SYNCED date and the comment above it
+ *   synced, dataNote → the SYNCED date and the comment above it. The footer says "Updated <date>": the day the server's
+ *               Last-Modified header gives (the day the demo was last uploaded); SYNCED only when it sends none
  *   maplbl    → the reference place names, one "<rank><lon><lat>~<name>~<ISO2>" record per line. The map's
  *               layers are the template's coastlines and borders with these names, written as map/<hash>.json
  *               beside the page and fetched on the first Map open, as the family page fetches its own.
