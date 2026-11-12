@@ -21,10 +21,11 @@ const L = require('./lib.js');
 
 const DIR = path.join(__dirname, '..', 'sources');
 
-// How a source is named in prose, per sheet. Keys are sheet basenames.
+// How a source is named in prose, per sheet. Keys are sheet basenames. A source named after a person
+// (a member tree called after its owner) keeps its pattern in its own sheet's contract, as a line
+// "named: <regular expression>", so that no public file names the person (tests/run.js §14).
 const NAMED = {
   astrosurf: /\bthe family site\b|\bastrosurf\b|\ble site familial\b/i,
-  hoffman: /\bHoffman family tree\b|\bl['’]arbre Hoffman\b|\bthe Hoffman tree\b/i,
   baradel: /\bBaradel\b|\bSaiRePa\b|\bSAIREPA\b/i,
   'archives-alsace': /\bArchives d['’]Alsace\b|\bEDEPOT\b|\bAD Bas-Rhin\b|\boriginal register\b|\bregistre original\b/i,
   'us-records': /\bcensus\b|\brecensement\b|\bdeath index\b|\bmarriage index\b|\bFindAGrave\b|\bnaturalisation\b|\bnaturalization\b|\btract book\b|\bland patent\b/i,
@@ -56,7 +57,8 @@ function loadSheets() {
     const excludes = list(line('excludes')).map(cat => ({ cat, re: CATEGORY[cat] })).filter(e => e.re);
     const exempt = list(line('exempt'));
     const status = (text.match(/^status:\s*(\w+)/mi) || [])[1] || 'UNKNOWN';
-    return { key, name: NAMED[key], excludes, exempt, status, hasContract: !!block };
+    const named = NAMED[key] || (line('named') ? new RegExp(line('named'), 'i') : undefined);
+    return { key, name: named, excludes, exempt, status, hasContract: !!block };
   }).filter(s => s.name);
 }
 

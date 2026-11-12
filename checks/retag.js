@@ -21,7 +21,7 @@ function sourcePhrase(inv) {
   const t = inv.join(' \n ');
   const en = [], fr = [];
   if (/astrosurf|family site|site familial/i.test(t)) { en.push('the family site'); fr.push('le site familial'); }
-  if (/Hoffman/i.test(t)) { en.push('the Hoffman family tree'); fr.push('l’arbre Hoffman'); }
+  // (a line naming a second compiled tree was taken out on 12 Nov 2026: tests/run.js §14)
   if (/Ban de la Roche/i.test(t)) { en.push('the Ban de la Roche study'); fr.push('l’étude du Ban de la Roche'); }
   if (/Geneanet \((?:pierfit|elsebethn|patkohler)\)|member tree|Geneanet member/i.test(t)) {
     en.push('a Geneanet member tree'); fr.push('un arbre Geneanet de contributeur');

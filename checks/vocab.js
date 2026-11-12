@@ -101,7 +101,7 @@ const SOURCE_TYPES = [
     inv: /death|d[ée]c[èe]s|certificate|register|SSDI|index|FindAGrave|record/i },
   { key: 'ssdi', prose: /\bSSDI\b|\bsocial security\b/i, inv: /SSDI|Social Security|SSA/i },
   { key: 'familysite', prose: /\bfamily (?:web)?site\b|\bastrosurf\b|\bsite familial\b/i,
-    inv: /astrosurf|family site|site familial|Geneanet|Hoffman|famille/i },
+    inv: /astrosurf|family site|site familial|Geneanet|famille/i },
   { key: 'onlinetree', prose: /\bonline family tree\b|\bcompiled tree\b|\bmember tree\b|\barbre en ligne\b/i,
     inv: /Geneanet|astrosurf|FamilySearch|Ancestry|member tree|arbre|family tree/i },
   { key: 'deed', prose: /\b(?:the )?deed\b|\bland patent\b|\bland (?:entry|record)\b|\btract book\b/i,
@@ -111,7 +111,7 @@ const SOURCE_TYPES = [
 
 // how many sources of each family the card carries — for count assertions
 const SOURCE_FAMILIES = [
-  { key: 'compiled tree', re: /astrosurf|Geneanet|family tree|member tree|arbre|FamilySearch tree|Hoffman|family site|site familial/i },
+  { key: 'compiled tree', re: /astrosurf|Geneanet|family tree|member tree|arbre|FamilySearch tree|family site|site familial/i },
   { key: 'register',      re: /register|registre|acte|act n|BMS|EDEPOT|archives6[78]|AD Bas-Rhin|AD Haut-Rhin|paroiss|Kirchenbuch/i },
   { key: 'census',        re: /census|recensement/i }
 ];
