@@ -582,6 +582,70 @@ async function run() {
     const roomy = await sons();
     ok(roomy.sons.length === 9 && roomy.named === 8, "with room, the crowd is a list: everyone drawn, each named (" + JSON.stringify(roomy) + ")");
     await shot(page, "pl0-list.png");
+    /* a crowd keeps its shape (Cory, 14 Nov 2026: "whenever a new person is born, the whole group reshuffles and it's
+       chaotic movement. It needs to be smoother"). The camera is still here (it is on the home region, the visitor's), so
+       a face that moves on the screen moves in its crowd. From 1700 the nine sons are born at one place, one a year: once
+       a face stands in its place, no later birth moves it. From 1760 eight of them die, one a year: a death moves no
+       one, and then one face at most into the place left empty. (Until then every birth re-centred the list or shifted
+       the sunflower by a place, and every death moved everyone after it.) */
+    {
+      const seek = y => page.evaluate(v => { const r = document.getElementById("pbrange"); r.value = v; r.dispatchEvent(new Event("input", { bubbles: true })); r.dispatchEvent(new Event("change", { bubbles: true })); }, y);
+      /* every frame for ms: where each drawn face is (its name → [x, y]) */
+      const watchFaces = ms => page.evaluate(ms => new Promise(done => {
+        const t0 = performance.now(), frames = [];
+        const tick = () => {
+          const f = {};
+          document.querySelectorAll("#playfaces .pf").forEach(e => {
+            const m = /translate\(([-\d.]+)px,\s*([-\d.]+)px\)/.exec(e.style.transform);
+            if (m && e.style.display !== "none") f[e.getAttribute("aria-label").split(",")[0]] = [+m[1], +m[2]];
+          });
+          frames.push(f);
+          if (performance.now() - t0 < ms) requestAnimationFrame(tick); else done(frames);
+        };
+        requestAnimationFrame(tick);
+      }), ms);
+      const far = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+      while ((await page.textContent("#pbspeed")) !== "2 yr/s") await page.click("#pbspeed");
+      await seek(1699.6);
+      await page.waitForTimeout(300);
+      let seen = watchFaces(7000);
+      await page.click("#pbplay");
+      let frames = await seen;
+      await page.click("#pbplay");
+      const sonsSeen = [...new Set(frames.flatMap(f => Object.keys(f)))].filter(n => /^Child\d /.test(n));
+      let stirred = 0, never = 0;
+      sonsSeen.forEach(n => {
+        const seq = frames.map(f => f[n] || null);
+        /* in its place: still for half a second */
+        let rest = -1;
+        for (let i = 30; i < seq.length && rest < 0; i++) if (seq.slice(i - 30, i + 1).every(q => q && far(q, seq[i]) < .5)) rest = i;
+        if (rest < 0) { never++; return; }
+        stirred = Math.max(stirred, ...seq.slice(rest).filter(Boolean).map(q => far(q, seq[rest])));
+      });
+      ok(sonsSeen.length === 9 && !never && stirred <= 1, "nine births at one place, one a year: once a face stands in its place, no later birth moves it (" +
+        sonsSeen.length + " faces, " + never + " never still, the most any moved afterwards: " + stirred.toFixed(1) + " px)");
+      await shot(page, "pl0-births.png");
+      await seek(1759.6);
+      await page.waitForTimeout(300);
+      seen = watchFaces(7000);
+      await page.click("#pbplay");
+      frames = await seen;
+      await page.click("#pbplay");
+      let most = 0, moves = 0;
+      const going = new Set();
+      frames.forEach((f, i) => {
+        if (!i) return;
+        const now = Object.keys(f).filter(n => /^Child\d /.test(n) && frames[i - 1][n] && far(f[n], frames[i - 1][n]) > .3);
+        most = Math.max(most, now.length);
+        now.forEach(n => { if (!going.has(n)) moves++; });
+        going.clear(); now.forEach(n => going.add(n));
+      });
+      const there = n => Object.keys(frames[n]).filter(x => /^Child\d /.test(x)).length;
+      /* the ninth son is on his island, and dies there in these years too */
+      ok(there(0) === 9 && there(frames.length - 1) < 3 && most <= 2 && moves <= 8, "eight deaths at one place, one a year: a death moves no one, then one face at most into the place left empty (" +
+        there(0) + " faces at first, " + there(frames.length - 1) + " at the end; " + most + " moving at once at most, " + moves + " moves in all)");
+      while ((await page.textContent("#pbspeed")) !== "5 yr/s") await page.click("#pbspeed");
+    }
     await page.click("#pbfollow").catch(() => {});   /* the camera back to Play */
     await page.waitForTimeout(400);
     await shot(page, "pl1-play.png");

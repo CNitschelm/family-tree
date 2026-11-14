@@ -1333,7 +1333,7 @@ html.dark #playbar .pcap.royal{background:linear-gradient(180deg,#4A3A10,#33280A
 
 <script>
 /* ---------------- DATA (verbatim from astrosurf.com/nitschelm, updated 2026-07-14) ---------------- */
-const SYNCED = "2026-11-09"; /* the day of the last deploy of this file's code: shown only when the server gives no date (lastDeploy) */
+const SYNCED = "2026-11-14"; /* the day of the last deploy of this file's code: shown only when the server gives no date (lastDeploy) */
 /* "Updated <date>" in the footer and the menu: the day the site was last deployed (Cory, 9 Nov 2026: "ideally its just
    the last deploy simple as that"). GitHub Pages stamps every file of a deploy with the deploy's time (Last-Modified), and
    the browser gives it as document.lastModified, in local time. Without that header a browser gives the current time
@@ -5289,7 +5289,11 @@ function mapEscape(){
    appear, the parent's face swells a little, a bud grows on its edge and pinches off, and the child glides on the
    usual arc to their own first place (to their own slot when it is the parent's place), arriving when the record
    says, where the green or plain ring shows. With no parent on the map (the root, a parent not shown yet or already
-   faded) a face pops in as before; deaths are unchanged. */
+   faded) a face pops in as before; deaths are unchanged.
+   A crowd keeps its shape (Cory, 14 Nov 2026: "whenever a new person is born, the whole group reshuffles and it's
+   chaotic movement. It needs to be smoother"): a face keeps its place in its crowd, a newcomer takes a free one, and a
+   place left empty is filled by one face, not by everyone shifting along; the crowds block of the play model has the
+   rules, and playFaces applies them. */
 
 /* ---- play model: pure functions of the pins (tests/run.js runs this part on the real data) ---- */
 const PLAY_SPEEDS = [1, 2, 5, 10];        /* years a second */
@@ -5464,6 +5468,105 @@ function playBox(tracks, t, look, linger){
   });
   return any ? {x0, x1, y0, y1} : null;
 }
+/* ---- the crowds: who stands where (14 Nov 2026) ----
+   Cory: "whenever a new person is born, the whole group reshuffles and it's chaotic movement. It needs to be smoother".
+   Until then a crowd was laid out afresh every frame, in the order of arrival, round the middle of its places weighted
+   by their people. So one birth, death or move shifted everyone after it a place round the sunflower, re-centred a
+   list (or turned its one column into two), moved the middle of the crowd, and could change which place led it and
+   so who was grouped with whom. Now a face keeps its place: a newcomer takes a free one and nobody moves for it; when
+   someone leaves, the place stays empty for the next newcomer, and failing one the outermost face moves in (one face,
+   never the crowd); a crowd stands on one place, and keeps it and its members while the map allows. A jump in time
+   (the slider, a mark) lays everything out afresh, in the order of arrival, the first in the middle. */
+const PLAY_GOLD = 2.39996323;                 /* the sunflower's angle */
+const PLAY_COL = 6;                           /* a list's first column holds six; then a second opens beside it */
+const PLAY_HOLE = .6, PLAY_HOLE_NEXT = .25;   /* seconds an empty place waits for a newcomer before the outermost face takes it; the longest between two such moves */
+const PLAY_AHEAD = 10;                        /* seconds of play a crowd looks ahead before it becomes a list: no one may be about to come to a place under it */
+const PLAY_SETTLE = 9;                        /* how fast a face glides to its place (a critically damped spring: there in about half a second) */
+/* a sunflower's place number i, from the crowd's own place: the first in the middle */
+function playSunSlot(i, gap){ const r = gap * Math.sqrt(i), a = i * PLAY_GOLD; return [Math.cos(a) * r, Math.sin(a) * r]; }
+/* a list's place number i: [column, row]. Column 0 stands on the place; on a wide screen column 1 opens beside it
+   once column 0 holds PLAY_COL, fills to the same height, and then the two grow together. The rows are numbered in
+   the order the list opened them (playNextRow says where each one is) */
+function playListSlot(i, wide){
+  if(!wide || i < PLAY_COL) return [0, i];
+  if(i < 2 * PLAY_COL) return [1, i - PLAY_COL];
+  return [i % 2, PLAY_COL + ((i - 2 * PLAY_COL) >> 1)];
+}
+/* A list grows from its place outward, and the rows it has stay where they are, so a new row moves no one. rows: how
+   far each row is from the place, in rows (the first is 0, on the place). The next one goes below or above, whichever
+   keeps the list centred on its place (below, above, below…), unless only the other side has room on the screen. */
+function playNextRow(rows, above, below){
+  if(!rows.length) return 0;
+  const lo = Math.min(...rows), hi = Math.max(...rows), down = hi <= -lo;
+  return (down ? below || !above : below && !above) ? hi + 1 : lo - 1;
+}
+/* seconds a crowd must have had room for a list before it becomes one: the more people would move, the longer */
+function playListWait(n){ return Math.min(3, .15 * n); }
+/* Who stands where. `a` are the people a crowd draws first and `b` those it draws only when it has room (people on
+   dead lines with no portrait), each in order of arrival; held(x) is the place x had in this crowd in the last frame,
+   or -1. Everyone keeps their place; a newcomer takes the lowest free one; when the crowd is full a newcomer of `a`
+   takes the outermost place held by one of `b`. Returns Map(x → place): whoever is not in it waits in the "+N". */
+function playSeat(a, b, cap, held){
+  const used = new Set(), out = new Map(), wa = [], wb = [], second = new Set(b);
+  const keep = w => x => { const s = held(x); if(s >= 0 && s < cap && !used.has(s)){ used.add(s); out.set(x, s); } else w.push(x); };
+  a.forEach(keep(wa)); b.forEach(keep(wb));
+  let free = 0;
+  const next = () => { while(used.has(free)) free++; return free < cap ? free : -1; };
+  wa.forEach(x => {
+    let s = next();
+    if(s < 0){
+      let who = null;
+      out.forEach((p, o) => { if(second.has(o) && p > s){ s = p; who = o; } });
+      if(who !== null) out.delete(who);
+    }
+    if(s >= 0){ used.add(s); out.set(x, s); }
+  });
+  wb.forEach(x => { const s = next(); if(s >= 0){ used.add(s); out.set(x, s); } });
+  return out;
+}
+/* An empty place inside a crowd of n (a place below n that no one holds): [who, place, holes] — the outermost face
+   that may move (can(x)) and the lowest empty place — or null when the crowd is whole or that face is not free to move. */
+function playHole(seats, can){
+  const used = new Set(seats.values()), n = seats.size;
+  let hole = -1, holes = 0;
+  for(let i = n - 1; i >= 0; i--) if(!used.has(i)){ hole = i; holes++; }
+  if(hole < 0) return null;
+  let top = -1, who = null;
+  seats.forEach((s, x) => { if(s > top){ top = s; who = x; } });
+  return can(who) ? [who, hole, holes] : null;
+}
+/* Which places share a crowd. As before, places too close to tell apart at this zoom (within `merge` px, across and
+   down, of the crowd's own place) share one, the fullest places first. But a crowd now lasts from frame to frame: it
+   keeps its place while people are there (another of its places takes over only once it has clearly outgrown it), a
+   place stays with its crowd until it is clearly apart (1.3 × merge), and of two crowds that come too close the bigger
+   takes the other's places. So a birth never changes who is grouped with whom, and a crowd does not flicker between
+   one and two as the camera moves.
+   count: Map(place → people there); pt(place) → [x, y]; old: last frame's crowds [{id, k, places:Set, n}].
+   Returns [{c: the crowd carried on (null: a new one), k: its place, p: that place's point, places:[…]}]. */
+function playCrowds(count, pt, merge, old){
+  const near = (a, b, d) => Math.abs(a[0] - b[0]) < d && Math.abs(a[1] - b[1]) < d;
+  const groups = [], heads = [], was = new Map(), taken = new Set();
+  old.forEach(c => {
+    let top = null;
+    c.places.forEach(k => { was.set(k, c); if(count.has(k) && (top === null || count.get(k) > count.get(top))) top = k; });
+    if(top === null) return;   /* everyone has left */
+    heads.push({c, k:count.has(c.k) && !(count.get(top) > 1.5 * count.get(c.k) + 1) ? c.k : top});
+  });
+  heads.sort((a, b) => b.c.n - a.c.n || a.c.id - b.c.id);
+  heads.forEach(h => {
+    const p = pt(h.k);
+    if(groups.some(g => near(g.p, p, merge))) return;   /* too close to a bigger crowd to tell apart: its places join that one below */
+    groups.push({c:h.c, k:h.k, p, places:[h.k]}); taken.add(h.k);
+  });
+  [...count.keys()].filter(k => !taken.has(k)).sort((a, b) => count.get(b) - count.get(a) || (a < b ? -1 : a > b ? 1 : 0)).forEach(k => {
+    const p = pt(k), w = was.get(k);
+    const g = (w && groups.find(x => x.c === w && near(x.p, p, merge * 1.3))) || groups.find(x => near(x.p, p, merge));
+    if(g) g.places.push(k); else groups.push({c:null, k, p, places:[k]});
+  });
+  return groups;
+}
+/* one step of a critically damped spring from x (speed v) towards 0, exact for any dt: [x, v] */
+function playSpring(x, v, w, dt){ const e = Math.exp(-w * dt), c = v + w * x; return [(x + c * dt) * e, (c - w * (x + c * dt)) * e]; }
 /* ---- end of the play model ---- */
 
 /* ---- play view: the faces, the trails, the camera and the bar ---- */
@@ -5474,7 +5577,7 @@ const pbHist = document.getElementById("pbhist"), pbMarks = document.getElementB
 const pbPlay = document.getElementById("pbplay"), pbSpeed = document.getElementById("pbspeed"), pbFollow = document.getElementById("pbfollow");
 const PLAY = {on:false, playing:false, t:-Infinity, model:null, speed:2, follow:true, snap:true, faces:new Map(), more:[], raf:null, last:0,
   idle:0, ended:false, drag:false, wasPlaying:false, onMap:0, history:null, histP:null, hist:null, histKey:"", hinted:false,
-  hero:null, party:null, ac:undefined, faceSize:26, watched:0, skipped:false, capQ:[], capT:null};
+  hero:null, party:null, ac:undefined, faceSize:26, watched:0, skipped:false, capQ:[], capT:null, crowds:[], cid:0};
 let PCAM = null;   /* the camera's spring: centre (map units) and log of the world width, with their speeds */
 const easeOut = p => 1 - Math.pow(1 - p, 3);
 const easeInOut = p => p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
@@ -5600,6 +5703,7 @@ function playInsets(){
    about five seconds before a pin lands somewhere new. A critically damped spring with a cap on how fast it may
    zoom and pan keeps every move gentle; zooming out wide before panning far falls out of the pan cap. */
 function playCamera(dt){
+  PLAY.calm = true;   /* the camera is where it wants to be (or the visitor has it): a crowd may take a new form */
   if(!PLAY.follow) return false;
   const m = PLAY.model, w = mapEl.clientWidth, h = mapEl.clientHeight, ins = playInsets();
   if(!m || !w || !h) return false;
@@ -5632,10 +5736,13 @@ function playCamera(dt){
     }
   }
   MS = Math.exp(PCAM.l); MTX = midX - PCAM.x * MS; MTY = midY - PCAM.y * MS;
+  PLAY.calm = Math.abs(tl - PCAM.l) < .03 && Math.hypot(tx - PCAM.x, ty - PCAM.y) * MS < 12;
   return Math.abs(tl - PCAM.l) > .002 || Math.hypot(tx - PCAM.x, ty - PCAM.y) * MS > .5 || Math.abs(PCAM.vl) > .002 || Math.hypot(PCAM.vx, PCAM.vy) * MS > .5;
 }
 /* the faces: everyone on the map at this moment. Faces at one place (or places too close to tell apart at this
-   zoom) gather in one crowd, the first to arrive in the middle; a face on the move follows its arc. */
+   zoom) gather in one crowd; a face on the move follows its arc. A face keeps its place in its crowd from frame to
+   frame (the crowds block of the play model says how and why), and stands there relative to the crowd's own place on
+   the map: so the camera carries a crowd whole, and only a face with somewhere new to go moves, on a spring. */
 function playFace(tr){
   const p = tr.n.p, el = document.createElement("div");
   el.className = "pf" + (p.g === "m" ? " sq" : "");
@@ -5646,7 +5753,11 @@ function playFace(tr){
   el._onTap = () => { PLAY.playing = false; playStop(); showJourney(tr.n); };   /* their journey; Play goes on from here next time */
   if(tr === PLAY.hero && MEDIA_RE.test(p.imgL || "")) mediaURL(p.imgL).then(u => { el.querySelector("img").src = u; }).catch(() => {});   /* sharp when he swells */
   facesEl.appendChild(el);
-  return {el, halo:el.firstChild, lbl:el.lastChild, x:0, y:0, mv:-1, ox:0, oy:0, ring:"", lblOn:false};
+  /* at: what the face did in the last frame (0 not drawn, 1 in its place, 2 travelling, 3 splitting off); c and slot: its
+     crowd and its place there; dx, dy: where it stands from that crowd's own place ak (plus a list's slide, ax, ay);
+     lx, ly: while it travels or splits off, where the place kept for it is, from where it is heading */
+  return {el, halo:el.firstChild, lbl:el.lastChild, x:0, y:0, mv:-1, ox:0, oy:0, ring:"", lblOn:false,
+    at:0, c:null, slot:-1, dx:0, dy:0, vx:0, vy:0, ak:"", ax:0, ay:0, sig:"", cc:null, lx:0, ly:0};
 }
 function playDrop(f){ f.el.remove(); if(f.neck) f.neck.remove(); }
 function playFaces(dt){
@@ -5671,86 +5782,151 @@ function playFaces(dt){
   /* a parent swells a little while a bud grows on it */
   const swell = new Map();
   if(!REDUCED) live.forEach(st => { const w = st.spawn; if(w && w.p < w.bud) swell.set(w.par, Math.max(swell.get(w.par) || 0, Math.sin(Math.PI * w.p / w.bud))); });
-  const groups = [];
-  [...atPlace].sort((a, b) => b[1].length - a[1].length).forEach(([k, arr]) => {
-    const [x, y] = playPt(k);
-    const host = groups.find(c => Math.abs(c.x - x) < merge && Math.abs(c.y - y) < merge);
-    if(host){ host.items.push(...arr); host.sx += x * arr.length; host.sy += y * arr.length; host.n += arr.length; }
-    else groups.push({k, x, y, items:arr.slice(), sx:x * arr.length, sy:y * arr.length, n:arr.length});
+  /* the crowds of this frame, each carried on from the last one (playCrowds); a jump in time starts them afresh */
+  if(PLAY.snap) PLAY.crowds = [];
+  const count = new Map(), crowdAt = new Map();
+  atPlace.forEach((arr, k) => count.set(k, arr.length));
+  const groups = playCrowds(count, playPt, merge, PLAY.crowds).map(g => {
+    const s = g.c || {id:++PLAY.cid, form:"", wait:0};
+    s.k = g.k; s.places = new Set(g.places);
+    const c = {s, k:g.k, cx:g.p[0], cy:g.p[1], items:[], due:[]};
+    g.places.forEach(k => { c.items.push(...atPlace.get(k)); crowdAt.set(k, c); });
+    s.n = c.items.length;
+    return c;
   });
-  /* A crowd is a sunflower of faces round its place, the first to arrive in the middle. Who is drawn depends on the
-     room round it (Cory, 17 Oct 2026, of a crowd alone on a zoomed-in map: "there is definitely enough room to show all
-     people / names"): with room, a list of everyone, each named; with less, every face it can hold; with none, people
-     on dead lines with no portrait wait in its +N ("the map gets way too busy"), and a face always shows ("never show
-     JUST the +x"). The smallest crowds choose first; a crowd keeps its form until it really no longer fits. */
+  PLAY.crowds = groups.map(c => c.s);
+  /* someone on the way to a crowd is expected there: a place is kept for them, and they land in it */
+  movers.forEach(st => { const c = st.fold ? null : crowdAt.get(st.move.to); if(c){ c.due.push(st); st.to = c; } });
+  /* A crowd is a sunflower of faces round its place. Who is drawn depends on the room round it (Cory, 17 Oct 2026, of a
+     crowd alone on a zoomed-in map: "there is definitely enough room to show all people / names"): with room, a list of
+     everyone, each named; with less, every face it can hold; with none, people on dead lines with no portrait wait in
+     its +N ("the map gets way too busy"), and a face always shows ("never show JUST the +x"). The smallest crowds choose
+     first; a crowd keeps its form until it really no longer fits. */
   groups.forEach(c => {
-    c.cx = c.sx / c.n; c.cy = c.sy / c.n;
     c.items.sort((a, b) => a.since - b.since || a.tr.n.id - b.tr.n.id);
     c.items.forEach(st => { st.g = c; });
-    c.shown = Math.min(CAP, c.items.filter(st => !st.fold).length);
+    c.a = c.items.filter(st => !st.fold); c.b = c.items.filter(st => st.fold);
+    c.shown = Math.min(CAP, c.a.length);
     const e = gap * Math.sqrt(Math.max(0, c.shown - 1)) + size / 2;
     c.box = [c.cx - e, c.cy - e, 2 * e, 2 * e];
   });
-  const MW = mapEl.clientWidth, MH = mapEl.clientHeight, ins = playInsets(), was = PLAY.modes || new Map(), modes = new Map();
+  const MW = mapEl.clientWidth, MH = mapEl.clientHeight, ins = playInsets();
   const over = (a, b) => a[0] < b[0] + b[2] && a[0] + a[2] > b[0] && a[1] < b[1] + b[3] && a[1] + a[3] > b[1];
   const fits = (c, box, mode) => {
-    const pad = was.get(c.k) === mode ? 0 : 10, b = [box[0] - pad, box[1] - pad, box[2] + 2 * pad, box[3] + 2 * pad];
+    const pad = c.s.form === mode ? 0 : 10, b = [box[0] - pad, box[1] - pad, box[2] + 2 * pad, box[3] + 2 * pad];
     return b[0] >= 4 && b[1] >= ins.top + 4 && b[0] + b[2] <= MW - 4 && b[1] + b[3] <= MH - ins.bottom - 4 && !groups.some(o => o !== c && over(b, o.box));
   };
+  /* the place a face held in this crowd in the last frame, while the crowd keeps its shape (a list, or a sunflower) */
+  const held = (c, list) => (c.s.form === "list") === list ? st => { const f = PLAY.faces.get(st.tr); return f && f.c === c.s ? f.slot : -1; } : () => -1;
   const nameW = st => st.tr.n.p.name.length * 6.3 + 14, rowH = size + 4, RMAX = small ? 8 : 24;
   const byRoom = groups.slice().sort((a, b) => a.items.length - b.items.length);
-  byRoom.forEach(c => {   /* a list: one column, two past six people on a wide screen, names outward */
-    const n = c.items.length;
-    if(n > RMAX || (PLAY.party && c.items.some(st => st.tr === PLAY.hero))) return;   /* his coronation is in a crowd */
-    const cols = !small && n > 6 ? 2 : 1, rows = Math.ceil(n / cols), y0 = c.cy - (rows - 1) * rowH / 2, hgt = (rows - 1) * rowH + size + 16;   /* and its place's name below */
-    let box, slots;
-    if(cols === 1){
-      const wn = Math.max(...c.items.map(nameW)), right = c.cx + size / 2 + 5 + wn <= MW - 6;   /* names on the left near the right edge */
-      box = [right ? c.cx - size / 2 : c.cx - size / 2 - 5 - wn, y0 - size / 2, size + 5 + wn, hgt];
-      slots = c.items.map((st, i) => ({x:c.cx, y:y0 + i * rowH, l:!right}));
-    } else {   /* even places on the right, odd on the left, so a newcomer moves no one across */
-      const xr = c.cx + size / 2 + 1, xl = c.cx - size / 2 - 1;
-      const x0 = xl - size / 2 - 5 - Math.max(...c.items.filter((st, i) => i % 2).map(nameW)), x1 = xr + size / 2 + 5 + Math.max(...c.items.filter((st, i) => !(i % 2)).map(nameW));
-      box = [x0, y0 - size / 2, x1 - x0, hgt];
-      slots = c.items.map((st, i) => ({x:i % 2 ? xl : xr, y:y0 + (i >> 1) * rowH, l:!!(i % 2)}));
+  const keepers = form => byRoom.filter(c => c.s.form === form).concat(byRoom.filter(c => c.s.form !== form));   /* a crowd that has a form keeps it before another takes it up */
+  /* the places someone comes to in the next PLAY_AHEAD seconds of play (a birth, a first record, a move) */
+  let soon = null;
+  const comingTo = (c, box) => {
+    if(!soon){
+      soon = [];
+      const t1 = t + PLAY_AHEAD * sp;
+      m.tracks.forEach(tr => { if(tr.t0 <= t1 && (tr.end === null || tr.end >= t)) tr.stops.forEach(x => { if(x.t > t && x.t <= t1) soon.push([x.k].concat(playPt(x.k))); }); });
     }
-    /* near an edge, the top or the bar below, a list may slide up to half its size away from its place; the place's
-       name stays under it */
-    const pad = was.get(c.k) === "list" ? 0 : 10, lo = ins.top + 4 + pad, hi = MH - ins.bottom - 4 - pad, le = 4 + pad, ri = MW - 4 - pad;
+    return soon.some(q => !c.s.places.has(q[0]) && q[1] > box[0] - size && q[1] < box[0] + box[2] + size && q[2] > box[1] - size && q[2] < box[1] + box[3] + size);
+  };
+  /* A list's shape for the places `at` (Map(face → [column, row number])): its rows (those it has stay; a new one opens
+     below or above, on the side with room: playNextRow), the side of its second column (the left, or the right when only
+     that side has room; it stays there), its box, and its slide: near an edge, the top or the bar below, a list may slide
+     up to half its size away from its place; the place's name stays under it. */
+  const listShape = (c, at, rows, side0, pad) => {
+    let last = 0, two = false, wA = 0, wB = 0;
+    at.forEach((o, st) => { const w = st ? nameW(st) : 110; if(o[1] > last) last = o[1]; if(o[0]){ two = true; if(w > wB) wB = w; } else if(w > wA) wA = w; });
+    rows = rows.slice(0, last + 1);
+    while(rows.length <= last){
+      const r0 = Math.min(0, ...rows), r1 = Math.max(0, ...rows);
+      rows.push(playNextRow(rows, c.cy + (r0 - 1) * rowH - size / 2 >= ins.top + 4, c.cy + (r1 + 1) * rowH + size / 2 + 16 <= MH - ins.bottom - 4));
+    }
+    const r0 = Math.min(...rows), r1 = Math.max(...rows);
+    const top = c.cy + r0 * rowH - size / 2, hgt = (r1 - r0) * rowH + size + 16;   /* and its place's name below */
+    const wide2 = 2 * size + 12 + wA + wB, xL = c.cx - size - 2 - size / 2 - 5 - wB, xR = c.cx - size / 2 - 5 - wA;
+    const side = !two ? 0 : side0 || (xL >= 4 || xR + wide2 > MW - 4 ? -1 : 1);
+    const right = two ? side < 0 : c.cx + size / 2 + 5 + wA <= MW - 6;   /* the names beside the place: on the right, or on the left near the right edge */
+    const box = two ? [side < 0 ? xL : xR, top, wide2, hgt] : [right ? c.cx - size / 2 : xR, top, size + 5 + wA, hgt];
+    const lo = ins.top + 4 + pad, hi = MH - ins.bottom - 4 - pad, le = 4 + pad, ri = MW - 4 - pad;
     const dy = box[1] < lo ? lo - box[1] : box[1] + hgt > hi ? hi - box[1] - hgt : 0;
     const dx = box[0] < le ? le - box[0] : box[0] + box[2] > ri ? ri - box[0] - box[2] : 0;
-    if(Math.abs(dy) > hgt / 2 || Math.abs(dx) > box[2] / 2 || !fits(c, [box[0] + dx, box[1] + dy, box[2], hgt], "list")) return;
-    box[0] += dx; box[1] += dy; slots.forEach(o => { o.x += dx; o.y += dy; });
-    c.box = box; c.list = slots; c.lx = c.cx + dx; modes.set(c.k, "list");
+    return {rows, side, right, dx, dy, ok:Math.abs(dy) <= hgt / 2 && Math.abs(dx) <= box[2] / 2, box:[box[0] + dx, box[1] + dy, box[2], hgt],
+      sig:"L" + [box[0] - c.cx, box[1] - c.cy, box[2], hgt].map(Math.round).join()};   /* the list's own shape: while it holds, a slide is the camera's doing */
+  };
+  keepers("list").forEach(c => {   /* a list: a column from the place outward, a second beside it past six people on a wide screen, names outward */
+    const s = c.s, isList = s.form === "list", n = c.items.length + c.due.length;
+    if(n > RMAX || (PLAY.party && c.items.some(st => st.tr === PLAY.hero))){ s.room = 0; return; }   /* his coronation is in a crowd */
+    const seats = playSeat(c.items.concat(c.due), [], RMAX, held(c, true)), at = new Map(), used = new Set(seats.values());
+    seats.forEach((v, st) => at.set(st, playListSlot(v, !small)));
+    let shape = listShape(c, at, isList ? s.rows : [], isList ? s.side : 0, isList ? 0 : 10);
+    if(!shape.ok || !fits(c, shape.box, "list")) shape = null;
+    else if(!isList){   /* a crowd becomes a list only with room for one more and, while the years run, no one about to come to a place under it: the next birth must not undo it */
+      let free = 0;
+      while(used.has(free)) free++;
+      const one = listShape(c, new Map(at).set(null, playListSlot(free, !small)), [], 0, 10);
+      if(!one.ok || !fits(c, one.box, "list") || (PLAY.playing && comingTo(c, one.box))) shape = null;
+    }
+    if(!shape){ s.room = 0; return; }
+    /* and only once the room has lasted with the camera at rest (everyone in the crowd moves): at once after a jump in
+       time, and almost at once while the years stand still or the visitor has the camera */
+    if(!isList && !PLAY.snap){
+      if(PLAY.calm) s.room = (s.room || 0) + dt;
+      busy = true;
+      if(s.room < (PLAY.playing && PLAY.follow ? playListWait(n) : Math.min(.3, playListWait(n)))) return;
+    }
+    c.sig = shape.sig; c.box = shape.box; c.list = at; c.seats = seats; c.left = !shape.right; c.side = shape.side;
+    c.shx = shape.dx; c.shy = shape.dy; c.lx = c.cx + shape.dx + shape.side * (size + 2) / 2;
+    s.rows = shape.rows; s.side = shape.side; s.room = 0;
   });
-  byRoom.forEach(c => {   /* every face the crowd can hold, those on dead lines with no portrait too */
+  keepers("all").forEach(c => {   /* every face the crowd can hold, those on dead lines with no portrait too */
     const n = Math.min(CAP, c.items.length);
     if(c.list || n <= c.shown) return;
     const e = gap * Math.sqrt(n - 1) + size / 2, box = [c.cx - e, c.cy - e, 2 * e, 2 * e];
     if(!fits(c, box, "all")) return;
-    c.box = box; c.all = true; c.shown = n; modes.set(c.k, "all");
+    c.box = box; c.all = true;
   });
-  PLAY.modes = modes;
   groups.forEach(c => {
-    if(c.list){
-      c.items.forEach((st, i) => { const s = c.list[i]; st.x = s.x; st.y = s.y; st.fold = st.hide = false; st.slot = s; });
-      c.shown = c.items.length; c.more = 0; c.r = gap;
-      return;
-    }
-    const vis = c.all ? c.items.filter(st => !st.fold).concat(c.items.filter(st => st.fold)) : c.items.filter(st => !st.fold);
-    vis.forEach((st, i) => { const r = gap * Math.sqrt(i), a = i * 2.39996323; st.x = c.cx + Math.cos(a) * r; st.y = c.cy + Math.sin(a) * r; st.hide = i >= CAP; st.fold = false; });
-    c.items.forEach(st => { if(st.fold){ st.x = c.cx; st.y = c.cy; st.hide = true; } });
-    c.more = c.items.length - c.shown; c.r = gap * Math.sqrt(c.shown);
+    if(!c.list) c.seats = playSeat(c.a.concat(c.due), c.all ? c.b : [], CAP, held(c, false));
+    c.shown = c.items.reduce((n, st) => n + (c.seats.has(st) ? 1 : 0), 0); c.more = c.items.length - c.shown;
   });
   /* a crowd with no face shows its first person, unless it sits on another crowd, whose +N it then joins */
   const near = c => groups.find(o => o !== c && o.shown && !o.list && Math.hypot(o.cx - c.cx, o.cy - c.cy) < gap * Math.sqrt(o.shown - 1) + size);
   groups.forEach(c => { if(!c.list && !c.shown && c.more){ const o = near(c); if(o){ o.more += c.more; c.more = 0; } } });
-  groups.forEach(c => { if(!c.list && !c.shown && c.more){ const st = c.items[0]; st.fold = st.hide = false; st.x = c.cx; st.y = c.cy; c.shown = 1; c.more--; c.r = gap; } });
+  groups.forEach(c => { if(!c.list && !c.shown && c.more){
+    const h = held(c, false), st = c.items.find(x => h(x) >= 0) || c.items[0], used = new Set(c.seats.values());   /* the one shown before, while they are there */
+    let s = Math.max(0, h(st)); while(used.has(s)) s++;
+    c.seats.set(st, s); c.shown = 1; c.more--;
+  } });
+  /* an empty place inside a crowd waits a moment for a newcomer; then the outermost face takes it, one at a time */
+  const idle = st => !st.move && !st.spawn && st.end < 0;
+  groups.forEach(c => {
+    const h = PLAY.snap ? null : playHole(c.seats, idle);
+    if(!h){ c.s.wait = 0; return; }
+    c.s.wait += dt; busy = true;
+    if(c.s.wait >= PLAY_HOLE || REDUCED){ c.seats.set(h[0], h[1]); c.s.wait = PLAY_HOLE - Math.min(PLAY_HOLE_NEXT, 1 / h[2]); }
+  });
+  /* where each place is on the screen: from the crowd's own place on the map (and, for a list near an edge, its slide) */
+  groups.forEach(c => {
+    c.ax = c.cx + (c.shx || 0); c.ay = c.cy + (c.shy || 0);
+    if(!c.list) c.sig = "S";
+    let top = 0;
+    c.seats.forEach((s, st) => {
+      if(s > top) top = s;
+      st.seat = s;
+      if(c.list){ const o = c.list.get(st); st.x = c.ax + (o[0] ? c.side * (size + 2) : 0); st.y = c.ay + c.s.rows[o[1]] * rowH; st.slot = {l:o[0] ? c.side < 0 : c.left}; }
+      else { const o = playSunSlot(s, gap); st.x = c.ax + o[0]; st.y = c.ay + o[1]; }
+      if(!st.move) st.fold = st.hide = false;
+    });
+    c.items.forEach(st => { if(!c.seats.has(st)){ st.seat = -1; st.x = c.cx; st.y = c.cy; st.hide = true; } });   /* in the +N: not drawn */
+    c.r = c.list ? gap : gap * Math.sqrt(top + 1);
+    c.s.form = c.list ? "list" : c.all ? "all" : "some";
+  });
   movers.forEach(st => { if(st.fold) st.hide = true; });   /* their trail still draws the move */
   PLAY.crowd = groups.reduce((a, c) => Math.max(a, gap * Math.sqrt(Math.min(CAP, c.items.length))), 0) + size / 2;   /* the camera keeps room round the pins for every face a crowd can hold, whatever it shows now, so the two never chase each other */
   /* faces that have left the map */
   PLAY.faces.forEach((f, tr) => { if(!live.has(tr)){ playDrop(f); PLAY.faces.delete(tr); } });
-  const k = PLAY.snap || REDUCED ? 1 : 1 - Math.exp(-dt / .09);
   /* each "+N": beside its crowd, or on the place itself when no one there is drawn; names keep off them */
   const big = groups.filter(c => c.more > 0), chips = [];
   big.forEach(c => {
@@ -5772,18 +5948,30 @@ function playFaces(dt){
     let f = PLAY.faces.get(tr);
     const fresh = !f;
     if(fresh){ f = playFace(tr); PLAY.faces.set(tr, f); }
+    /* what the face was doing, and where it stood under this frame's camera (a face in its place moves with the map) */
+    const was = f.at, g = st.g || st.to || null, seated = !!g && st.seat >= 0;
+    let stood = [f.x, f.y];
+    if(was === 1){ const o = playPt(f.ak); stood = [o[0] + f.ax + f.dx, o[1] + f.ay + f.dy]; }
+    f.c = seated ? g.s : null; f.slot = seated ? st.seat : -1;
+    /* the place kept for a face on its way, from where it is heading: followed gently, so a change of plan on the way is no jump */
+    const aim = (x, y, now) => { const k = now ? 1 : 1 - Math.exp(-dt / .12); f.lx += (x - f.lx) * k; f.ly += (y - f.ly) * k; };
     if(st.move){
-      const a = playPt(st.move.from), b = playPt(st.move.to);
+      const a = playPt(st.move.from), b = playPt(st.move.to), start = fresh || PLAY.snap || f.mv !== st.i;
       if(fresh || PLAY.snap) f.mv = st.i, f.ox = f.oy = 0;
-      else if(f.mv !== st.i){ f.mv = st.i; f.ox = f.x - a[0]; f.oy = f.y - a[1]; }   /* leave from where the face stood */
+      else if(f.mv !== st.i){ f.mv = st.i; f.ox = stood[0] - a[0]; f.oy = stood[1] - a[1]; }   /* leave from where the face stood */
       const p = REDUCED ? 0 : easeInOut(Math.min(1, st.move.p)), q = playArc(a, b, p);
-      f.x = q[0] + f.ox * (1 - p); f.y = q[1] + f.oy * (1 - p);
+      aim(seated ? st.x - b[0] : 0, seated ? st.y - b[1] : 0, start);   /* and land in the place kept for it in the crowd there */
+      f.x = q[0] + f.ox * (1 - p) + f.lx * p; f.y = q[1] + f.oy * (1 - p) + f.ly * p;
+      f.at = 2;
     } else if(st.spawn && !REDUCED){
       /* splitting off: a bud grows out of the parent's face towards the child's own slot, the membrane between them
          thins and pinches off, and the child glides on the journeys' arc to its slot, growing to full size */
       const w = st.spawn, pf = PLAY.faces.get(w.par), P = pf && pf.el.style.display !== "none" ? [pf.x, pf.y] : playPt(w.from || st.k);
       const R = (pf && pf.size || size) / 2;
-      let dx = st.x - P[0], dy = st.y - P[1], d = Math.hypot(dx, dy);
+      aim(st.x - g.ax, st.y - g.ay, was !== 3 || f.cc !== g.s);
+      f.cc = g.s;
+      const to = [g.ax + f.lx, g.ay + f.ly];   /* its own slot, from its crowd's place */
+      let dx = to[0] - P[0], dy = to[1] - P[1], d = Math.hypot(dx, dy);
       if(d < 1){ dx = .8; dy = -.6; d = 1; }
       const ux = dx / d, uy = dy / d;
       if(w.p < w.bud){
@@ -5791,20 +5979,37 @@ function playFaces(dt){
         f.x = P[0] + ux * r; f.y = P[1] + uy * r;
         bud = {sc:.16 + .44 * easeOut(u), op:Math.min(1, u * 4), u, x0:P[0] + ux * R * .45, y0:P[1] + uy * R * .45, a:Math.atan2(uy, ux), len:r - R * .45};
       } else {
-        const g = (w.p - w.bud) / (1 - w.bud), q = playArc([P[0] + ux * R * 1.65, P[1] + uy * R * 1.65], [st.x, st.y], easeInOut(g));
+        const e = (w.p - w.bud) / (1 - w.bud), q = playArc([P[0] + ux * R * 1.65, P[1] + uy * R * 1.65], to, easeInOut(e));
         f.x = q[0]; f.y = q[1];
-        bud = {sc:.6 + .4 * easeOut(g), op:1};
+        bud = {sc:.6 + .4 * easeOut(e), op:1};
       }
-      busy = true;
+      busy = true; f.at = st.hide ? 0 : 3;
+    } else if(st.hide){   /* waiting in a +N */
+      f.mv = -1; f.x = st.x; f.y = st.y; f.at = 0;
     } else {
       f.mv = -1;
-      if(fresh) { f.x = st.x; f.y = st.y; }
-      else { f.x += (st.x - f.x) * k; f.y += (st.y - f.y) * k; if(Math.abs(st.x - f.x) + Math.abs(st.y - f.y) > .6) busy = true; }
+      const tx = st.x - g.ax, ty = st.y - g.ay;
+      /* straight into its place: a first frame, a jump in time, out of a +N */
+      if(fresh || PLAY.snap || REDUCED || was === 0){ f.dx = tx; f.dy = ty; f.vx = f.vy = 0; }
+      else {
+        /* it has just landed (in the place kept for it, when there was one) or split off, or its crowd, the crowd's place
+           or a list's shape changed: it goes on from where it is, on a spring; otherwise it stays put in its crowd,
+           however the camera moves */
+        if(was === 2){ const o = playPt(st.k); f.dx = o[0] + f.lx - g.ax; f.dy = o[1] + f.ly - g.ay; f.vx = f.vy = 0; }
+        else if(was === 3){ f.dx = f.lx; f.dy = f.ly; f.vx = f.vy = 0; }
+        else if(f.cc !== g.s || f.ak !== g.k || f.sig !== g.sig){ f.dx = stood[0] - g.ax; f.dy = stood[1] - g.ay; }
+        const X = playSpring(f.dx - tx, f.vx, PLAY_SETTLE, dt), Y = playSpring(f.dy - ty, f.vy, PLAY_SETTLE, dt);
+        if(Math.abs(X[0]) + Math.abs(Y[0]) > .25 || Math.abs(X[1]) + Math.abs(Y[1]) > 3){ f.dx = tx + X[0]; f.vx = X[1]; f.dy = ty + Y[0]; f.vy = Y[1]; busy = true; }
+        else { f.dx = tx; f.dy = ty; f.vx = f.vy = 0; }
+      }
+      f.x = g.ax + f.dx; f.y = g.ay + f.dy;
+      f.at = 1; f.cc = g.s; f.ak = g.k; f.ax = g.shx || 0; f.ay = g.shy || 0; f.sig = g.sig;
     }
     /* a pop on arrival, a fade at the end: a soft rose ring for a death, none when its date is unknown */
     let pop = Math.max(0, Math.min(1, st.pop));
     if(tr === PLAY.hero && PLAY.party) pop = Math.min(1, PLAY.party.e / .6);   /* the year stands still, his entrance does not */
     if(fresh) f.fi = PLAY.snap || REDUCED || pop < 1 ? 1 : 0;   /* a face back on the map mid-life (alone again) fades in */
+    else if(was === 0 && f.at === 1 && !PLAY.snap && !REDUCED) f.fi = 0;   /* and so does one out of a +N, in the place that came free */
     if(f.fi < 1){ f.fi = Math.min(1, f.fi + dt / .35); busy = true; }
     let sc = REDUCED || pop >= 1 || st.spawned ? 1 : .35 + .65 * easeBack(pop), op = 1, gray = 0, ring = "", rs = 1, ro = 0;
     if(pop < 1 && !REDUCED && !st.spawn){ ring = tr.born ? "born" : "first"; rs = 1 + .9 * easeOut(pop); ro = .9 * (1 - pop); }   /* after a split, the ring on arrival */

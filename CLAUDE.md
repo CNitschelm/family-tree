@@ -123,6 +123,11 @@ fast-forward); deaths are a soft rose ring and a fade, an unknown date of death 
 crowd's "+N" only when the crowd has no room ("the map gets way too busy", R-0576); with room a crowd is a list of
 everyone, each named, or as many faces as it holds, and a face always shows (R-0578, R-0584).
 Each crowd's place is named under it and the map's town names keep off faces and names (R-0581).
+A crowd keeps its shape (R-0736, Cory, 14 Nov 2026: "whenever a new person is born, the whole group reshuffles and it's
+chaotic movement"): a face keeps its place in its crowd, a newcomer takes a free one and moves no one, a place left empty
+is taken by one face, and a crowd stands on one place and keeps its members while the map allows; never lay the crowds
+out afresh each frame (only after a jump in time). The rules are the crowds block of the play model (`playSeat`,
+`playHole`, `playCrowds`, `playNextRow`), applied in `playFaces`.
 At Cory's own first record the year stands still for a coronation he asked for (trumpets, a synthesized fanfare, a
 crown, confetti, one royal caption: R-0577, R-0579; his face grows in size from his large portrait, so it stays sharp:
 R-0582); `PLAY_HERO` holds his card id and the demo build blanks it; a

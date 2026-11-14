@@ -1618,6 +1618,82 @@ section("Play");
     ok(/if\(PLAY\.hero\) PLAY\.hero\.solo = true;/.test(js) && /const PLAY_BUD = [\d.]+, PLAY_SLOT = [\d.]+;/.test(js) && /else if\(st\.spawn\) op = Math\.min\(1, st\.spawn\.p \* 1\.5\);/.test(js),
       "his coronation stays a pop-in; reduced motion turns a split into a plain fade in the child's own place");
   }
+  /* the crowds keep their shape (Cory, 14 Nov 2026: "whenever a new person is born, the whole group reshuffles and it's
+     chaotic movement. It needs to be smoother"). The rules, on invented places and people; tests/browser.js watches the
+     faces themselves. */
+  {
+    const seat = pg("playSeat"), hole = pg("playHole"), sun = pg("playSunSlot"), slot = pg("playListSlot"), nextRow = pg("playNextRow"),
+      crowds = pg("playCrowds"), spring = pg("playSpring"), COL = pg("PLAY_COL");
+    const heldIn = m => x => (m.has(x) ? m.get(x) : -1), none = () => -1, same = (a, b, xs) => xs.every(x => a.get(x) === b.get(x));
+    /* a birth: everyone keeps their place, the newcomer takes the next one */
+    const ten = "abcdefghij".split(""), s0 = seat(ten, [], 24, none);
+    ok(ten.every((x, i) => s0.get(x) === i), "a crowd laid out afresh stands in the order of arrival, the first in the middle");
+    const s1 = seat(ten.concat("k"), [], 24, heldIn(s0));
+    ok(same(s0, s1, ten) && s1.get("k") === 10, "a newcomer takes a free place and moves no one");
+    /* a death: the place stays empty for the next newcomer; failing one, the outermost face moves in, and no one else */
+    const left = ten.filter(x => x !== "c"), s2 = seat(left, [], 24, heldIn(s1)), h = hole(s2, () => true);
+    ok(same(s1, s2, left) && h && h[0] === "j" && h[1] === 2 && h[2] === 1, "when someone leaves, everyone else keeps their place, and only the outermost face may move into the empty one");
+    const s3 = seat(left.concat("n"), [], 24, heldIn(s2));
+    ok(s3.get("n") === 2 && same(s2, s3, left) && hole(s3, () => true) === null, "…or the next newcomer takes it, and then no one moves at all");
+    ok(hole(s2, x => x !== "j") === null && hole(s0, () => true) === null, "a face that is splitting off, travelling or fading is not moved into an empty place; a whole crowd has none");
+    /* full: people on dead lines with no portrait give way, the outermost first; then a newcomer waits in the +N */
+    const s4 = seat(["a", "b"], ["x", "y"], 4, none), s5 = seat(["a", "b", "c"], ["x", "y"], 4, heldIn(s4)), s6 = seat(["a", "b", "c", "d", "e"], [], 4, heldIn(s5));
+    ok(s4.size === 4 && s5.get("c") === 3 && !s5.has("y") && s5.get("x") === 2 && same(s4, s5, ["a", "b", "x"]) && s6.size === 4 && !s6.has("e") && same(s5, s6, ["a", "b", "c"]),
+      "a full crowd: a newcomer takes the outermost place of someone drawn only when there is room; with none of those, the newcomer waits in the +N");
+    /* the sunflower: the first in the middle, no two faces on one spot */
+    const pts = Array.from({ length: 24 }, (_, i) => sun(i, 16));
+    let closest = Infinity;
+    pts.forEach((a, i) => pts.forEach((b, j) => { if (j > i) closest = Math.min(closest, Math.hypot(a[0] - b[0], a[1] - b[1])); }));
+    ok(pts[0][0] === 0 && pts[0][1] === 0 && closest > 16 * .8, "a sunflower's places: the first on the crowd's own place, the others clear of each other (" + closest.toFixed(1) + " px apart at least, for a gap of 16)");
+    /* a list grows from its place outward, on the side with room, and a new row moves no one */
+    const grow = (n, above, below) => { const r = []; while (r.length < n) r.push(nextRow(r, above, below)); return r; };
+    const both = grow(7, true, true), up = grow(5, true, false), down = grow(5, false, true);
+    ok(both.join() === "0,1,-1,2,-2,3,-3" && up.join() === "0,-1,-2,-3,-4" && down.join() === "0,1,2,3,4" && grow(4, false, false).join() === "0,1,-1,2",
+      "a list's rows open from its place outward, below and above in turn, or all on the one side that has room");
+    ok(nextRow([0, -1, -2], true, true) === 1 && nextRow([0, 1, 2], true, true) === -1, "…and go back to the middle once both sides have room");
+    const cells = Array.from({ length: 24 }, (_, i) => slot(i, true)), narrow = Array.from({ length: 8 }, (_, i) => slot(i, false));
+    ok(cells.slice(0, COL).every((c, i) => c[0] === 0 && c[1] === i) && cells.slice(COL, 2 * COL).every((c, i) => c[0] === 1 && c[1] === i) &&
+       new Set(cells.map(c => c.join())).size === 24 && Math.max(...cells.map(c => c[1])) === 11 && narrow.every((c, i) => c[0] === 0 && c[1] === i),
+      "a list's places: six in the column on the place, then a second column beside it, then both grow together; one column on a phone; no place twice");
+    /* who is grouped with whom: three villages a few pixels apart and a town far off (all invented) */
+    const P = { east: [100, 100], mid: [120, 100], west: [80, 110], far: [400, 300] }, pt = k => P[k], M = 27;
+    const groupsOf = (count, old) => crowds(new Map(Object.entries(count)), pt, M, old);
+    const carry = (gs, n0) => gs.map((g, i) => ({ id: g.c ? g.c.id : n0 + i, k: g.k, places: new Set(g.places), n: 0 }));
+    const g0 = groupsOf({ east: 5, mid: 3, west: 2, far: 1 }, []);
+    ok(g0.length === 2 && g0[0].k === "east" && g0[0].places.slice().sort().join() === "east,mid,west" && g0[1].k === "far" && g0.every(g => g.c === null),
+      "laid out afresh, the fullest place leads its crowd and places too close to tell apart join it, as before");
+    const o1 = carry(g0, 1); o1[0].n = 10; o1[1].n = 1;
+    const g1 = groupsOf({ east: 5, mid: 7, west: 2, far: 1 }, o1);
+    ok(g1.length === 2 && g1[0].c === o1[0] && g1[0].k === "east" && g1[0].places.slice().sort().join() === "east,mid,west",
+      "a birth that makes another place the fullest changes neither the crowd, nor its place, nor its members");
+    const g2 = groupsOf({ east: 5, mid: 9, west: 2, far: 1 }, o1), g3 = groupsOf({ mid: 3, west: 2, far: 1 }, o1);
+    ok(g2[0].c === o1[0] && g2[0].k === "mid" && g3[0].c === o1[0] && g3[0].k === "mid" && !g3[0].places.includes("east"),
+      "another place takes over only once it has clearly outgrown the crowd's own, or when that one empties; the crowd goes on");
+    /* the camera: a member stays until clearly apart, a stranger joins only when close; two crowds that meet become one */
+    P.mid = [100 + M * 1.2, 100];
+    const g4 = groupsOf({ east: 5, mid: 3, west: 2, far: 1 }, o1), g5 = groupsOf({ east: 5, mid: 3, west: 2, far: 1 }, []);
+    P.mid = [100 + M * 1.4, 100];
+    const g6 = groupsOf({ east: 5, mid: 3, west: 2, far: 1 }, o1);
+    ok(g4.length === 2 && g4[0].places.includes("mid") && g5.length === 3 && g6.length === 3 && g6.find(g => g.k === "mid").c === null,
+      "a place stays with its crowd until it is clearly apart (1.3 × the distance at which a new place would join)");
+    P.mid = [120, 100]; P.far = [110, 105];
+    const g7 = groupsOf({ east: 5, mid: 3, west: 2, far: 1 }, o1);
+    ok(g7.length === 1 && g7[0].c === o1[0] && g7[0].places.includes("far"), "of two crowds that come too close, the bigger goes on and takes the other's place");
+    /* the spring a face moves on: exact for any frame length, no overshoot from rest, there in about half a second */
+    const W = pg("PLAY_SETTLE"), one = spring(40, 0, W, .1), half = spring(40, 0, W, .05), two = spring(half[0], half[1], W, .05);
+    let x = 40, v = 0, crossed = false, at = 0;
+    for (let i = 0; i < 120; i++) { [x, v] = spring(x, v, W, 1 / 60); if (x < 0) crossed = true; if (!at && x < 1) at = (i + 1) / 60; }
+    ok(Math.abs(one[0] - two[0]) < 1e-9 && Math.abs(one[1] - two[1]) < 1e-9 && !crossed && at > .3 && at < .9 && Math.abs(x) < .01,
+      "a face glides to a new place on a critically damped spring: the same path at any frame rate, no overshoot, 40 px in " + at.toFixed(2) + " s");
+    /* the page: a crowd stands on its own place on the map, each face at its place from there, and a jump in time lays
+       everything out afresh; the old frame-by-frame smoothing towards a slot is gone */
+    ok(/f\.x = g\.ax \+ f\.dx; f\.y = g\.ay \+ f\.dy;/.test(js) && /if\(PLAY\.snap\) PLAY\.crowds = \[\];/.test(js) && !/Math\.exp\(-dt \/ \.09\)/.test(js) &&
+       /const groups = playCrowds\(count, playPt, merge, PLAY\.crowds\)/.test(js) && /held\(c, (true|false)\)\)/.test(js),
+      "the page seats the faces with these rules, relative to each crowd's own place on the map, afresh only after a jump in time");
+    ok(/if\(s\.room < \(PLAY\.playing && PLAY\.follow \? playListWait\(n\) : Math\.min\(\.3, playListWait\(n\)\)\)\) return;/.test(js) && pg("playListWait")(20) === 3 && pg("playListWait")(2) < .5 &&
+       /\(PLAY\.playing && comingTo\(c, one\.box\)\)/.test(js) && /keepers\("list"\)\.forEach/.test(js),
+      "a crowd becomes a list only once the room has lasted (the longer the more people would move), with room for one more and no one about to come to a place under it; a list that is one keeps its room before another takes it");
+  }
   ok(/function playBuild\(\)\{\n  PLAY\.model = playModel\(allNodes\.filter\(passes\), rowsOf,/.test(js) && /function refreshMap\(refit\)\{\n  if\(playOn\(\)\)\{ playBuild\(\);/.test(js),
     "the page builds Play from the pins the map's filters show, each time it opens and when the filters change");
   /* Cory, 17 Oct 2026: "no dont do that becuase it should be consistent" — one steady speed, no fast-forward */
