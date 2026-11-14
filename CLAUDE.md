@@ -128,6 +128,9 @@ chaotic movement"): a face keeps its place in its crowd, a newcomer takes a free
 is taken by one face, and a crowd stands on one place and keeps its members while the map allows; never lay the crowds
 out afresh each frame (only after a jump in time). The rules are the crowds block of the play model (`playSeat`,
 `playHole`, `playCrowds`, `playNextRow`), applied in `playFaces`.
+From far away a crowd stays near its place (R-0738, Cory, 14 Nov 2026: "completely wrong with locations … Because there are so
+many faces"): it draws only the faces that stand within about 100 km of its place at the map's scale (`playRoom`,
+`PLAY_REACH`), three at least (`PLAY_FEW`), smaller from far away, and the rest wait in the +N; from a country in, nothing changes.
 At Cory's own first record the year stands still for a coronation he asked for (trumpets, a synthesized fanfare, a
 crown, confetti, one royal caption: R-0577, R-0579; his face grows in size from his large portrait, so it stays sharp:
 R-0582); `PLAY_HERO` holds his card id and the demo build blanks it; a

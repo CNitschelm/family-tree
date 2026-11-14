@@ -1685,6 +1685,16 @@ section("Play");
     for (let i = 0; i < 120; i++) { [x, v] = spring(x, v, W, 1 / 60); if (x < 0) crossed = true; if (!at && x < 1) at = (i + 1) / 60; }
     ok(Math.abs(one[0] - two[0]) < 1e-9 && Math.abs(one[1] - two[1]) < 1e-9 && !crossed && at > .3 && at < .9 && Math.abs(x) < .01,
       "a face glides to a new place on a critically damped spring: the same path at any frame rate, no overshoot, 40 px in " + at.toFixed(2) + " s");
+    /* from far away a crowd stays near its place (Cory, 14 Nov 2026, of two dozen faces, all in one valley, covering a
+       continent: "completely wrong with locations … Because there are so many faces, they are in the totally wrong spot") */
+    const room = pg("playRoom"), FEW = pg("PLAY_FEW"), REACH = pg("PLAY_REACH");
+    const inside = (n, reach) => Array.from({ length: n }, (_, i) => sun(i, 16)).every(q => Math.hypot(q[0], q[1]) + 13 <= reach + 1e-9);
+    ok(room(5, 26, 16, FEW, 24) === FEW && room(13, 26, 16, 1, 24) === 1 && room(1000, 26, 16, FEW, 24) === 24 && [30, 45, 60, 80].every(r => { const n = room(r, 26, 16, 1, 24);
+         return inside(n, r) && (n === 24 || !inside(n + 1, r)); }) && [30, 45, 60, 80].map(r => room(r, 26, 16, 1, 24)).every((n, i, a) => !i || n > a[i - 1]),
+      "a crowd draws only the faces that stand within its reach of its place: all of them from close by, fewer as the map shows more, " + FEW + " at least; the rest wait in the +N");
+    ok(REACH >= 50 && REACH <= 200 && FEW >= 1 && FEW <= 5 && /const room = \(k, f\) => playRoom\(PLAY_REACH \* f \* MS \/ \(40075 \* Math\.max\(\.05, Math\.cos\(GAZ\[k\]\.lat \* D2R\)\)\), size, gap, PLAY_FEW, CAP\);/.test(js) &&
+       /playSeat\(c\.a\.concat\(c\.due\), c\.all \? c\.b : \[\], c\.cap, held\(c, false\)\)/.test(js) && /n > RMAX \|\| n > c\.cap/.test(js) && /room\(c\.k, \.85\)/.test(js) && /room\(c\.k, 1\.15\)/.test(js),
+      "the page gives each crowd that reach in kilometres (" + REACH + " km) at the map's scale where it stands, for its faces and its list alike, and changes the number only once the zoom has clearly changed");
     /* the page: a crowd stands on its own place on the map, each face at its place from there, and a jump in time lays
        everything out afresh; the old frame-by-frame smoothing towards a slot is gone */
     ok(/f\.x = g\.ax \+ f\.dx; f\.y = g\.ay \+ f\.dy;/.test(js) && /if\(PLAY\.snap\) PLAY\.crowds = \[\];/.test(js) && !/Math\.exp\(-dt \/ \.09\)/.test(js) &&

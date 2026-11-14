@@ -5482,6 +5482,13 @@ const PLAY_COL = 6;                           /* a list's first column holds six
 const PLAY_HOLE = .6, PLAY_HOLE_NEXT = .25;   /* seconds an empty place waits for a newcomer before the outermost face takes it; the longest between two such moves */
 const PLAY_AHEAD = 10;                        /* seconds of play a crowd looks ahead before it becomes a list: no one may be about to come to a place under it */
 const PLAY_SETTLE = 9;                        /* how fast a face glides to its place (a critically damped spring: there in about half a second) */
+const PLAY_REACH = 100, PLAY_FEW = 3;         /* a face stands within about 100 km of its crowd's place; from far away, where one face is wider than that, a crowd draws three */
+/* How many faces a crowd may draw so that none stands farther than `reach` px from the crowd's own place (Cory, 14 Nov
+   2026, of a view of the whole world where two dozen faces, all of them in Alsace, covered Europe from the Atlantic to
+   Russia: "it's completely wrong with locations … Because there are so many faces, they are in the totally wrong
+   spot"): the sunflower's places inside that circle, never fewer than `least` nor more than `most`. The rest wait in
+   the "+N". */
+function playRoom(reach, size, gap, least, most){ const r = (reach - size / 2) / gap; return Math.max(least, Math.min(most, r > 0 ? 1 + Math.floor(r * r) : 1)); }
 /* a sunflower's place number i, from the crowd's own place: the first in the middle */
 function playSunSlot(i, gap){ const r = gap * Math.sqrt(i), a = i * PLAY_GOLD; return [Math.cos(a) * r, Math.sin(a) * r]; }
 /* a list's place number i: [column, row]. Column 0 stands on the place; on a wide screen column 1 opens beside it
@@ -5764,7 +5771,11 @@ function playFaces(dt){
   const m = PLAY.model, t = PLAY.t, sp = PLAY.speed;
   /* a phone showing half the world has no room for full crowds: smaller faces, smaller crowds, fewer names */
   const small = mapEl.clientWidth < 600, tiny = small && MS < 4000;
-  const size = tiny ? 17 : small ? 22 : 26, gap = size * (small ? .56 : .62), merge = size * 1.05, CAP = tiny ? 8 : small ? 14 : 24, NAMES = small ? 4 : 12;
+  /* and from far away a face is hundreds of kilometres wide on any screen: smaller faces there (20 px for the whole
+     world, 26 px from a country in), and fewer of them, so a crowd stays near its place (playRoom) */
+  const far = Math.max(0, Math.min(1, Math.log(MS / 2500) / Math.log(8000 / 2500)));
+  const size = tiny ? 17 : small ? 22 : Math.round((20 + 6 * far) * 2) / 2, gap = size * (small ? .56 : .62), merge = size * 1.05, CAP = tiny ? 8 : small ? 14 : 24, NAMES = small ? 4 : 12;
+  const room = (k, f) => playRoom(PLAY_REACH * f * MS / (40075 * Math.max(.05, Math.cos(GAZ[k].lat * D2R))), size, gap, PLAY_FEW, CAP);
   const live = new Map(), atPlace = new Map(), movers = [];
   let onMap = 0, busy = false;
   m.tracks.forEach(tr => {
@@ -5806,7 +5817,11 @@ function playFaces(dt){
     c.items.sort((a, b) => a.since - b.since || a.tr.n.id - b.tr.n.id);
     c.items.forEach(st => { st.g = c; });
     c.a = c.items.filter(st => !st.fold); c.b = c.items.filter(st => st.fold);
-    c.shown = Math.min(CAP, c.a.length);
+    /* how many faces it may draw at this zoom; the number changes only once the zoom has clearly changed, so no face
+       comes and goes as the camera drifts */
+    const had = PLAY.snap ? 0 : c.s.cap || 0, now = room(c.k, 1);
+    c.cap = c.s.cap = !had || now === had ? now : now > had ? Math.max(had, room(c.k, .85)) : Math.min(had, room(c.k, 1.15));
+    c.shown = Math.min(c.cap, c.a.length);
     const e = gap * Math.sqrt(Math.max(0, c.shown - 1)) + size / 2;
     c.box = [c.cx - e, c.cy - e, 2 * e, 2 * e];
   });
@@ -5857,7 +5872,7 @@ function playFaces(dt){
   };
   keepers("list").forEach(c => {   /* a list: a column from the place outward, a second beside it past six people on a wide screen, names outward */
     const s = c.s, isList = s.form === "list", n = c.items.length + c.due.length;
-    if(n > RMAX || (PLAY.party && c.items.some(st => st.tr === PLAY.hero))){ s.room = 0; return; }   /* his coronation is in a crowd */
+    if(n > RMAX || n > c.cap || (PLAY.party && c.items.some(st => st.tr === PLAY.hero))){ s.room = 0; return; }   /* no more names than the crowd may draw faces; his coronation is in a crowd */
     const seats = playSeat(c.items.concat(c.due), [], RMAX, held(c, true)), at = new Map(), used = new Set(seats.values());
     seats.forEach((v, st) => at.set(st, playListSlot(v, !small)));
     let shape = listShape(c, at, isList ? s.rows : [], isList ? s.side : 0, isList ? 0 : 10);
@@ -5881,14 +5896,14 @@ function playFaces(dt){
     s.rows = shape.rows; s.side = shape.side; s.room = 0;
   });
   keepers("all").forEach(c => {   /* every face the crowd can hold, those on dead lines with no portrait too */
-    const n = Math.min(CAP, c.items.length);
+    const n = Math.min(c.cap, c.items.length);
     if(c.list || n <= c.shown) return;
     const e = gap * Math.sqrt(n - 1) + size / 2, box = [c.cx - e, c.cy - e, 2 * e, 2 * e];
     if(!fits(c, box, "all")) return;
     c.box = box; c.all = true;
   });
   groups.forEach(c => {
-    if(!c.list) c.seats = playSeat(c.a.concat(c.due), c.all ? c.b : [], CAP, held(c, false));
+    if(!c.list) c.seats = playSeat(c.a.concat(c.due), c.all ? c.b : [], c.cap, held(c, false));
     c.shown = c.items.reduce((n, st) => n + (c.seats.has(st) ? 1 : 0), 0); c.more = c.items.length - c.shown;
   });
   /* a crowd with no face shows its first person, unless it sits on another crowd, whose +N it then joins */

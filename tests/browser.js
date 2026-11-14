@@ -665,6 +665,26 @@ async function run() {
       "it ends today, on the living family (" + (await page.textContent("#pbcount")) + ")");
     ok((await page.getAttribute("#pbplay", "aria-label")) === "Play again from the start", "at the end the button offers to play again");
     await shot(page, "pl2-end.png");
+    /* from far away a crowd stays near its place (Cory, 14 Nov 2026: "completely wrong with locations … Because there
+       are so many faces, they are in the totally wrong spot"): the eight living daughters are all at one place; with the
+       whole world on the screen three faces stand there and the others wait in the +N, and close in all eight show */
+    {
+      const drawn = () => page.evaluate(() => ({ faces: [...document.querySelectorAll("#playfaces .pf")].filter(e => e.style.display !== "none").length,
+        wide: Math.max(0, ...[...document.querySelectorAll("#playfaces .pf")].filter(e => e.style.display !== "none").map(e => e.offsetWidth)),
+        span: (() => { const xs = [...document.querySelectorAll("#playfaces .pf")].filter(e => e.style.display !== "none").map(e => e.getBoundingClientRect()); return xs.length ? Math.round(Math.max(...xs.map(r => r.right)) - Math.min(...xs.map(r => r.left))) : 0; })(),
+        more: [...document.querySelectorAll("#playfaces .pfmore")].filter(e => e.style.display !== "none").map(e => e.textContent) }));
+      await page.click('#goto [data-mr="world"]');
+      await page.waitForTimeout(2500);
+      const afar = await drawn();
+      await shot(page, "pl2-afar.png");
+      await page.click('#goto [data-mr="alsace"]');
+      await page.waitForTimeout(2500);
+      const near = await drawn();
+      ok(afar.faces === 3 && afar.more.join() === "+5" && afar.wide <= 20 && afar.span <= 60 && near.faces === 8 && !near.more.length && near.wide === 26,
+        "with the whole world on the screen a crowd of eight draws three small faces at its place and a +5; close in, all eight (" + JSON.stringify(afar) + " → " + JSON.stringify(near) + ")");
+      await page.click("#pbfollow").catch(() => {});
+      await page.waitForTimeout(400);
+    }
     /* a face: that person's journey, and Play steps aside */
     /* faces in a crowd overlap: tap one whose middle is not under another */
     const hit = await page.evaluate(() => {
