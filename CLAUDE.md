@@ -131,6 +131,9 @@ out afresh each frame (only after a jump in time). The rules are the crowds bloc
 From far away a crowd stays near its place (R-0738, Cory, 14 Nov 2026: "completely wrong with locations … Because there are so
 many faces"): it draws only the faces that stand within about 100 km of its place at the map's scale (`playRoom`,
 `PLAY_REACH`), three at least (`PLAY_FEW`), smaller from far away, and the rest wait in the +N; from a country in, nothing changes.
+A crowd draws its portraits first (R-0742, Cory, 15 Nov 2026: "Is it prioritizing people with bio pictures? If it's not, it needs
+to"): `playSeat` takes three lists, the people with a portrait, the others on a living line, and, with room, people on
+dead lines with no portrait; a portrait never waits in the +N while a plain face of its crowd is drawn.
 At Cory's own first record the year stands still for a coronation he asked for (trumpets, a synthesized fanfare, a
 crown, confetti, one royal caption: R-0577, R-0579; his face grows in size from his large portrait, so it stays sharp:
 R-0582); `PLAY_HERO` holds his card id and the demo build blanks it; a

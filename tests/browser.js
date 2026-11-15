@@ -53,6 +53,7 @@ function person(name, years, g, extra) {
   return p;
 }
 const kids = (...c) => c;
+const PORTRAIT = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA4IDgnPjxyZWN0IHdpZHRoPSc4JyBoZWlnaHQ9JzgnIGZpbGw9JyM3ODknLz48L3N2Zz4=";   /* a plain grey square */
 /* the trunk: five generations; then one small family per branch, each head carrying its anchor */
 /* the eighth line keeps the anchor and branch id of the real payload's leftover "schw" line, whose tile came off on
    8 Nov 2026: the page lists neither, so it has no tile and its cards take the colour of the line above */
@@ -66,7 +67,8 @@ g5.unions = [{ s: "Ottilie Probe", sy: "1650", c: BR.map(([key, bid], i) => {
   /* and its son ends his days on an island far from everyone: alone on the map in Play (17 Oct 2026) */
   if (i === BR.length - 1) son.pl.push({ k: "epsilon", t: "residence", c: "doc", y: 1740 });
   h.unions = [{ s: "Spouse" + (i + 1) + " Probe", sy: String(1695 + i), c: [son]
-    .concat(i === BR.length - 1 ? [] : [person("Daughter" + (i + 1) + " Testmann", "b. " + (1950 + i), "f")]) }];
+    /* the two youngest daughters have a portrait: a crowd draws them before a plain face (15 Nov 2026) */
+    .concat(i === BR.length - 1 ? [] : [person("Daughter" + (i + 1) + " Testmann", "b. " + (1950 + i), "f", i >= 6 ? { img: PORTRAIT } : undefined)]) }];
   return h;
 }) }];
 const g4 = person("Septimus Testmann", "1598–1661", "m", { unions: [{ s: "Tertia Probe", sy: "1622", c: [g5] }] });
@@ -670,6 +672,7 @@ async function run() {
        whole world on the screen three faces stand there and the others wait in the +N, and close in all eight show */
     {
       const drawn = () => page.evaluate(() => ({ faces: [...document.querySelectorAll("#playfaces .pf")].filter(e => e.style.display !== "none").length,
+        who: [...document.querySelectorAll("#playfaces .pf")].filter(e => e.style.display !== "none").map(e => e.getAttribute("aria-label").split(" ")[0]).sort().join(),
         wide: Math.max(0, ...[...document.querySelectorAll("#playfaces .pf")].filter(e => e.style.display !== "none").map(e => e.offsetWidth)),
         span: (() => { const xs = [...document.querySelectorAll("#playfaces .pf")].filter(e => e.style.display !== "none").map(e => e.getBoundingClientRect()); return xs.length ? Math.round(Math.max(...xs.map(r => r.right)) - Math.min(...xs.map(r => r.left))) : 0; })(),
         more: [...document.querySelectorAll("#playfaces .pfmore")].filter(e => e.style.display !== "none").map(e => e.textContent) }));
@@ -682,6 +685,9 @@ async function run() {
       const near = await drawn();
       ok(afar.faces === 3 && afar.more.join() === "+5" && afar.wide <= 20 && afar.span <= 60 && near.faces === 8 && !near.more.length && near.wide === 26,
         "with the whole world on the screen a crowd of eight draws three small faces at its place and a +5; close in, all eight (" + JSON.stringify(afar) + " → " + JSON.stringify(near) + ")");
+      /* portraits first (Cory, 15 Nov 2026: "Is it prioritizing people with bio pictures? If it's not, it needs to"): the
+         three drawn are the crowned one and the two youngest, who have a portrait, not the three who came first */
+      ok(afar.who === "Daughter1,Daughter7,Daughter8", "…and the three it draws are the ones with a portrait, though they came last (" + afar.who + ")");
       await page.click("#pbfollow").catch(() => {});
       await page.waitForTimeout(400);
     }

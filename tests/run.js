@@ -1626,20 +1626,38 @@ section("Play");
       crowds = pg("playCrowds"), spring = pg("playSpring"), COL = pg("PLAY_COL");
     const heldIn = m => x => (m.has(x) ? m.get(x) : -1), none = () => -1, same = (a, b, xs) => xs.every(x => a.get(x) === b.get(x));
     /* a birth: everyone keeps their place, the newcomer takes the next one */
-    const ten = "abcdefghij".split(""), s0 = seat(ten, [], 24, none);
+    const ten = "abcdefghij".split(""), s0 = seat([ten], 24, none);
     ok(ten.every((x, i) => s0.get(x) === i), "a crowd laid out afresh stands in the order of arrival, the first in the middle");
-    const s1 = seat(ten.concat("k"), [], 24, heldIn(s0));
+    const s1 = seat([ten.concat("k")], 24, heldIn(s0));
     ok(same(s0, s1, ten) && s1.get("k") === 10, "a newcomer takes a free place and moves no one");
     /* a death: the place stays empty for the next newcomer; failing one, the outermost face moves in, and no one else */
-    const left = ten.filter(x => x !== "c"), s2 = seat(left, [], 24, heldIn(s1)), h = hole(s2, () => true);
+    const left = ten.filter(x => x !== "c"), s2 = seat([left], 24, heldIn(s1)), h = hole(s2, () => true);
     ok(same(s1, s2, left) && h && h[0] === "j" && h[1] === 2 && h[2] === 1, "when someone leaves, everyone else keeps their place, and only the outermost face may move into the empty one");
-    const s3 = seat(left.concat("n"), [], 24, heldIn(s2));
+    const s3 = seat([left.concat("n")], 24, heldIn(s2));
     ok(s3.get("n") === 2 && same(s2, s3, left) && hole(s3, () => true) === null, "…or the next newcomer takes it, and then no one moves at all");
     ok(hole(s2, x => x !== "j") === null && hole(s0, () => true) === null, "a face that is splitting off, travelling or fading is not moved into an empty place; a whole crowd has none");
     /* full: people on dead lines with no portrait give way, the outermost first; then a newcomer waits in the +N */
-    const s4 = seat(["a", "b"], ["x", "y"], 4, none), s5 = seat(["a", "b", "c"], ["x", "y"], 4, heldIn(s4)), s6 = seat(["a", "b", "c", "d", "e"], [], 4, heldIn(s5));
+    const s4 = seat([["a", "b"], ["x", "y"]], 4, none), s5 = seat([["a", "b", "c"], ["x", "y"]], 4, heldIn(s4)), s6 = seat([["a", "b", "c", "d", "e"], []], 4, heldIn(s5));
     ok(s4.size === 4 && s5.get("c") === 3 && !s5.has("y") && s5.get("x") === 2 && same(s4, s5, ["a", "b", "x"]) && s6.size === 4 && !s6.has("e") && same(s5, s6, ["a", "b", "c"]),
       "a full crowd: a newcomer takes the outermost place of someone drawn only when there is room; with none of those, the newcomer waits in the +N");
+    /* portraits first (Cory, 15 Nov 2026: "Is it prioritizing people with bio pictures? If it's not, it needs to"): three
+       lists, portraits, plain faces on a living line, and people drawn only with room */
+    const t0 = seat([["p1"], ["q1", "q2", "q3"], ["z1"]], 3, none);
+    const t1 = seat([["p1", "p2"], ["q1", "q2", "q3"], ["z1"]], 3, heldIn(t0)), t2 = seat([["p1", "p2", "p3", "p4"], ["q1", "q2", "q3"], []], 3, heldIn(t1));
+    ok(t0.get("p1") === 0 && t0.has("q1") && t0.has("q2") && !t0.has("q3") && !t0.has("z1") && t1.get("p2") === t0.get("q2") && !t1.has("q2") && same(t0, t1, ["p1", "q1"]) &&
+       ["p1", "p2", "p3"].every(x => t2.has(x)) && !t2.has("p4") && !t2.has("q1") && same(t1, t2, ["p1", "p2"]),
+      "a portrait is drawn before a plain face: in a full crowd a newcomer with a portrait takes the outermost plain face's place, and one with none waits in the +N");
+    const t3 = seat([["p1"], ["q1"], ["z1", "z2"]], 3, none), t4 = seat([["p1", "p2"], ["q1"], ["z1", "z2"]], 3, heldIn(t3)), t5 = seat([["p1", "p2"], ["q1", "q2"], ["z1", "z2"]], 3, heldIn(t4));
+    ok(t3.get("z1") === 2 && t4.get("p2") === 2 && !t4.has("z1") && same(t3, t4, ["p1", "q1"]) && !t5.has("q2") && same(t4, t5, ["p1", "p2", "q1"]),
+      "…and the place given up is one of the last list that holds any: someone drawn only with room goes before a plain face on a living line; a plain newcomer moves no one");
+    /* the map shows more and the crowd may draw fewer: the portraits are the ones that stay */
+    const w0 = seat([["p9"], ["q1", "q2", "q3", "q4", "q5"], []], 6, heldIn(new Map([["q1", 0], ["q2", 1], ["q3", 2], ["q4", 3], ["q5", 4], ["p9", 5]])));
+    const w1 = seat([["p9"], ["q1", "q2", "q3", "q4", "q5"], []], 3, heldIn(w0));
+    ok(w0.get("p9") === 5 && w1.size === 3 && w1.get("p9") === 2 && w1.get("q1") === 0 && w1.get("q2") === 1 && !w1.has("q3"),
+      "when a crowd may draw fewer faces, a portrait at its edge takes the outermost plain face's place among those that stay");
+    ok(/const pic = st => !!st\.tr\.n\.p\.img \|\| st\.tr === PLAY\.hero;/.test(js) &&
+       /playSeat\(\[c\.pic\.concat\(c\.due\.filter\(pic\)\), c\.plain\.concat\(c\.due\.filter\(st => !pic\(st\)\)\), c\.all \? c\.b : \[\]\], c\.cap, held\(c, false\)\)/.test(js),
+      "the page seats each crowd's portraits first, then its plain faces, then, with room, people on dead lines with no portrait");
     /* the sunflower: the first in the middle, no two faces on one spot */
     const pts = Array.from({ length: 24 }, (_, i) => sun(i, 16));
     let closest = Infinity;
@@ -1693,7 +1711,7 @@ section("Play");
          return inside(n, r) && (n === 24 || !inside(n + 1, r)); }) && [30, 45, 60, 80].map(r => room(r, 26, 16, 1, 24)).every((n, i, a) => !i || n > a[i - 1]),
       "a crowd draws only the faces that stand within its reach of its place: all of them from close by, fewer as the map shows more, " + FEW + " at least; the rest wait in the +N");
     ok(REACH >= 50 && REACH <= 200 && FEW >= 1 && FEW <= 5 && /const room = \(k, f\) => playRoom\(PLAY_REACH \* f \* MS \/ \(40075 \* Math\.max\(\.05, Math\.cos\(GAZ\[k\]\.lat \* D2R\)\)\), size, gap, PLAY_FEW, CAP\);/.test(js) &&
-       /playSeat\(c\.a\.concat\(c\.due\), c\.all \? c\.b : \[\], c\.cap, held\(c, false\)\)/.test(js) && /n > RMAX \|\| n > c\.cap/.test(js) && /room\(c\.k, \.85\)/.test(js) && /room\(c\.k, 1\.15\)/.test(js),
+       /c\.cap, held\(c, false\)\)/.test(js) && /n > RMAX \|\| n > c\.cap/.test(js) && /room\(c\.k, \.85\)/.test(js) && /room\(c\.k, 1\.15\)/.test(js),
       "the page gives each crowd that reach in kilometres (" + REACH + " km) at the map's scale where it stands, for its faces and its list alike, and changes the number only once the zoom has clearly changed");
     /* the page: a crowd stands on its own place on the map, each face at its place from there, and a jump in time lays
        everything out afresh; the old frame-by-frame smoothing towards a slot is gone */
