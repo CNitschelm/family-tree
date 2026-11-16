@@ -508,6 +508,23 @@ test "$(git --git-dir="$GHA" rev-parse main)" = "$am1" && test -z "$(git -C "$AA
 cp "$T/data.keep" "$A/data.json"; rm -f "$A/.data-stamp"
 quiet git -C "$PB" pull -q --ff-only
 
+echo "6e. setup says when a repository is not attached (16 Nov 2026)"
+nosetup() { local n="$1"; shift; ( cd "$T/$n" && HOME="$T/$n/home" FT_SKIP_DECRYPT=1 FT_SKIP_TOOLS=1 "$@" bash "$TOOLS/cloud-setup.sh" ); }
+mkdir -p "$T/NA/home" && quiet git clone --depth 1 "file://$GHS" "$T/NA/family-tree"
+refuse "setup stops when family-tree-private is not attached to the session" nosetup NA env FT_PRIVATE_URL="file://$T/gh/not-attached.git"
+says "could not clone family-tree-private" "…and names the repository"
+says "starts with only the repositories its owner selected" "…says that a session has only the repositories selected for it"
+says "must be attached" "…that the private ones must be attached"
+says "bash tools/cloud-setup.sh  again" "…and that setup is then run again"
+says "git said:" "…with git's own words"
+quiet git clone --depth 1 "file://$GHP" "$T/NA/family-tree-private"
+refuse "…and the same for the source archive" nosetup NA env FT_SOURCES_URL="file://$T/gh/not-attached.git"
+says "could not clone family-tree-sources" "…naming it"
+test ! -e "$T/NA/home/.ft-ready" && ok "…and the session is not marked ready" || no "ready after a failed clone"
+mkdir -p "$T/NB/home"
+refuse "setup stops when none of the project's repositories is here" nosetup NB env
+says "starts with only the repositories its owner selected" "…and says why, and what to attach"
+
 echo "7. the queue and the airlock"
 publish() { gp push -q "$GHS" site-queue:refs/heads/main; }  # what the airlock does
 verdict() { # $1 = result: write family-tree-private's airlock-status for the current queue

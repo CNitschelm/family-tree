@@ -49,6 +49,21 @@ onto_main() { # $1 = repo. Cloud sessions start each clone on a session branch o
   git -C "$r" rev-parse -q --verify '@{upstream}' >/dev/null 2>&1 || git -C "$r" branch -q --set-upstream-to=origin/main main
 }
 ahead_of_up() { git -C "$1" rev-list --count '@{upstream}..HEAD' 2>/dev/null || echo 1; }
+clone_private() { # $1 = repo name, $2 = its address, $3 = where, then git clone's options. The two private
+  # repositories are not part of a session unless they were attached to it: say that plainly, with git's own
+  # words (16 Nov 2026: the old message asked a question, and a session could not tell this from a network fault).
+  local name="$1" url="$2" dest="$3" out; shift 3
+  out="$(git clone -q "$@" "$url" "$dest" 2>&1)" && return 0
+  die "could not clone $name: it is not attached to this session, or GitHub could not be reached.
+  git said:
+$(printf '%s\n' "$out" | sed -E 's#(https?://)[^/@[:space:]]*@#\1#g' | grep -v '^[[:space:]]*$' | tail -n 4 | cut -c1-300 | sed 's/^/    /')
+  A cloud session starts with only the repositories its owner selected for it. family-tree-private (the working
+  state) and family-tree-sources (the source archive) are private, and setup needs both: each must be attached
+  to this session, with push access. In an interactive session, ask for it with the platform's add-repository
+  tool (owner CNitschelm, repository $name, push access; Cory approves it), or have Cory start the session
+  with all three repositories selected; a routine gets it on its own page, where Cory adds it.
+  Then run  bash tools/cloud-setup.sh  again. (If git's lines show the network failing instead, just run it again.)"
+}
 reach_back() { # $1 = repo. The platform's clones are shallow, and a routine's can start on an older main than GitHub's,
   # with origin/main fetched shallow as well. Once GitHub's main is more commits ahead than the clone holds, the two
   # histories do not meet: a main that is only behind looks diverged ("50 ahead, 50 behind", 9 Nov 2026) and is never
@@ -81,7 +96,12 @@ else
     for c in "${FT_PRIVATE_DIR:-}" "$PWD" "$PWD/family-tree-private" "$ATTACH/family-tree-private" "$HOME/family-tree-private"; do
       [ -n "$c" ] && [ -e "$c/.git" ] && [ -f "$c/.private-paths" ] && { p="$(cd -P "$c" && pwd)"; break; }
     done
-    [ -n "$p" ] || die "no clone of the site or of family-tree-private found (looked in $PWD, $ATTACH and $HOME); set FT_DIR"
+    [ -n "$p" ] || die "no clone of the site or of family-tree-private found (looked in $PWD, $ATTACH and $HOME).
+  A cloud session starts with only the repositories its owner selected for it, and none of this project's is here.
+  Attach them to this session (an interactive session: CNitschelm/family-tree, family-tree-private and
+  family-tree-sources, with push access, through the platform's add-repository tool, which Cory approves, or a new
+  session started with all three selected; a routine: the two private ones, on the routine's own page), then
+  run  bash tools/cloud-setup.sh  again. If the clones are somewhere else on this machine, set FT_DIR to the site clone."
     FT="$(dirname "$p")/family-tree"
     [ ! -e "$FT" ] || die "$FT exists but is not a clone of the site"
     git clone -q "${FT_SITE_URL:-https://github.com/CNitschelm/family-tree.git}" "$FT" \
@@ -127,7 +147,7 @@ say "site: main at $(git rev-parse --short HEAD), full history ($(git rev-list -
 # ------------------------------------------------------------------ 2. the private state repo
 if [ -e "$PRIV/.git" ]; then onto_main "$PRIV" || die "could not put family-tree-private on main"; reach_back "$PRIV"; fi
 if [ ! -e "$PRIV/.git" ]; then
-  git clone -q "$PRIV_URL" "$PRIV" || die "could not clone $PRIV_URL — is family-tree-private one of this session's repositories?"
+  clone_private family-tree-private "$PRIV_URL" "$PRIV"
 elif ! tracks "$PRIV"; then
   say "NOTE: family-tree-private is not on a branch that follows GitHub; not pulled"
 elif clean_tracked "$PRIV" && [ "$(ahead_of_up "$PRIV")" = 0 ]; then
@@ -207,7 +227,7 @@ fi
 # ------------------------------------------------------------------ 3. the source archive
 if [ -e "$SRC/.git" ]; then onto_main "$SRC" || say "NOTE: could not put family-tree-sources on main"; reach_back "$SRC"; fi
 if [ ! -e "$SRC/.git" ]; then
-  git clone -q --depth 1 "$SRC_URL" "$SRC" || die "could not clone $SRC_URL — is family-tree-sources one of this session's repositories?"
+  clone_private family-tree-sources "$SRC_URL" "$SRC" --depth 1
 elif tracks "$SRC" && clean_tracked "$SRC" && [ "$(ahead_of_up "$SRC")" = 0 ]; then
   git -C "$SRC" pull -q --ff-only || say "NOTE: family-tree-sources not updated (pull failed)"
 fi
