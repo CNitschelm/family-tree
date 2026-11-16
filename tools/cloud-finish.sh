@@ -33,7 +33,8 @@
 #  3. finds this session's own site commits (those on top of the newest published or queued commit)
 #     and stops BEFORE pushing anything when they cannot go out: other site work came in under them, a
 #     commit a queue rebuild dropped, a message the airlock refuses or that names someone, a payload the
-#     gate did not pass, no writer lock; for the queue also a QUEUE CONFLICT, more than the airlock's 30
+#     gate did not pass (.gate-stamp: line 1 the payload's iv, line 2 "… PASS … over origin/main", or over the
+#     queue's head), no writer lock; for the queue also a QUEUE CONFLICT, more than the airlock's 30
 #     commits, a merge, a file it does not publish; for direct also unpublished commits in the queue
 # 4a. keeps the archive's source list current: when data.json is here and comes from the index.html on disk,
 #     node checks/manifest.js, and if its sources/urls.tsv differs from the archive's, a commit of it in the
@@ -318,6 +319,25 @@ $(printf '%s\n' "$out" | grep -v '^$' | head -4 | sed 's/^/  /')
     st=$(head -n 1 "$FT/.gate-stamp" 2>/dev/null | tr -d '\r')
     [ -n "$iv" ] && [ "$st" = "$iv" ] || die "the payload of $(short "$H") is not the one checks/gate.js last passed (iv ${iv:-?};
   .gate-stamp says ${st:-nothing}). Run node checks/gate.js on it; never publish a payload the gate has not passed."
+    # ...and passed against the site as it is published or queued (16 Nov 2026). The gate writes, as line 2,
+    # "<time> PASS n change set(s) m edit(s) over <base>", and takes any --base: over HEAD, a payload that is
+    # already committed passes with no change set at all, and that stamp's first line is the same. So line 2
+    # must say PASS over origin/main (the gate's own base) or over the queue's head, by name or by commit.
+    st2=$(sed -n 2p "$FT/.gate-stamp" 2>/dev/null | tr -d '\r')
+    gbase=$(printf '%s\n' "$st2" | sed -n -E 's/^[^ ]+ PASS [0-9]+ change set\(s\) [0-9]+ edit\(s\) over ([^ ]+)$/\1/p')
+    gok=0
+    case "$gbase" in
+      origin/main|refs/remotes/origin/main) gok=1 ;;
+      queue/site-queue|refs/remotes/queue/site-queue) [ -n "$queue" ] && gok=1 ;;
+      *) if printf '%s' "$gbase" | grep -qE '^[0-9a-f]{7,40}$'; then
+           case "$M" in "$gbase"*) gok=1 ;; esac
+           case "${queue:-none}" in "$gbase"*) gok=1 ;; esac
+         fi ;;
+    esac
+    [ "$gok" = 1 ] || die "the gate's stamp does not say that the payload of $(short "$H") passed against the published or queued
+  site (.gate-stamp, line 2: ${st2:-nothing}; it must read \"<time> PASS n change set(s) m edit(s) over origin/main\",
+  or over the queue's head). Run  node checks/gate.js  (with no --base), then run this again; never publish a
+  payload the gate has not passed against what is live."
   fi
   hrc=0; d="$(ft_holds_refused "$FT" "$PRIV_URL" "$queue")" || hrc=$?
   [ "$hrc" = 0 ] && die "this site clone holds commit $(printf %.7s "$d"), which the airlock refused, and the queue no longer does (it

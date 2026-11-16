@@ -67,7 +67,10 @@ mc() { # $1 = session, $2 = name: a site commit the airlock publishes (a new med
 }
 pc() { # $1 = session, $2 = 16 characters: a payload commit (only the payload line of index.html changes), gate passed
   sed -i -E 's/(const ENC = \{v:[0-9]+, iter:[0-9]+, salt:"[^"]*", iv:")[A-Za-z0-9+\/]{16}"/\1'"$2"'"/' "$T/$1/family-tree/index.html" \
-    && gnohook -C "$T/$1/family-tree" commit -qam "Update site data payload" && printf '%s\n' "$2" > "$T/$1/family-tree/.gate-stamp"
+    && gnohook -C "$T/$1/family-tree" commit -qam "Update site data payload" && gstamp "$T/$1/family-tree" "$2"
+}
+gstamp() { # $1 = site clone, $2 = iv, $3 = base (default origin/main): .gate-stamp as checks/gate.js writes it on a pass
+  printf '%s\n%s PASS 1 change set(s) 1 edit(s) over %s\n' "$2" "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" "${3:-origin/main}" > "$1/.gate-stamp"
 }
 fin() { local n="$1"; shift; in_cloud "$n" env FT_SKIP_LIVE=1 bash "$TOOLS/cloud-finish.sh" "$@"; }
 side() { # $1 = name: a commit pushed to public main by hand, past the tools and the lock
@@ -255,11 +258,28 @@ git -C "$A" reset -q --hard HEAD~1
 gnohook -C "$A" commit -q --allow-empty -m "update data for Somebody"
 refuse "…and so is one with a capitalised word after the first" fin A "Update working state" "session-a"
 git -C "$A" reset -q --hard HEAD~1
-pc A AAAAAAAAAAAAAAA2; echo "AAAAAAAAAAAAAAA9" > "$A/.gate-stamp"
+pc A AAAAAAAAAAAAAAA2; gstamp "$A" AAAAAAAAAAAAAAA9
 refuse "a payload the gate did not pass is refused" fin A "Update working state" "session-a"
 says "not the one checks/gate.js last passed" "…and says why"
+q0="$(gp rev-parse site-queue)"
 echo "AAAAAAAAAAAAAAA2" > "$A/.gate-stamp"
-check "…and goes out once the gate has passed on it" fin A "Update working state" "session-a"
+refuse "a stamp that is only the payload's iv is refused (16 Nov 2026: line 2 must say PASS, and over what)" fin A "Update working state" "session-a"
+says "does not say that the payload" "…and says why"
+says "node checks/gate.js" "…with the command to run"
+printf 'AAAAAAAAAAAAAAA2\nFAIL\n' > "$A/.gate-stamp"
+refuse "…and one whose second line is not a pass" fin A "Update working state" "session-a"
+gstamp "$A" AAAAAAAAAAAAAAA2 HEAD
+refuse "…and a pass over HEAD (a committed payload passes over itself with no change set)" fin A "Update working state" "session-a"
+says "over HEAD" "…quoting the line"
+gstamp "$A" AAAAAAAAAAAAAAA2 "$(git -C "$A" rev-parse --short=12 HEAD~2)"
+refuse "…and a pass over some other commit" fin A "Update working state" "session-a"
+test "$(gp rev-parse site-queue)" = "$q0" && ok "…nothing was queued by any of them" || no "a payload with a bad stamp was queued"
+gstamp "$A" AAAAAAAAAAAAAAA2 "$(printf %.12s "$q0")"
+check "a pass over the queue's head, named by its commit, goes out" fin A "Update working state" "session-a"
+quiet lock A take "session-a" "checks"; pc A AAAAAAAAAAAAAAA3; gstamp "$A" AAAAAAAAAAAAAAA3 queue/site-queue
+check "…and so does one over queue/site-queue" fin A "Update working state" "session-a"
+quiet lock A take "session-a" "checks"; pc A AAAAAAAAAAAAAAA4
+check "…and the gate's own base, origin/main" fin A "Update working state" "session-a"
 quiet lock A take "session-a" "many"
 for i in $(seq 1 31); do mc A "n$i"; done
 refuse "more commits than the airlock takes at once are refused" fin A "Update working state" "session-a"
@@ -552,8 +572,8 @@ port=$(( 20000 + RANDOM % 20000 )); ( cd "$T/www" && exec python3 -m http.server
 sleep 1
 codec() { # $1 = a comment: a commit of page code (the payload unchanged, so the gate's stamp still holds)
   echo "<!-- $1 -->" >> "$T/H/family-tree/index.html" && gnohook -C "$T/H/family-tree" commit -qam "Update page code" \
-    && grep -o 'const ENC = {v:[0-9]*, iter:[0-9]*, salt:"[^"]*", iv:"[^"]*"' "$T/H/family-tree/index.html" | head -n 1 \
-       | sed 's/.*iv:"//; s/"$//' > "$T/H/family-tree/.gate-stamp"
+    && gstamp "$T/H/family-tree" "$(grep -o 'const ENC = {v:[0-9]*, iter:[0-9]*, salt:"[^"]*", iv:"[^"]*"' "$T/H/family-tree/index.html" | head -n 1 \
+       | sed 's/.*iv:"//; s/"$//')"
 }
 livefin() { quiet lock H take "h" "direct"; in_cloud H env FT_PUBLISH=direct SITE="http://127.0.0.1:$port/" NO_PROXY=127.0.0.1 no_proxy=127.0.0.1 \
   FT_LIVE_TRIES=2 FT_LIVE_WAIT=0 bash "$TOOLS/cloud-finish.sh" "Update working state" "h"; }
