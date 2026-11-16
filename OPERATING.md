@@ -436,9 +436,9 @@ state file this session has changed and not committed, not to rebase by hand, an
   2026): when `data.json` is here and comes from the `index.html` on disk, it runs
   `node checks/manifest.js`, and if the list differs from the archive's it commits it there ("update the
   source list"); the commit goes up with the archive's others. `checks/manifest.js` ends with **0** (both
-  lists written and complete), **3** (written, but not complete: its private file
-  `checks/source-hosts.json` is not here) or **1** (it failed; a hosts file it cannot use stops it and
-  nothing is written). On 3 or 1 the finish prints a NOTE and leaves every list as it was, and a list
+  lists written and complete), **3** (its private file `checks/source-hosts.json` is not here, so the
+  lists would not be complete and nothing is written) or **1** (it failed; a hosts file it cannot use
+  stops it and nothing is written). On 3 or 1 the finish prints a NOTE and leaves every list as it was, and a list
   commit that cannot be pushed is undone; the next full finish rebuilds it. After a NOTE about exit 3,
   run `bash tools/cloud-setup.sh` (it links the file); if the file is still not there, say so in the
   session's report. Never copy a list from such a run into the archive by hand.
@@ -617,7 +617,7 @@ changes the site does not have.
 | `tools/pages.js` | the page list of a register scan, kept in the source archive: `add`, `show`, `unread`, `list`, `import-list` |
 | `tools/mapfile.js` | the map's base layers: `check`, `write <layers.json>` (a new hashed file; keep the old one a deploy) |
 | `checks/run.js` | prose linter (report only; the gate fails on new HIGH findings) |
-| `checks/manifest.js` | regenerate `sources/urls.tsv` for the archive (the full finish runs it); reads the private `checks/source-hosts.json`; exit 0 complete, 3 written but not complete, 1 failed |
+| `checks/manifest.js` | regenerate `sources/urls.tsv` for the archive (the full finish runs it); reads the private `checks/source-hosts.json`; exit 0 complete, 3 not complete and nothing written, 1 failed |
 | `tests/run.js`, `tests/ledger.js`, `tests/research.js`, `tests/browser.js` | site regression suite; tests for this loop; tests for the research tools (the first three run in the gate and in CI); browser checks (Playwright) |
 
 Retired: each of these refuses to run and says what to use instead. `checks/patch.js`, `checks/retag.js`

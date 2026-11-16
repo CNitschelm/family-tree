@@ -631,17 +631,26 @@ echo "after the clash" >> "$PA/OPEN-ITEMS.md"
 check "the next full finish puts the list right again, on top of the other session's" fin A "Update working state"
 git --git-dir="$GHA" show main:sources/urls.tsv | grep -q "notice/4" && ! git --git-dir="$GHA" show main:sources/urls.tsv | grep -q "notice/5" \
   && ok "…GitHub's archive has the list the cards give" || no "the list after a clash"
-# a manifest.js that runs without its private list of hosts writes a list and says, by its exit code, that the
-# list is not complete: the finish must believe it and keep that list out of the archive (a push of the list
-# starts the archive's capture run). The real script first, in a copy of its own with no hosts file beside it;
-# then a stand-in in the site clone, which leaves with the real script's code and prints none of its words,
-# because the finish goes by the code alone.
+# a manifest.js that runs without its private list of hosts says, by its exit code, that its list is not
+# complete, and writes nothing: the finish must believe the code and keep such a list out of the archive (a
+# push of the list starts the archive's capture run). The real script first, in a copy of its own with no hosts
+# file beside it, then by hand in the site clone with the link to the hosts file taken away (a hand run once
+# left its incomplete lists in sources/, and the next full finish pushed them with the state); then a stand-in
+# in the site clone, which writes a list all the same, leaves with the real script's code and prints none of
+# its words, because the finish goes by the code alone.
 mkdir -p "$T/mf/checks" && cp "$A/checks/manifest.js" "$A/checks/lib.js" "$T/mf/checks/"
 mrc=0; ( cd "$T/mf" && FT_DATA="$A/data.json" node checks/manifest.js ) > "$T/last.out" 2>&1 || mrc=$?
 mcode="$(sed -n 's/^const INCOMPLETE = \([0-9][0-9]*\);.*/\1/p' "$A/checks/manifest.js")"
-[ "$mrc" = 3 ] && [ "$mcode" = 3 ] && grep -q "notice/4" "$T/mf/sources/urls.tsv" \
-  && ok "checks/manifest.js without its private hosts file writes its list and leaves with exit code 3" \
+[ "$mrc" = 3 ] && [ "$mcode" = 3 ] && [ ! -e "$T/mf/sources" ] \
+  && ok "checks/manifest.js without its private hosts file writes nothing and leaves with exit code 3" \
   || no "manifest.js without its hosts file: exit $mrc, and the code it names is ${mcode:-none}"
+says "NOTHING is written" "…and says so"
+mv "$A/checks/source-hosts.json" "$T/hosts.link"; lists0="$(cat "$PA/sources/urls.tsv" "$PA/sources/MANIFEST.json" | sha256sum)"
+mrc=0; ( cd "$A" && FT_DATA="$A/data.json" node checks/manifest.js ) > "$T/last.out" 2>&1 || mrc=$?
+mv "$T/hosts.link" "$A/checks/source-hosts.json"
+[ "$mrc" = 3 ] && [ "$(cat "$PA/sources/urls.tsv" "$PA/sources/MANIFEST.json" | sha256sum)" = "$lists0" ] && test -z "$(git -C "$PA" status --porcelain -- sources)" \
+  && ok "…run by hand in a session without the hosts file, it leaves the lists in sources/ as they were: nothing for the next finish to push" \
+  || no "a hand run of manifest.js without its hosts file changed sources/ (exit $mrc)"
 echo '{"risk":{},"kind":{}}' > "$T/mf/checks/source-hosts.json"
 check "…with the file, it leaves with 0" sh -c "cd '$T/mf' && FT_DATA='$A/data.json' node checks/manifest.js"
 echo '[]' > "$T/mf/checks/source-hosts.json"

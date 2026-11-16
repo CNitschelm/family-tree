@@ -632,7 +632,9 @@ section("Line figures (linkconf sync)");
  * from family-tree-private). Without that file its sources/urls.tsv is not the whole one, and a push of such a
  * list into the archive starts the archive's capture run. tools/cloud-finish.sh rebuilds the list at every full
  * finish and used to tell an incomplete one only by the words manifest.js printed. The exit code is the sign
- * now: 0 complete, 3 written but not complete, 1 failed. Run here on a copy of the script with made-up cards. */
+ * now: 0 complete, 3 not complete, 1 failed. On 3 nothing is written (found in review, 16 Nov 2026: a hand run
+ * left its incomplete lists in sources/, a link into family-tree-private, and the next full finish pushed them
+ * with the state). Run here on a copy of the script with made-up cards. */
 section("Source list (manifest)");
 {
   const os = require("os"), cp = require("child_process");
@@ -646,15 +648,21 @@ section("Source list (manifest)");
       unions: [{ s: "Spouse Card", c: [{ id: "t01", name: "Second Card", years: "1699–1760", unions: [],
         src: [src("A register", "https://example.invalid/register/1"), src("A page", "https://private-host.example/page/2")] }] }] }));
     const hosts = path.join(T, "checks", "source-hosts.json"), list = path.join(T, "sources", "urls.tsv");
-    const run = () => {
+    const run = before => {
       fs.rmSync(path.join(T, "sources"), { recursive: true, force: true });
+      if (before) { fs.mkdirSync(path.join(T, "sources")); Object.keys(before).forEach(f => fs.writeFileSync(path.join(T, "sources", f), before[f])); }
       const r = cp.spawnSync("node", [path.join(T, "checks", "manifest.js")], { cwd: T, env: { ...process.env, FT_DATA: path.join(T, "data.json") }, encoding: "utf8" });
       let tsv = ""; try { tsv = fs.readFileSync(list, "utf8"); } catch (_) {}
       return { code: r.status, out: (r.stdout || "") + (r.stderr || ""), tsv };
     };
     const bare = run();
-    ok(bare.code === 3 && /medium\t1\tpage\thttps:\/\/private-host\.example\/page\/2/.test(bare.tsv) && /source-hosts\.json is not here/.test(bare.out),
-      "checks/manifest.js without its private hosts file writes the list, says it is not complete, and leaves with exit code 3");
+    ok(bare.code === 3 && bare.tsv === "" && !fs.existsSync(path.join(T, "sources")) && /source-hosts\.json is not here/.test(bare.out) &&
+       /NOTHING is written/.test(bare.out) && /MANIFEST \(not written\): 2 distinct URLs/.test(bare.out),
+      "checks/manifest.js without its private hosts file says its list would not be complete, writes nothing, and leaves with exit code 3");
+    const kept = { "urls.tsv": "the list as the last full finish left it\n", "MANIFEST.json": "{\"kept\":true}\n" };
+    const over = run(kept);
+    ok(over.code === 3 && over.tsv === kept["urls.tsv"] && fs.readFileSync(path.join(T, "sources", "MANIFEST.json"), "utf8") === kept["MANIFEST.json"],
+      "…and the lists a full finish left in sources/ are as they were after such a run (a hand run once left incomplete ones there)");
     fs.writeFileSync(hosts, JSON.stringify({ risk: { high: ["private-host.example"] }, kind: {} }));
     const full = run();
     ok(full.code === 0 && /high\t1\tpage\thttps:\/\/private-host\.example\/page\/2/.test(full.tsv) && !/not here/.test(full.out) && !/(First|Second|Spouse) Card/.test(full.tsv),

@@ -456,10 +456,11 @@ sync_urls() {
   elif [ ! -L "$FT/sources" ] || [ ! -d "$FT/sources" ]; then why="sources/ is not a link into family-tree-private (checks/manifest.js writes there)"
   elif ! keep="$(mktemp -d)" || ! lists_keep "$keep"; then why="the lists in sources/ could not be set aside before the rebuild"
   elif out="$(cd "$FT" && FT_DATA="$FT/data.json" node checks/manifest.js 2>&1)"; mrc=$?; [ "$mrc" = 3 ]; then
-    # manifest.js ran and wrote its lists, and its exit code 3 says they are not the whole ones: without its
-    # private list of hosts it rates them all alike. A push of sources/urls.tsv starts the archive's capture
-    # run, so such a list must never go there (found in review, 16 Nov 2026). The code is the sign, not the
-    # words it prints: a reworded note cannot let an incomplete list through.
+    # manifest.js ran, and its exit code 3 says its lists would not be the whole ones: without its private
+    # list of hosts it rates them all alike. A push of sources/urls.tsv starts the archive's capture run, so
+    # such a list must never go there (found in review, 16 Nov 2026). The code is the sign, not the words it
+    # prints: a reworded note cannot let an incomplete list through. (The script writes nothing on 3 now;
+    # the lists are put back all the same, so that this does not rest on that.)
     back=1
     why="checks/manifest.js says this run's list is not complete (its private file checks/source-hosts.json is not here), and such a list must not go into the archive"
     next="Before it: run  bash tools/cloud-setup.sh  (it links that file from family-tree-private); if the file is

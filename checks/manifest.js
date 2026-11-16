@@ -11,9 +11,11 @@
 // Exit codes (tools/cloud-finish.sh goes by these, never by the words printed):
 //   0  both lists were written and are complete
 //   1  the run failed: the private hosts file cannot be used, or data.json could not be read
-//   3  both lists were written but are NOT complete: the private hosts file is not here, so the hosts only
-//      it knows are rated like any unknown host. Such a sources/urls.tsv must never go into the archive
-//      repo (a push of it there starts the archive's capture run).
+//   3  the lists would NOT be complete, so NOTHING was written: the private hosts file is not here, and the
+//      hosts only it knows would be rated like any unknown host. Such a sources/urls.tsv must never go into
+//      the archive repo (a push of it there starts the archive's capture run). The summary is still printed.
+//      (Until the review of 16 Nov 2026 the lists were written all the same. sources/ is a link into
+//      family-tree-private, so a hand run left them there and the next full finish pushed them with the state.)
 //
 // The manifest is the input to the archiver. It is regenerated from data.json, never hand-edited:
 // add a source to a card and it appears here on the next run.
@@ -51,8 +53,8 @@ const KIND = [
   [/\.(jpe?g|png|gif|webp|pdf)(\?|$)/i, 'file'],
 ];
 
-// The private part of both lists. Without it the script still runs, and says so: a host only that
-// file knows is then rated "medium" and captured as a "page", which is the answer for any unknown host.
+// The private part of both lists. Without it the script still runs, says so and writes nothing: a host
+// only that file knows is then rated "medium" and captured as a "page", which is the answer for any unknown host.
 // A file that is there and cannot be used is another matter: it would rate hosts wrongly without a
 // word, so the run stops, whether the file is not JSON or is JSON of another shape.
 const HOSTS_FILE = path.join(__dirname, 'source-hosts.json');
@@ -69,7 +71,7 @@ const shapeFault = p => {
   }
   return null;
 };
-const INCOMPLETE = 3;   // the exit code for a list written without the private hosts file (see the top of this file)
+const INCOMPLETE = 3;   // the exit code for a run without the private hosts file (see the top of this file)
 let PRIVATE = null;
 try {
   PRIVATE = JSON.parse(fs.readFileSync(HOSTS_FILE, 'utf8'));
@@ -82,8 +84,9 @@ try {
   }
   PRIVATE = null;
 }
-const NO_HOSTS_NOTE = 'NOTE: checks/source-hosts.json is not here, so the hosts only that private file lists are rated "medium" and "page". ' +
-  'Do not copy this run\'s sources/urls.tsv into the archive repo: run bash tools/cloud-setup.sh (it links the file from family-tree-private), then run this again. ' +
+const NO_HOSTS_NOTE = 'NOTE: checks/source-hosts.json is not here, so the hosts only that private file lists would be rated "medium" and "page". ' +
+  'Such a list is not complete, so NOTHING is written: sources/MANIFEST.json and sources/urls.tsv stay as they were, and the figures printed are this run\'s only. ' +
+  'Copy no list into the archive repo now: run bash tools/cloud-setup.sh (it links the file from family-tree-private), then run this again. ' +
   'If the file is still not here after that, it is not in family-tree-private yet (or its name is not in .private-paths): stop, change nothing, and report that.';
 if (!PRIVATE) console.log(NO_HOSTS_NOTE + '\n');
 const listed = (group, level) => {
@@ -139,12 +142,15 @@ const entries = [...map.values()].map(e => {
 });
 
 const dir = path.join(__dirname, '..', 'sources');
-fs.mkdirSync(dir, { recursive: true });
+// Without the private hosts file nothing is written (exit code 3, at the end): a list that is not complete
+// must not lie in sources/, where the next step of a run, or the next finish, would take it for the real one.
+const WRITE = !!PRIVATE;
+if (WRITE) fs.mkdirSync(dir, { recursive: true });
 
 // Two files, because they go to two different places.
 // The full one stays here, git-ignored, and carries the card names — that is what makes
 // checks/archive-status.js able to say "these cards would lose their evidence".
-fs.writeFileSync(path.join(dir, 'MANIFEST.json'), JSON.stringify({
+if (WRITE) fs.writeFileSync(path.join(dir, 'MANIFEST.json'), JSON.stringify({
   generated: 'regenerate with node checks/manifest.js',
   count: entries.length,
   entries,
@@ -159,10 +165,10 @@ const tsv = [
   '# Card names are deliberately omitted. Columns: risk, cards-depending, kind, url',
   ...entries.map(e => [e.risk, e.dependents, e.kind, e.url].join('\t')),
 ].join('\n') + '\n';
-fs.writeFileSync(path.join(dir, 'urls.tsv'), tsv);
+if (WRITE) fs.writeFileSync(path.join(dir, 'urls.tsv'), tsv);
 
 const by = (k, v) => entries.filter(e => e[k] === v).length;
-console.log(`MANIFEST: ${entries.length} distinct URLs, ${new Set(entries.map(e => e.host)).size} hosts`);
+console.log(`MANIFEST${WRITE ? '' : ' (not written)'}: ${entries.length} distinct URLs, ${new Set(entries.map(e => e.host)).size} hosts`);
 console.log(`  by risk of vanishing:  high ${by('risk', 'high')}   medium ${by('risk', 'medium')}   low ${by('risk', 'low')}`);
 console.log(`  by capture kind:       page ${by('kind', 'page')}   gated ${by('kind', 'gated')}   scan ${by('kind', 'scan')}   file ${by('kind', 'file')}   already-archived ${by('kind', 'already-archived')}`);
 console.log('');
