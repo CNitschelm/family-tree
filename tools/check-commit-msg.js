@@ -15,7 +15,7 @@
  *   3. no capitalised word after the first — proper nouns are the tell
  *   4. no word that is a person's name: in the payload (cards, spouses, the correspondents its
  *      source labels name) or, where this clone has them, on the private lists (below)
- *   5. the author and the committer use a noreply address
+ *   5. the author and the committer use an address the airlock publishes
  *
  * Rule 3 is the one that actually does the work, and it is deliberately blunt.
  * The name index (rule 4) can only know people the payload lists as nodes or
@@ -34,10 +34,12 @@
  * FT_PRIVATE_LISTS names another folder that holds them at the same relative paths.
  *
  * Rule 5: an address in a commit is as public as its message, and as permanent. 58 early
- * commits carry a personal address; nothing checked. A noreply address is one whose mailbox
- * part is "noreply" or "no-reply", or one at users.noreply.github.com. An address under
- * ".invalid" passes too: that ending is reserved, no such mailbox can exist, and the test
- * suites commit with one in their throwaway repositories.
+ * commits carry a personal address; nothing checked. The addresses that pass are the two the
+ * airlock publishes and no others, so that a commit this guard lets through is not refused
+ * later, when nobody is there to redo it: the cloud sessions' own (noreply at SESSION_HOST) and
+ * a GitHub address ending in @users.noreply.github.com. An address under ".invalid" passes only
+ * in a repository that cannot publish (no remote, or only remotes that are folders on this
+ * machine): the test suites and the rehearsal commit with one in their throwaway repositories.
  *
  * It FAILS CLOSED. If it cannot build the name index it refuses the commit
  * rather than waving it through, because "could not check" and "checked and
@@ -161,58 +163,127 @@ function namesFromRecords(md) {
   return out;
 }
 
-/* Both files list people in tables, the names in bold. A bold phrase in a table row is taken
- * as a name when every word of it reads as one (capitalised words, initials, a nickname in
- * brackets) and, where `known` is given, at least one of its words is already a name in the
- * payload. That second test keeps out a bold place, heading or verdict, which would otherwise
- * put ordinary words on the list of names. Names in running text are not read: nothing there
- * says where one starts and stops. */
-function namesFromTables(md, known) {
+/* The site's own public words: the family names on its front page and the owner's first name,
+ * the same four as ALLOW in tests/run.js section 14 (which checks that the two agree). They
+ * exempt nothing here. They only keep the family name from proving that a phrase on a private
+ * list is a person: nearly every heading in those files carries it. */
+const PUBLIC_WORDS = ["nitschelm", "schweitzer", "sartre", "cory"];
+
+/* Words a heading, a verdict or a place is made of and a person's name is not. The list cannot
+ * be complete; what gets past it is caught late and loudly (see NOT_A_PERSON_HINT). */
+const HEADING = new Set([...NOT_A_PERSON, "research", "branch", "line", "lines", "cluster", "clusters", "spelling",
+  "record", "records", "unknown", "unnamed", "unplaced", "updated", "resolved", "proven", "pending", "see", "tree",
+  "people", "person", "children", "child", "son", "daughter", "wife", "husband", "widow", "brother", "sister", "father",
+  "mother", "parents", "born", "died", "married", "yes", "no", "not", "our", "own", "new", "old", "saint", "st", "san",
+  "los", "las", "fort", "mount", "falls", "island", "springs", "heights", "valley", "beach", "co", "inc"]);
+const NOT_A_PERSON_HINT = "If a phrase read from a private list is a heading, a place or a verdict and not a person, " +
+  "take the bold off it (or move it out of the Person column) in that file, in family-tree-private, and run this again.";
+
+/* Both files list people in tables, and a table's header row says what each column holds.
+ * Until the review of 16 Nov 2026 every bold phrase of a row was read, the verdict in the
+ * recommendation column too: one verdict holding a word that is also on the tree would have
+ * put ordinary words on the list of names, turned the gate red and stopped the day's commit,
+ * with nothing pointing at the private file. Now:
+ *  - "Person", "Name": the people the table is about. Where the column writes them in bold among
+ *    other words, the bold phrases are the names; where it has no bold at all, each cell is one.
+ *  - "Mother", "Father", "Parent", "Spouse": each cell is one name.
+ *  - "Rec.", "Evidence", "Status" and the like (VERDICT_COLUMN): never read.
+ *  - any other column (a description, the reasons): a bold phrase is a name only if `known`
+ *    holds one of its words, that is, a name already in the payload, the site's public words
+ *    aside. These columns name the parents, husbands and wives of the row's person, in bold,
+ *    two dozen people today; they also put facts in bold, which is why the test is stricter.
+ * Everywhere, a phrase is a name only when every word of it reads as one (capitalised words,
+ * initials, a nickname in brackets) and none is a HEADING word; and one with a word written all
+ * in capitals (how these files write a heading, and now and then a surname) needs a word of
+ * `known` in the people columns too. A row that stands apart from its table (a blank line above
+ * it, as one does today) is read under the header before it when it has as many cells.
+ * Names in running text are not read: nothing there says where one starts and stops. */
+const PEOPLE_COLUMN = /^(?:person|people|name|names)$/, ONE_PERSON_COLUMN = /^(?:mother|father|parent|spouse|husband|wife)$/;
+const VERDICT_COLUMN = /^(?:rec|recommendation|recommended|verdict|status|decision|evidence|source|sources|action|next)$/;
+function tablesOf(md) {
   const out = [];
+  const lines = String(md).split(/\r?\n/), row = l => /^\s*\|/.test(l);
+  const cellsOf = l => l.trim().replace(/^\|/, "").replace(/\|\s*$/, "").split(/(?<!\\)\|/).map(c => c.trim());
+  const rule = cells => cells.every(c => /^:?-+:?$/.test(c));
+  for (let i = 0; i < lines.length; i++) {
+    if (!row(lines[i])) continue;
+    const block = [];
+    while (i < lines.length && row(lines[i])) block.push(cellsOf(lines[i++]));
+    if (block.length > 1 && rule(block[1])) out.push({ head: block[0], rows: block.slice(2) });
+    else {
+      const last = out[out.length - 1];
+      if (last) last.rows.push(...block.filter(c => c.length === last.head.length && !rule(c)));
+    }
+  }
+  return out;
+}
+function asName(part, known, needsKnown) {
   const WORD = /^(?:[\p{Lu}][\p{L}'’-]*\.?|\([\p{Lu}][\p{L}'’. -]*\)|["“][\p{Lu}][\p{L}'’. -]*["”])$/u;
   const SMALL = /^(?:de|du|des|la|le|von|van|der|den|zu)$/;
-  for (const line of String(md).split(/\r?\n/)) {
-    if (!/^\s*\|/.test(line)) continue;
-    for (const b of line.match(/\*\*([^*]+)\*\*/g) || []) {
-      for (let part of b.replace(/\*\*/g, "").split(/\s*(?:→|×|·|,|;|\/|&|=|—|–|:|\band\b|\bet\b)\s*/)) {
-        part = part.replace(/\s*\(?(?:[bd]\.|c\.)?\s*\d.*$/, "").trim().replace(/^["“]([^"“”]*)["”]$/, "$1");
-        let toks = part.split(/\s+/).filter(Boolean);
-        while (toks.length && TITLE.test(toks[0])) toks = toks.slice(1);
-        if (toks.length < 2 || toks.length > 6) continue;
-        if (!toks.every((t, i) => WORD.test(t) || (i > 0 && i < toks.length - 1 && SMALL.test(t)))) continue;
-        /* two words at least outside any bracket, one of them more than an initial */
-        const bare = words(toks.join(" ").replace(/\([^)]*\)|["“][^"”]*["”]/g, " "));
-        if (bare.length < 2 || !bare.some(w => w.length > 2)) continue;
-        if (known && !bare.some(w => w.length > 2 && known.has(w))) continue;
-        out.push(toks.join(" "));
-      }
-    }
+  /* "c042 Name 1832–1906", "Name (b. 1901)", "“Name”" → "Name" */
+  part = String(part).replace(/^\s*c\d{3,}\s+/, "").replace(/\s*\(?(?:[bd]\.|c\.)?\s*\d.*$/, "").trim().replace(/^["“]([^"“”]*)["”]$/, "$1");
+  let toks = part.match(/\([^)]*\)|["“][^"”]*["”]|\S+/g) || [];
+  while (toks.length && TITLE.test(toks[0])) toks = toks.slice(1);
+  if (toks.length < 2 || toks.length > 6) return null;
+  if (!toks.every((t, i) => WORD.test(t) || (i > 0 && i < toks.length - 1 && SMALL.test(t)))) return null;
+  /* two words at least outside any bracket, one of them more than an initial */
+  const bare = words(toks.join(" ").replace(/\([^)]*\)|["“][^"”]*["”]/g, " "));
+  if (bare.length < 2 || !bare.some(w => w.length > 2)) return null;
+  const letters = t => t.replace(/[^\p{L}]/gu, "");
+  if (toks.some(t => HEADING.has(fold(letters(t))))) return null;
+  const capitals = toks.some(t => { const l = letters(t); return l.length > 1 && l === l.toUpperCase() && !SUFFIX.has(l.toLowerCase()); });
+  if ((needsKnown || capitals) && !(known && bare.some(w => w.length > 2 && known.has(w) && !PUBLIC_WORDS.includes(w)))) return null;
+  return toks.join(" ");
+}
+function namesFromTables(md, known) {
+  const out = [];
+  const take = (part, needsKnown) => { const n = asName(part, known, needsKnown); if (n) out.push(n); };
+  const bold = (cell, needsKnown) => (cell.match(/\*\*([^*]+)\*\*/g) || []).forEach(b =>
+    b.replace(/\*\*/g, "").split(/\s*(?:→|×|·|,|;|\/|&|=|—|–|:|\band\b|\bet\b)\s*/).forEach(p => take(p, needsKnown)));
+  for (const t of tablesOf(md)) {
+    t.head.forEach((h, col) => {
+      const first = words(h)[0] || "";
+      if (VERDICT_COLUMN.test(first)) return;
+      const cells = t.rows.map(r => r[col] || "");
+      if (ONE_PERSON_COLUMN.test(first)) cells.forEach(c => take(c.replace(/\*\*|~~/g, ""), false));
+      else if (!PEOPLE_COLUMN.test(first)) cells.forEach(c => bold(c, true));
+      else if (cells.some(c => /\*\*[^*]+\*\*/.test(c))) cells.forEach(c => bold(c, false));
+      else cells.forEach(c => take(c, false));
+    });
   }
   return out;
 }
 
 /* opts.dir: the folder that holds the files (default FT_PRIVATE_LISTS, then the repository root);
  * opts.known: folded name words of the payload (see namesFromTables).
- * Returns { dir, files (those found), deny, names, ci }. Nothing found is not an error. */
+ * Returns { dir, files (those found), deny, names, origin (name → the file it was read from), ci }.
+ * Nothing found is not an error. */
 function privateLists(opts) {
   opts = opts || {};
   const dir = opts.dir || process.env.FT_PRIVATE_LISTS || ROOT;
-  const res = { dir, files: [], deny: [], names: [], ci: false };
+  const res = { dir, files: [], deny: [], names: [], origin: Object.create(null), ci: false };
   if (process.env.CI || process.env.GITHUB_ACTIONS) { res.ci = true; return res; }
   const read = f => { try { const t = fs.readFileSync(path.join(dir, f), "utf8"); res.files.push(f); return t; } catch (_) { return null; } };
   const deny = read(PRIVATE_FILES[0]);
   if (deny !== null) res.deny = [...new Set(deny.split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith("#"))
     .map(l => words(l).join(" ")).filter(Boolean))];
-  const names = new Set();
   for (const f of PRIVATE_FILES.slice(1)) {
     const md = read(f);
     if (md === null) continue;
-    namesFromRecords(md).forEach(n => names.add(n));
-    namesFromTables(md, opts.known).forEach(n => names.add(n));
+    namesFromRecords(md).concat(namesFromTables(md, opts.known)).forEach(n => { if (!(n in res.origin)) res.origin[n] = f; });
   }
-  res.names = [...names];
+  res.names = Object.keys(res.origin);
   return res;
 }
+/* For a failure message: where each word the private lists add comes from.
+ * word → { file, phrase } (phrase: the name it is part of; null for a never-publish line) */
+function listWords(priv) {
+  const from = new Map();
+  (priv.names || []).forEach(n => words(n).forEach(w => { if (w.length >= 3 && !from.has(w)) from.set(w, { file: priv.origin[n], phrase: n }); }));
+  (priv.deny || []).forEach(d => d.split(" ").concat(d).forEach(w => { if (w.length >= 3 && !from.has(w)) from.set(w, { file: PRIVATE_FILES[0], phrase: null }); }));
+  return from;
+}
+const listedAs = (w, o) => o.phrase ? w + " (read in " + o.file + ' as part of "' + o.phrase + '")' : w + " (a never-publish line of " + o.file + ")";
 
 /* the name words (three letters and up, or `min`, folded) of a list of names, into a Set */
 function nameWords(names, into, min) {
@@ -235,17 +306,36 @@ function denyHits(text, deny) {
   return deny.filter(d => d.replace(/ /g, "").length >= 5 ? spaced.includes(d) : spaced.includes(" " + d + " "));
 }
 
-/* Rule 5. True for an address that is nobody's mailbox. */
-function noreply(email) {
+/* Rule 5. True for an address that may be published: the two forms the airlock lets through
+ * (its rules.py), so the guard and the airlock cannot disagree about a commit. With
+ * opts.throwaway, an address under the reserved ".invalid" ending as well. */
+const SESSION_HOST = "anthropic.com";
+function noreply(email, opts) {
   const m = String(email || "").trim().toLowerCase().match(/^([^@\s]+)@([^@\s]+)$/);
   if (!m) return false;
   const local = m[1], host = m[2];
-  return /^no-?reply$/.test(local) || host === "users.noreply.github.com" || /(?:^|\.)invalid$/.test(host);
+  if (local === "noreply" && host === SESSION_HOST) return true;
+  if (host === "users.noreply.github.com" && local.length <= 100) return true;
+  return !!(opts && opts.throwaway) && /(?:^|\.)invalid$/.test(host);
 }
+/* A repository that cannot publish: it has no remote, or every remote is a folder on this
+ * machine. The suites' and the rehearsal's repositories are like that; a working clone never is. */
+function throwaway(cwd) {
+  let out;
+  try {
+    out = cp.execFileSync("git", ["config", "--get-regexp", "^remote\\..*\\.(url|pushurl)$"],
+      { cwd: cwd || process.cwd(), stdio: ["ignore", "pipe", "ignore"] }).toString("utf8");
+  } catch (e) { return e.status === 1; }      /* 1: no remote at all; anything else could not be read, so: no */
+  const urls = out.split(/\r?\n/).map(l => l.replace(/^\S+\s+/, "").trim()).filter(Boolean);
+  return urls.every(u => /^(?:\/|\.\.?\/|file:\/\/|[A-Za-z]:[\\/])/.test(u));
+}
+/* what to do about an address: one wording, here and in tests/run.js section 13 */
+const ADDRESS_FIX = "give this clone an address that may be published: git config user.email noreply@" + SESSION_HOST +
+  " (the cloud sessions' own), or the GitHub account's address ending in @users.noreply.github.com";
 
 if (require.main !== module) {
-  module.exports = { fold, words, nameForms, labelNames, privateLists, namesFromRecords, namesFromTables,
-    nameWords, denyHits, noreply, PRIVATE_FILES, LABEL_WORD_MIN };
+  module.exports = { fold, words, nameForms, labelNames, privateLists, namesFromRecords, namesFromTables, listWords, listedAs,
+    nameWords, denyHits, noreply, throwaway, PRIVATE_FILES, LABEL_WORD_MIN, PUBLIC_WORDS, SESSION_HOST, ADDRESS_FIX, NOT_A_PERSON_HINT };
   return;
 }
 
@@ -335,16 +425,19 @@ const TECH = new Set(["github","actions","pages","readme","json","html","css",
         (commit ? " and that " + commit + " is a commit" : "") + ", then commit again.");
   }
   if (who) {
-    const bad = Object.keys(who).filter(k => !noreply(who[k]));
+    const loose = { throwaway: throwaway(process.cwd()) };
+    const bad = Object.keys(who).filter(k => !noreply(who[k], loose));
     if (bad.length)
-      die("the " + bad.join(" and the ") + " of this commit " + (bad.length > 1 ? "do" : "does") + " not use a noreply address" +
+      die("the " + bad.join(" and the ") + " of this commit " + (bad.length > 1 ? "do" : "does") + " not use an address that may be published" +
           " (" + bad.map(k => k + ": …@" + String(who[k] || "none").replace(/^.*@/, "")).join(", ") + ").\n" +
-          "  An address in a commit is public and cannot be taken back.\n" +
-          "  Fix: give this clone the noreply address the newest commits on main carry\n" +
-          "  (git log -1 --format=%ae origin/main prints it):  git config user.email <that address>\n" +
+          "  An address in a commit is public and cannot be taken back, and the airlock refuses any other.\n" +
+          (bad.some(k => /invalid$/i.test(String(who[k]))) ? "  (An address under .invalid passes only in a throwaway repository, one with no remote on the network.)\n" : "") +
+          "  Fix: " + ADDRESS_FIX.replace(": git", ":\n  git").replace(", or the", ",\n  or the") + ",\n" +
           "  and leave out --author, GIT_AUTHOR_EMAIL and GIT_COMMITTER_EMAIL if one of them set this one.\n" +
-          (commit ? "  Then, if " + commit + " is the newest commit: git commit --amend --reset-author --no-edit."
-                  : "  Then commit again."));
+          (commit ? "  Then, if " + commit + " is the newest commit and tools/cloud-finish.sh has not queued it yet:\n" +
+                    "  git commit --amend --reset-author --no-edit. If it is older or already queued, stop and report it to Cory."
+                  : "  Then commit again. If this commit amends one written under the other address, the author stays\n" +
+                    "  as it was unless you say: git commit --amend --reset-author --no-edit"));
   }
 }
 
@@ -399,8 +492,7 @@ loadNames().then(res => {
 
   /* the private lists, where this clone has them: their names are names too */
   const priv = privateLists({ known: res.toks });
-  const listToks = nameWords(priv.names);
-  priv.deny.forEach(d => d.split(" ").forEach(w => { if (w.length >= 3) listToks.add(w); }));
+  const from = listWords(priv);
 
   const subjectWords = [...new Set(words(subject).filter(w => w.length >= 3))];
   const all = [...res.toks];
@@ -410,20 +502,21 @@ loadNames().then(res => {
     return w.length >= 4 && all.some(t => t.length > w.length && t.startsWith(w));
   });
   const inLabels = subjectWords.filter(w => res.labelToks.has(w) && !inPayload.includes(w));
-  const inLists = [...new Set(subjectWords.filter(w => listToks.has(w)).concat(denyHits(subject, priv.deny)))]
+  const inLists = [...new Set(subjectWords.filter(w => from.has(w)).concat(denyHits(subject, priv.deny)))]
     .filter(w => !inPayload.includes(w) && !inLabels.includes(w));
   const bad = inPayload.concat(inLabels, inLists);
   if (bad.length)
     die("this message carries " + bad.length + " word(s) that are a person's name: " + bad.join(", ") + "\n" +
         (inPayload.length ? "  In the payload (a card or a spouse, or the start of a given name there): " + inPayload.join(", ") + "\n" : "") +
         (inLabels.length ? "  A correspondent named in a source label: " + inLabels.join(", ") + "\n" : "") +
-        (inLists.length ? "  On the private lists (" + priv.files.join(", ") + "): " + inLists.join(", ") + "\n" : "") +
+        (inLists.length ? "  Only on the private lists: " + inLists.map(w => listedAs(w, from.get(w) || { file: PRIVATE_FILES[0], phrase: null })).join("; ") + "\n" : "") +
         "  The repo is PUBLIC and a force-push does not take it back — GitHub keeps\n" +
         "  serving old SHAs by hash indefinitely. There is no clean way back.\n" +
         "  Fix: write a neutral mechanical line without " + (bad.length > 1 ? "those words" : "that word") +
         " (\"Update site data payload\"), commit again,\n" +
         "  and put the story in CHANGE-LOG-COMMITS.md. If the word is an ordinary one that is also\n" +
-        "  somebody's name, use another word; the lists are not changed to let a message through.\n" +
+        "  somebody's name, use another word; no person is taken off a list to let a message through.\n" +
+        (inLists.some(w => (from.get(w) || {}).phrase) ? "  " + NOT_A_PERSON_HINT.replace("and run this again", "and commit again") + "\n" : "") +
         "  (name index via " + res.via + (priv.files.length ? " and " + priv.files.length + " private list(s)" : "") + ")");
   process.exit(0);
 }).catch(e => die("guard crashed, refusing the commit: " + e.message));
