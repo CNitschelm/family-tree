@@ -163,8 +163,9 @@ function writerProblem(env = process.env) {
   if (!l) return "nobody holds the writer lock. Take it first:  " + TAKE(who) + "  Then run this command again, in a new shell or after  . ~/.ft-env  (the lock's holder is read from FT_WHO).";
   const held = 'the writer lock is held by "' + l.who + '" since ' + l.since + (l.what ? " (" + l.what + ")" : "");
   if (l.stale) return held + ", over 12 hours ago, so it no longer counts" + (l.who === who ? " and another session may take it" : "") + ". Take it again:  " + TAKE(who || undefined) + "  (if that is refused because the site has uncommitted changes, commit media/research.bin and media/research-cards.bin first). Then run this command again.";
-  /* ~/.ft-env has FT_WHO only when cloud-lock.sh took the lock: after tools/lock.js alone (doctor.js still names it
-     for an abandoned lock) reading the file again changes nothing, so the message goes on to the step that does */
+  /* ~/.ft-env has FT_WHO only when cloud-lock.sh took the lock: after tools/lock.js alone (doctor.js named it
+     for an abandoned lock until 16 Nov 2026) reading the file again changes nothing, so the message goes on to
+     the step that does */
   if (!who) return held + ", and this shell does not say who it is (FT_WHO is not set). If this session took the lock, run  . ~/.ft-env  (or open a new shell) and run this command again. If FT_WHO is still not set after that (echo \"$FT_WHO\" prints nothing), the lock was taken without cloud-lock.sh: take it again under the same name, which renews it and sets FT_WHO:  " + TAKE(l.who) + "  (do what it says if it refuses), then  . ~/.ft-env  and this command again. If another session took the lock, wait until it is free (bash tools/cloud-lock.sh status), then:  " + TAKE();
   if (l.who !== who) return held + ": another session is writing, and this one is \"" + who + "\". Wait until it is free (bash tools/cloud-lock.sh status), then take it:  " + TAKE(who) + "  and run this command again.";
   return "";

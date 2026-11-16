@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /*
- * doctor — the state of this working copy, in one command. Run it FIRST, every session.
+ * doctor — the state of this working copy, in one command. Run it at the start of every session, after
+ * tools/cloud-setup.sh and the writer lock (setup runs it once itself, and stops on a blocker).
  *
- *   node tools/doctor.js
+ *   . ~/.ft-env && node tools/doctor.js
  *
  * WHY THIS EXISTS. Every session here starts cold: no memory of the last one, only these
  * files. The conditions that cost the most time are the ones a cold reader cannot see —
@@ -125,8 +126,9 @@ if (ahead && +ahead > 0 && unqueued !== null && +unqueued === 0) {
 } else if (ahead && +ahead > 0) {
   add("WARN", (unqueued || ahead) + " commit(s) neither pushed nor queued",
     "They are on " + (branch || "this branch") + " locally only, so the live site cannot be showing them.\n" + PLATFORM(ahead),
-    "In a cloud session: bash tools/cloud-finish.sh \"<one neutral line>\" \"<who>\" (it queues them for the airlock). " +
-    "On the PC: push in GitHub Desktop. Then confirm the live site actually changed.");
+    "bash tools/cloud-finish.sh \"<one neutral line>\" \"<who>\" (it queues them, and the airlock publishes them; " +
+    "never run git push in the site clone). A change to code, tests, tools or documents is not for the queue: " +
+    "it goes out only from a session with Cory there. Once the airlock has published, confirm the live site changed.");
 }
 /* A stale queue and a quiet airlock (16 Nov 2026): the airlock runs every two hours and records nothing while
  * idle, so one that has stopped looks like one with nothing to do. tools/cloud-lib.sh's ft_queue_wait works the
@@ -152,8 +154,9 @@ if (ahead && +ahead > 0 && unqueued !== null && +unqueued === 0) {
 })();
 if (behind && +behind > 0) {
   add("WARN", behind + " commit(s) on the remote that are not here",
-    "Someone or something else has pushed. Fetch before editing, or you will be working from an old base.",
-    "git fetch && git status");
+    "The airlock has published newer work, or a session with Cory has pushed. Do not edit from this base.",
+    "before writing: bash tools/cloud-lock.sh take \"<who>\" \"<what>\" (it brings this clone up to the newest published " +
+    "or queued commit and rebuilds data.json); to read only: bash tools/cloud-setup.sh again");
 }
 
 /* ---- 5. uncommitted tracked changes ---- */
@@ -181,13 +184,30 @@ if (!exists("ledger/register.jsonl") || !exists("ledger/changes.jsonl")) {
     "ledger/register.jsonl (settled questions) and ledger/changes.jsonl (every applied change) are missing.",
     "Do not edit data.json until they are restored; see OPERATING.md.");
 } else {
+  /* The writer lock, as this clone last saw it (ledger/LOCK is family-tree-private's; bash tools/cloud-lock.sh
+   * status reads it as GitHub has it now). The commands are cloud-lock.sh's: it pushes the lock, so other
+   * sessions see it, and puts FT_WHO in ~/.ft-env, so tools/change.js, tools/research.js and the gate know the
+   * holder. tools/lock.js alone does neither: until 16 Nov 2026 this advice named it, and a session that
+   * followed it would hold a lock nobody else could see, and could not write under it. */
   try {
     const lock = fs.readFileSync(p("ledger/LOCK"), "utf8").trim();
     if (lock && lock !== "free") {
       const l = JSON.parse(lock);
       const hours = (Date.now() - Date.parse(l.since)) / 3600e3;
-      add(hours > 12 ? "WARN" : "INFO", `ledger/LOCK held by "${l.who}" for ${hours.toFixed(1)} h` + (hours > 12 ? " (abandoned?)" : ""),
-        l.what || "", hours > 12 ? 'node tools/lock.js take "<you>" --steal, if that session is gone' : "another session is editing: wait for it");
+      const TAKE = 'bash tools/cloud-lock.sh take "<who>" "<what>"';
+      const mine = !!process.env.FT_WHO && process.env.FT_WHO === l.who;
+      if (hours > 12)
+        add("WARN", `ledger/LOCK held by "${l.who}" for ${hours.toFixed(1)} h: over 12 hours, so it no longer counts`, l.what || "",
+          (mine ? "this session's own lock ran out; to go on writing, take it again: " : "to write, take it: ") + TAKE +
+          " (a lock this old is simply taken: no --steal, and not node tools/lock.js, which neither pushes the lock nor sets FT_WHO)");
+      else if (mine)
+        add("INFO", `ledger/LOCK held by this session ("${l.who}") for ${hours.toFixed(1)} h`, l.what || "",
+          "bash tools/cloud-finish.sh \"<one neutral line>\" \"" + l.who + "\" releases it when the work is saved; it runs out after 12 hours");
+      else
+        add("INFO", `ledger/LOCK held by "${l.who}" for ${hours.toFixed(1)} h`, l.what || "",
+          "another session is writing: wait for it (bash tools/cloud-lock.sh status reads the lock as GitHub has it now). " +
+          "If this session took it, FT_WHO is not set in this shell: run  . ~/.ft-env  first. " +
+          "Only if that session is gone: " + TAKE + " --steal");
     }
   } catch (_) { /* no lock file: free */ }
   if (exists("index.html") && git(["diff", "--name-only", "HEAD", "--", "index.html"])) {

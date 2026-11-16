@@ -757,6 +757,28 @@ publish
 check "…and a queue with nothing waiting gets neither" cloud A
 lacks "still not published\\|unpushed commit(s)" "…(no warning, no number of commits to push)"
 says "the platform may ask to push commits on branch 'main'" "…only the standing note: a commit this session makes will put main ahead, and the platform will ask"
+# tools/doctor.js gives the cloud's own commands (16 Nov 2026): cloud-lock.sh for the writer lock, never
+# tools/lock.js alone (it neither pushes the lock nor sets FT_WHO), and cloud-finish.sh for a commit not yet queued
+lk="$PA/ledger/LOCK"; cp "$lk" "$T/lock.keep"
+printf '{"who":"someone-else","what":"a stretch","since":"%s"}\n' "$(date -u -d '13 hours ago' +%Y-%m-%dT%H:%M:%S.000Z)" > "$lk"
+doc A
+says "over 12 hours, so it no longer counts" "tools/doctor.js says a lock over 12 hours old no longer counts"
+says 'to write, take it: bash tools/cloud-lock.sh take "<who>" "<what>"' "…and gives cloud-lock.sh's command to take it"
+lacks "fix: node tools/lock.js\|GitHub Desktop" "…(not tools/lock.js alone, and nothing from the time of the PC)"
+printf '{"who":"someone-else","what":"a stretch","since":"%s"}\n' "$(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%S.000Z)" > "$lk"
+doc A
+says "another session is writing: wait for it" "…for a younger lock held by another session: wait"
+says 'bash tools/cloud-lock.sh take "<who>" "<what>" --steal' "…and --steal, with cloud-lock.sh, only if that session is gone"
+( export FT_WHO=someone-else; doc A )
+says 'held by this session ("someone-else")' "…and the session that holds the lock is told it is its own"
+cp "$T/lock.keep" "$lk"
+test -z "$(git -C "$PA" status --porcelain -- ledger/LOCK)" || no "the selftest left the lock file changed"
+mc A docx
+doc A
+says "1 commit(s) neither pushed nor queued" "tools/doctor.js names a site commit that is not queued yet"
+says "fix: bash tools/cloud-finish.sh" "…with cloud-finish.sh as the way out"
+lacks "GitHub Desktop\|On the PC" "…(and no advice to push it)"
+git -C "$A" reset -q --hard HEAD~1
 check "session D sets up from public main" cloud D
 check "session E sets up from the same main" cloud E
 quiet lock E take "E" "work"; mc E w-e
