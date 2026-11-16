@@ -1782,6 +1782,48 @@ section("Play");
   }
 }
 
+/* ---------- 13–14: the names both sections check against ----------
+ * Until 16 Nov 2026 the index was the payload alone: cards, spouses, a few correspondents. An
+ * audit found what that cannot see (register R-0761): people the project knows and never
+ * publishes, a name written without its accents, split over two lines, joined into one word
+ * or percent-encoded. The helpers are tools/check-commit-msg.js's, so the commit guard and
+ * these two sections read the same lists the same way.
+ *
+ * The private lists (ledger/research-deny.txt, TRIMMED-PEOPLE.md, NOT-ADDED-PEOPLE.md) are
+ * links in a working clone's root; FT_PRIVATE_LISTS names another folder that holds them. A
+ * bare checkout and CI have none, and then the payload's own names are the whole index. */
+const NG = require("../tools/check-commit-msg.js");
+const NAMES = (() => {
+  const cards = [], labels = [];
+  allNodes.forEach(n => cards.push({ name: n.p.name, years: n.p.years, spouses: (n.p.unions || []).map(u => u.s).filter(Boolean) }));
+  try {
+    (function walkLabels(o) {
+      if (!o || typeof o !== "object") return;
+      if (Array.isArray(o)) return o.forEach(walkLabels);
+      if (typeof o.l === "string") labels.push(o.l);
+      Object.values(o).forEach(walkLabels);
+    })(get("DATA"));
+  } catch (e) { console.error("   label scan unavailable: " + e.message); }
+  const people = []; cards.forEach(c => { people.push(c.name); c.spouses.forEach(s => people.push(s)); });
+  const known = NG.nameWords(people);
+  const priv = NG.privateLists({ known });
+  const fromLabels = NG.labelNames(labels);
+  /* every name word a commit message must not carry (a word only a source label knows: from six letters,
+   * as in the commit guard) */
+  const msgWords = NG.nameWords(people.concat(priv.names));
+  NG.nameWords(fromLabels, msgWords, NG.LABEL_WORD_MIN);
+  priv.deny.forEach(d => d.split(" ").forEach(w => { if (w.length >= 3) msgWords.add(w); }));
+  const where = priv.ci ? "private lists: not read in CI"
+    : priv.files.length ? "private lists: " + priv.names.length + " names, " + priv.deny.length + " never-publish lines"
+    : "private lists: not here";
+  return { cards, fromLabels, priv, msgWords, where };
+})();
+if (!NAMES.priv.ci && NAMES.priv.files.length < NG.PRIVATE_FILES.length)
+  console.log("\n  --  " + (NAMES.priv.files.length ? "only " + NAMES.priv.files.join(", ") + " of " : "none of ") +
+    "the private name lists (" + NG.PRIVATE_FILES.join(", ") + ") " + (NAMES.priv.files.length ? "is" : "are") + " in " + NAMES.priv.dir +
+    ":\n      sections 13 and 14 check against the payload's names" + (NAMES.priv.files.length ? " and what is there" : " only") +
+    ". In a working clone, bash tools/cloud-setup.sh links them.");
+
 /* ---------- 13. Commit hygiene ----------
  * The repo is PUBLIC: anyone can read commit messages without the password,
  * and GitHub Actions run titles republish them. On 12 Aug 2026 the entire
@@ -1796,41 +1838,50 @@ section("Play");
  * wired up, because a guard nobody runs is not a guard. The two known-bad
  * commits are listed as accepted so this does not re-report them every run;
  * they are public, a force-push would not unpublish them, and the decision to
- * leave them is recorded in OPEN-ITEMS N18. */
+ * leave them is recorded in OPEN-ITEMS N18.
+ *
+ * 16 Nov 2026: the index also holds the correspondents the source labels name and, where they
+ * are present, the private lists (above); and each commit's author and committer address is
+ * checked, because an address is as public and as permanent as a message. 58 early commits
+ * carry a personal one (accepted, R-0761); the commit guard now refuses a new one, and this
+ * section catches a commit that went round the guard. */
 section("Commit hygiene");
 {
+  const cp = require("child_process");
+  const gitLog = args => cp.execFileSync("git", ["log", "--format=%H%x1f%ae%x1f%ce%x1f%B%x1e"].concat(args),
+    { cwd: ROOT, env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" }, stdio: ["ignore", "pipe", "ignore"] })
+    .toString("utf8").split("\x1e").map(s => s.trim()).filter(Boolean)
+    .map(s => { const [sha, ae, ce, ...rest] = s.split("\x1f"); return { sha, ae, ce, body: rest.join("\x1f") }; });
+  /* the name words a message carries, and the never-publish lines it carries in any form */
+  const namesIn = body => {
+    const w = [...new Set(NG.words(body).filter(x => x.length >= 3 && NAMES.msgWords.has(x)))];
+    NG.denyHits(body, NAMES.priv.deny).forEach(d => { if (!w.includes(d)) w.push(d); });
+    return w;
+  };
+  /* which of a commit's two addresses is somebody's mailbox; only the part after the @ is ever printed */
+  const addrIn = c => [["author", c.ae], ["committer", c.ce]].filter(([, a]) => !NG.noreply(a))
+    .map(([k, a]) => k + " …@" + String(a).replace(/^.*@/, ""));
+
   let msgs = null;
-  try {
-    const cp = require("child_process");
-    const out = cp.execFileSync("git",
-      ["log", "--format=%h%x1f%B%x1e", "origin/main..HEAD"],
-      { cwd: ROOT, env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" }, stdio: ["ignore", "pipe", "ignore"] })
-      .toString("utf8");
-    msgs = out.split("\x1e").map(s => s.trim()).filter(Boolean)
-      .map(s => { const i = s.indexOf("\x1f"); return { sha: s.slice(0, i), body: s.slice(i + 1) }; });
-  } catch (_) { /* no git, no origin, or detached CI checkout — nothing to scan */ }
+  try { msgs = gitLog(["origin/main..HEAD"]); }
+  catch (_) { /* no git, no origin, or detached CI checkout — nothing to scan */ }
   if (msgs === null || !msgs.length) {
     console.log("  --  no unpushed commits to scan");
   } else {
-    const nameTok = new Set();
-    const addTok = s => String(s || "").split(/[^\p{L}]+/u).forEach(w => {
-      if (w.length >= 3) { nameTok.add(w.toLowerCase()); nameTok.add(norm(w)); }
-    });
-    allNodes.forEach(n => { addTok(n.p.name); (n.p.unions || []).forEach(u => addTok(u.s)); });
-    const hits = [];
-    msgs.forEach(m => {
-      const words = m.body.split(/[^\p{L}]+/u).filter(w => w.length >= 3);
-      const bad = [...new Set(words.filter(w => nameTok.has(w.toLowerCase()) || nameTok.has(norm(w))))];
-      if (bad.length) hits.push({ sha: m.sha, bad });
-    });
-    ok(!hits.length, "unpushed commit messages carry no person names (" + msgs.length + " scanned)" +
+    const hits = msgs.map(m => ({ sha: m.sha.slice(0, 7), bad: namesIn(m.body) })).filter(h => h.bad.length);
+    ok(!hits.length, "unpushed commit messages carry no person names (" + msgs.length + " scanned; " + NAMES.where + ")" +
       (hits.length ? " — " + hits.map(h => h.sha + ": " + h.bad.length + " name token(s)" +
-        (process.env.CI ? "" : " [" + h.bad.join(", ") + "]")).join("; ") : ""));
+        (process.env.CI ? "" : " [" + h.bad.join(", ") + "]")).join("; ") +
+        " — reword before pushing: git rebase -i origin/main (reword), one neutral line each" : ""));
+    const addr = msgs.map(m => ({ sha: m.sha.slice(0, 7), bad: addrIn(m) })).filter(h => h.bad.length);
+    ok(!addr.length, "unpushed commits carry noreply author and committer addresses (" + msgs.length + " scanned)" +
+      (addr.length ? " — " + addr.map(h => h.sha + (process.env.CI ? "" : " [" + h.bad.join(", ") + "]")).join("; ") +
+        " — before pushing: git config user.email <the account's …@users.noreply.github.com address>, then" +
+        " git rebase origin/main --exec \"git commit --amend --reset-author --no-edit\"" : ""));
   }
 
   /* ---- the commit-msg guard must be installed ---- */
   {
-    const cp = require("child_process");
     let hooksPath = "";
     try {
       hooksPath = cp.execFileSync("git", ["config", "core.hooksPath"],
@@ -1846,6 +1897,10 @@ section("Commit hygiene");
     ok(wired && fs.existsSync(hookFile) && fs.existsSync(guard),
       "commit-msg guard is wired up" +
       (wired ? "" : " — RUN: git config core.hooksPath githooks"));
+    /* the guard's address rule, on addresses nobody owns */
+    ok(["noreply@host.example", "no-reply@host.example", "12345+someone@users.noreply.github.com", "t@example.invalid"].every(NG.noreply) &&
+       !["someone@host.example", "noreply", "", "someone@noreply.host.example", "noreply@", "a b@users.noreply.github.com"].some(NG.noreply),
+      "the guard takes a noreply address for one, and nothing else");
   }
 
   /* ---- recent pushed history, so a leak cannot hide behind having shipped ---- */
@@ -1859,34 +1914,25 @@ section("Commit hygiene");
       "d37f3afb0d527439641e6d10b8907885285b91e9",
     ]);
     let pushed = null;
-    try {
-      const cp = require("child_process");
-      const out = cp.execFileSync("git",
-        ["log", "--format=%H%x1f%B%x1e", "-n", "40", "origin/main"],
-        { cwd: ROOT, env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" },
-          stdio: ["ignore", "pipe", "ignore"] }).toString("utf8");
-      pushed = out.split("\x1e").map(x => x.trim()).filter(Boolean)
-        .map(x => { const i = x.indexOf("\x1f"); return { sha: x.slice(0, i), body: x.slice(i + 1) }; })
-        .filter(c => !ACCEPTED.has(c.sha));
-    } catch (_) { /* no origin ref locally — nothing to sweep */ }
+    try { pushed = gitLog(["-n", "40", "origin/main"]).filter(c => !ACCEPTED.has(c.sha)); }
+    catch (_) { /* no origin ref locally — nothing to sweep */ }
     if (pushed === null) {
       console.log("  --  no origin/main ref to sweep");
     } else {
-      const nameTok2 = new Set();
-      const addTok2 = str => String(str || "").split(/[^\p{L}]+/u).forEach(w => {
-        if (w.length >= 3) { nameTok2.add(w.toLowerCase()); nameTok2.add(norm(w)); }
-      });
-      allNodes.forEach(n => { addTok2(n.p.name); (n.p.unions || []).forEach(u => addTok2(u.s)); });
-      const leaks = [];
-      pushed.forEach(c => {
-        const words = c.body.split(/[^\p{L}]+/u).filter(w => w.length >= 3);
-        const bad = [...new Set(words.filter(w => nameTok2.has(w.toLowerCase()) || nameTok2.has(norm(w))))];
-        if (bad.length) leaks.push({ sha: c.sha.slice(0, 7), bad });
-      });
+      const leaks = pushed.map(c => ({ sha: c.sha.slice(0, 7), bad: namesIn(c.body) })).filter(h => h.bad.length);
       ok(!leaks.length,
         "pushed commit messages carry no NEW person names (" + pushed.length +
         " scanned, " + ACCEPTED.size + " accepted)" +
         (leaks.length ? " — " + leaks.map(h => h.sha + (process.env.CI ? "" : " [" + h.bad.join(", ") + "]")).join("; ") : ""));
+      /* An address that is pushed is public for good, like a name in a message. This line then
+       * stays red until the commit is 40 back or its id is added to ACCEPTED above, which is a
+       * privacy decision and Cory's to make. */
+      const addr = pushed.map(c => ({ sha: c.sha.slice(0, 7), bad: addrIn(c) })).filter(h => h.bad.length);
+      ok(!addr.length,
+        "pushed commits carry noreply author and committer addresses (" + pushed.length + " scanned)" +
+        (addr.length ? " — " + addr.map(h => h.sha + (process.env.CI ? "" : " [" + h.bad.join(", ") + "]")).join("; ") +
+          " — it is public and cannot be taken back: set this clone's address now (git config user.email <…@users.noreply.github.com>)" +
+          " so the next commit is clean, and ask Cory whether the commit's id goes into ACCEPTED in tests/run.js section 13" : ""));
     }
   }
 }
@@ -1900,7 +1946,30 @@ section("Commit hygiene");
  * more first names in checks/. The privacy invariant in CLAUDE.md said the
  * plaintext layer carries no personal data; nothing enforced it outside
  * index.html. This is the enforcement. Offending words print only outside CI —
- * CI logs are public. */
+ * CI logs are public.
+ *
+ * 16 Nov 2026 (R-0761), what it now also sees. Both sides are compared without accents. A full
+ * name is found whatever stands between its words (a line break, a comment's leading star, a
+ * hyphen, several spaces), inside percent-encoding, a \u escape or an HTML entity, and joined
+ * into one word, as in a host or user name. The shorter ways to write a person count as well:
+ * without a nickname or an initial, given name and surname alone in either order, the first two
+ * words of a longer name. File names are read like file contents. Where the private lists are
+ * present, so are the people on them.
+ *
+ * What it still cannot see, so that nobody takes a pass for more than it is:
+ *  - a surname under five letters, or the given name of someone who has died, standing alone
+ *    (a given name with a year beside it is the commonest way a card is described);
+ *  - an initial with a surname, a spelling variant or a translation of a name, a nickname the
+ *    payload does not record;
+ *  - a name in base64, in an image, spelled letter by letter, or under a line marked
+ *    ft-allow-names;
+ *  - whatever points at a person without naming one: an employer's or a school's host, a home
+ *    town, a quoted remark, a card id beside a private fact;
+ *  - people who are neither in the payload nor on the three private lists (a correspondent only
+ *    the private notes name), and, on those lists, a name that is not in bold in a table;
+ *  - in CI, anyone who is only on the private lists; without the site password, everything
+ *    (sections 13 and 14 need the payload's names and do not run);
+ *  - old versions of a file: the history is public too, and is accepted as it stands (R-0761). */
 section("No names in the plaintext repo");
 {
   const cp = require("child_process"), fsx = require("fs");
@@ -1928,6 +1997,151 @@ section("No names in the plaintext repo");
     if (skip) unclosed.push(fname);
     return out.join("\n");
   };
+
+  /* ---- the index ----
+   * exact:    a full name as the payload writes it (a card, a spouse, a correspondent in a source
+   *           label), found anywhere, inside a longer word too
+   * loose:    the shorter ways to write a person, and the names on the private lists: found as
+   *           whole words
+   * joined:   a full name with nothing between its words, ten letters and up
+   * surnames: a surname of five letters and up, as a word of its own
+   * given:    a living person's given name, or their husband's or wife's, four letters and up, as a
+   *           word of its own; from seven letters also at the start of a longer word, which is how
+   *           a user name or a host is made of one (the two finds of the 16 Nov audit were both that)
+   * deny:     the never-publish lines, found in any form
+   * A shorter form made only of the four ALLOW words is the site's own public name, not a find. */
+  const JOIN_MIN = 10, GIVEN_STEM = 7;
+  const newIndex = () => ({ exact: new Set(), loose: new Set(), joined: new Set(), surnames: new Set(), given: new Set(), deny: [] });
+  const publicOnly = form => form.split(" ").every(w => w.length < 2 || ALLOW.has(w));
+  /* two words of three letters and up, or three words: "g a" and "xo b" would match by chance */
+  const solid = form => { const w = form.split(" "); return w.length >= 3 || w.filter(x => x.length >= 3).length >= 2; };
+  const addFull = (idx, raw, asWritten) => {
+    const f = NG.nameForms(raw);
+    if (!f.exact) return f;
+    if (asWritten) idx.exact.add(f.exact);
+    [f.exact].concat(f.loose).forEach(form => {
+      if (publicOnly(form) || !solid(form)) return;
+      if (!(asWritten && form === f.exact)) idx.loose.add(form);
+      const j = form.replace(/ /g, "");
+      if (j.length >= JOIN_MIN) idx.joined.add(j);
+    });
+    return f;
+  };
+  /* The surname of a name: the words of its last part, once a closing "Jr" or initial is set aside. A
+   * name that is one word is that word; "Given S." has no surname to take (its one word is a given
+   * name). A bracket that closes the name holds another surname or another full name: the same rule. */
+  const SUFFIX = new Set(["jr", "sr", "ii", "iii", "iv", "junior", "senior", "fils", "pere"]);
+  const lastPart = str => {
+    const all = String(str || "").split(/\s+/).map(t => NG.words(t)).filter(w => w.length);
+    const real = all.filter(w => !(w.length === 1 && (w[0].length < 2 || SUFFIX.has(w[0]))));
+    return real.length > 1 || (real.length === 1 && all.length === 1) ? real[real.length - 1] : [];
+  };
+  const addSurname = (idx, raw, min) => {
+    const NICK = /\(([^)]*)\)|["“«]([^"”»]*)["”»]/g;
+    const str = String(raw || "");
+    const tail = (str.match(/(?:\(([^)]*)\)|["“«]([^"”»]*)["”»])\s*$/) || []).slice(1).filter(Boolean)[0];
+    lastPart(str.replace(NICK, " ")).concat(tail ? lastPart(tail) : [])
+      .forEach(w => { if (w.length >= (min || 5) && !ALLOW.has(w)) idx.surnames.add(w); });
+  };
+  /* every word of the name but its surname; a name with no surname ("Given S.") is its given name */
+  const addGiven = (idx, raw) => {
+    const f = NG.nameForms(raw);
+    NG.words(raw).filter(w => w !== f.surname && !SUFFIX.has(w))
+      .forEach(w => { if (w.length >= 4 && !ALLOW.has(w)) idx.given.add(w); });
+  };
+  /* CLAUDE.md: a person is living when the dates are "b. YYYY", or none. (Until 16 Nov 2026 only a
+   * birth from 1930 on with no death counted, so the cards with no dates were read as dead.) */
+  const isLiving = years => {
+    const y = String(years || "").trim();
+    const birth = (y.match(/(\d{4})/) || [])[1];
+    return !y || /^b\.\s*\d{4}$/.test(y) || (!!birth && +birth >= 1930 && !/\d{4}\s*[–-]\s*\d{4}/.test(y));
+  };
+  const buildIndex = src => {
+    const idx = newIndex();
+    (src.cards || []).forEach(c => {
+      addFull(idx, c.name, true); addSurname(idx, c.name);
+      (c.spouses || []).forEach(s => { addFull(idx, s, true); addSurname(idx, s); });
+      if (isLiving(c.years)) { addGiven(idx, c.name); (c.spouses || []).forEach(s => addGiven(idx, s)); }
+    });
+    /* A correspondent who is not on the tree is as often a stranger (a photographer, a contributor to a
+     * graves site) as a relative, and a stranger's five-letter surname is as often an ordinary word:
+     * the first run after the comma fix flagged one in the page's own stylesheet. Alone, such a surname
+     * counts from six letters (the commit guard's rule too); the full name counts at any length. */
+    (src.fromLabels || []).forEach(n => { addFull(idx, n, !publicOnly(NG.words(n).join(" "))); addSurname(idx, n, NG.LABEL_WORD_MIN); });
+    (src.names || []).forEach(n => addFull(idx, n, false));
+    idx.deny = (src.deny || []).slice();
+    return idx;
+  };
+
+  /* ---- the text ----
+   * Read twice: as written, and with its escapes undone, where that makes a difference. */
+  const HIDDEN = /[\u00ad\u200B-\u200D\u2060\uFEFF]/g;      /* soft hyphens and zero-width marks inside a word */
+  const cpt = n => { try { return String.fromCodePoint(n); } catch (_) { return " "; } };
+  const unescaped = raw => raw
+    .replace(/(?:%[0-9A-Fa-f]{2})+/g, m => { try { return decodeURIComponent(m); } catch (_) { return m.replace(/%([0-9A-Fa-f]{2})/g, (x, h) => cpt(parseInt(h, 16))); } })
+    .replace(/\\u\{([0-9A-Fa-f]{1,6})\}|\\u([0-9A-Fa-f]{4})|\\x([0-9A-Fa-f]{2})/g, (m, a, b, c) => cpt(parseInt(a || b || c, 16)))
+    .replace(/&#x([0-9A-Fa-f]{2,6});|&#(\d{2,7});/g, (m, h, d) => cpt(h ? parseInt(h, 16) : +d))
+    .replace(/&([A-Za-z])(?:acute|grave|circ|uml|cedil|tilde|ring|caron|slash);/g, "$1")
+    .replace(/&([A-Za-z]{2})lig;/g, "$1");
+  const scan = (idx, raw) => {
+    const bad = new Set();
+    const clean = raw.replace(HIDDEN, "");
+    const un = unescaped(clean);
+    for (const t of un === clean ? [clean] : [clean, un]) {
+      const w = NG.words(t), spaced = " " + w.join(" ") + " ", set = new Set(w), each = [...set], low = NG.fold(t);
+      idx.exact.forEach(n => { if (spaced.includes(n)) bad.add(n); });
+      idx.loose.forEach(n => { if (spaced.includes(" " + n + " ")) bad.add(n); });
+      idx.joined.forEach(n => { if (low.includes(n)) bad.add(n); });
+      idx.surnames.forEach(n => { if (set.has(n)) bad.add(n); });
+      idx.given.forEach(n => { if (set.has(n) || (n.length >= GIVEN_STEM && each.some(x => x.startsWith(n)))) bad.add(n); });
+      NG.denyHits(t, idx.deny).forEach(d => bad.add(d));
+    }
+    return bad;
+  };
+
+  /* ---- the check on itself, with people who do not exist ----
+   * Every way of writing a name that this section claims to see, and a few it must leave alone. */
+  {
+    const idx = buildIndex({
+      cards: [{ name: "Zéphyrine (Zéza) Quàrtzwëiler", years: "b. 1990", spouses: ["Thaddäus Ignaz Q. Plumbstøne Jr.", "Wilhelmijna V."] },
+              { name: "Cory Xavier Nitschelm", years: "1801–1870", spouses: [] }],
+      fromLabels: NG.labelNames(["Email to Cory from Hesperine Dwerryhaus, 3 Sep 2026 — her own photograph"]),
+      names: ["Ottoline B. Brackwäter"], deny: ["wimbleforth", "ozz"]
+    });
+    const finds = (t, what) => scan(idx, t).has(what);
+    const seen = [
+      ["without its accents",            "Zephyrine (Zeza) Quartzweiler",                         "zephyrine zeza quartzweiler"],
+      ["across a line break",            "// see Zéphyrine (Zéza)\n//   Quàrtzwëiler",            "zephyrine zeza quartzweiler"],
+      ["across a hyphen and spaces",     "Zéphyrine-Quàrtzwëiler,   Zéphyrine    Quàrtzwëiler",   "zephyrine quartzweiler"],
+      ["without the nickname",           "Zéphyrine Quàrtzwëiler",                                "zephyrine quartzweiler"],
+      ["by nickname and surname",        "Zéza Quàrtzwëiler",                                     "zeza quartzweiler"],
+      ["surname first",                  "QUARTZWEILER Zéphyrine",                                "quartzweiler zephyrine"],
+      ["by two given names",             "Thaddäus Ignaz, born 1801",                             "thaddaus ignaz"],
+      ["percent-encoded",                encodeURIComponent("Zéphyrine Quàrtzwëiler"),            "zephyrine quartzweiler"],
+      ["in a \\u escape",                "Z\\u00e9phyrine Qu\\u00e0rtzw\\u00ebiler",              "zephyrine quartzweiler"],
+      ["in an HTML entity",              "Z&eacute;phyrine Qu&#224;rtzw&#xEB;iler",               "zephyrine quartzweiler"],
+      ["joined into one word",           "https://zephyrinequartzweiler.example/",                "zephyrinequartzweiler"],
+      ["with a soft hyphen inside",      "Zéphy\u00adrine Quàrtz\u200Bwëiler",                    "zephyrine quartzweiler"],
+      ["a surname behind Jr",            "the plumbstone papers",                                 "plumbstone"],
+      ["a living person's given name",   "ask zephyrine",                                         "zephyrine"],
+      ["a living person's spouse",       "ask Thaddaus",                                          "thaddaus"],
+      ["a spouse written Given S.",      "ask Wilhelmijna",                                       "wilhelmijna"],
+      ["a given name opening a user name", "(zephyrineq|other)",                                    "zephyrine"],
+      ["a correspondent before a comma", "sent by hesperine dwerryhaus",                          "hesperine dwerryhaus"],
+      ["someone on the private lists",   "Ottoline Brackwater",                                   "ottoline brackwater"],
+      ["a never-publish line in a user name", "(wimbleforthx|other)",                             "wimbleforth"],
+    ].filter(([, text, what]) => !finds(text, what)).map(x => x[0]);
+    const quiet = [
+      ["plain text",                          "A neutral sentence about quartz, plumb lines and the west wind."],
+      ["the site's own public name",          "Cory Nitschelm, corynitschelm.example"],
+      ["a short never-publish line in a word", "fizzy ozzing"],
+      ["a dead person's given name alone",    "xavier"],
+    ].filter(([, text]) => scan(idx, text).size).map(x => x[0]);
+    ok(!seen.length && !quiet.length, "the name check finds a name however it is written, and nothing in clean text" +
+      (seen.length ? " — NOT found: " + seen.join("; ") : "") + (quiet.length ? " — found in: " + quiet.join("; ") : ""));
+    ok(scan(idx, "ask OZZ").has("ozz"), "a short never-publish line is found as a word of its own");
+  }
+
   let files = null;
   try {
     files = cp.execFileSync("git", ["ls-files"], { cwd: ROOT, stdio: ["ignore", "pipe", "ignore"] })
@@ -1936,57 +2150,7 @@ section("No names in the plaintext repo");
   if (!files) {
     console.log("  --  git unavailable — skipping");
   } else {
-    /* three tiers, narrowest first: a full name is unambiguous, a long surname
-     * nearly so, and a living person's given name is the one that matters most. */
-    const fullNames = new Set(), surnames = new Set(), livingGiven = new Set();
-    const addName = (raw, node) => {
-      const name = String(raw || "").trim();
-      if (!name) return;
-      const toks = name.split(/\s+/).filter(t => /\p{L}/u.test(t));
-      if (toks.length > 1) fullNames.add(name.toLowerCase());
-      const last = toks[toks.length - 1];
-      if (last && last.length >= 5) surnames.add(norm(last).toLowerCase());
-      if (node) {
-        const years = String(node.years || "");
-        const birth = (years.match(/(\d{4})/) || [])[1];
-        const died  = /\d{4}\s*[–-]\s*\d{4}/.test(years);
-        if (birth && +birth >= 1930 && !died) {
-          toks.slice(0, -1).forEach(t => { if (t.length >= 4) livingGiven.add(norm(t).toLowerCase()); });
-        }
-      }
-    };
-    allNodes.forEach(n => { addName(n.p.name, n.p); (n.p.unions || []).forEach(u => addName(u.s, null)); });
-    /* Correspondents named in source labels are people too — and they are NOT
-     * nodes in the tree, so the pass above is blind to them. Labels introduce
-     * them in a few fixed shapes ("Email to X from Y", "photographed by Y",
-     * "via Y"); only correspondence-ish labels are read, which keeps place
-     * names, publications and institutions out of the index. */
-    let fromLabels = 0;
-    try {
-      const CORRESPONDENCE = /email|courriel|letter|correspondence|correspondance|photograph|bible|\bvia\b/i;
-      const NAMED_BY = /\b(?:from|by|via|to)\s+((?:[A-ZÀ-Þ][\p{L}'’-]+(?:\s+|$)){2,4})/gu;
-      const labels = [];
-      (function walkLabels(o) {
-        if (!o || typeof o !== "object") return;
-        if (Array.isArray(o)) return o.forEach(walkLabels);
-        if (typeof o.l === "string") labels.push(o.l);
-        Object.values(o).forEach(walkLabels);
-      })(get("DATA"));
-      labels.filter(l => CORRESPONDENCE.test(l)).forEach(l => {
-        let m; NAMED_BY.lastIndex = 0;
-        while ((m = NAMED_BY.exec(l))) {
-          const phrase = m[1].trim().replace(/[,(].*$/, "").trim();
-          const toks = phrase.split(/\s+/).filter(Boolean);
-          if (toks.length < 2) continue;
-          fullNames.add(phrase.toLowerCase());
-          const last = toks[toks.length - 1];
-          if (last.length >= 5) surnames.add(norm(last).toLowerCase());
-          fromLabels++;
-        }
-      });
-    } catch (e) { console.error("   label scan unavailable: " + e.message); }
-    [...ALLOW].forEach(a => { surnames.delete(a); livingGiven.delete(a); });
-
+    const idx = buildIndex({ cards: NAMES.cards, fromLabels: NAMES.fromLabels, names: NAMES.priv.names, deny: NAMES.priv.deny });
     const hits = [];
     for (const f of files) {
       if (/^media\/[0-9a-f]{24}\.bin$/.test(f) || P.STABLE_MEDIA.has(f.replace(/^media\//, ""))) continue;   /* ciphertext — proven to be, below */
@@ -1997,14 +2161,11 @@ section("No names in the plaintext repo");
         .replace(/const MAPLBL = "[\s\S]*?";/, "");   /* world city labels, not people (before 3 Oct 2026) */
       if (/^map\/[0-9a-f]{16}\.json$/.test(f)) text = text.replace(/"lbl":"(?:[^"\\]|\\.)*"/, "");   /* the same labels, since */
       text = stripAllowed(text, f);
-      const low = text.toLowerCase();
-      const bad = new Set();
-      fullNames.forEach(n => { if (low.includes(n)) bad.add(n); });
-      const words = new Set(norm(text).toLowerCase().split(/[^\p{L}]+/u).filter(w => w.length >= 4));
-      surnames.forEach(sn => { if (words.has(sn)) bad.add(sn); });
-      livingGiven.forEach(g => { if (words.has(g)) bad.add(g); });
+      const bad = scan(idx, text);
       if (bad.size) hits.push({ f, bad: [...bad] });
     }
+    /* a file's name is as public as its contents */
+    { const bad = scan(idx, files.join("\n")); if (bad.size) hits.push({ f: "(file names)", bad: [...bad] }); }
     /* media/ holds the bio pictures, AES-GCM encrypted under the payload key (tools/payload.js). Random
      * bytes read as text collide with short names by pure chance, so those files are not scanned as
      * text above. Instead every file there must be named as payload.js names them and open with the
@@ -2021,9 +2182,12 @@ section("No names in the plaintext repo");
     ok(!unclosed.length, "every ft-allow-names block is closed" +
       (unclosed.length ? " — unterminated in " + unclosed.join(", ") : ""));
     ok(!hits.length, "no person names in the " + files.length + " tracked files" +
-      " (index: " + fullNames.size + " full names incl. " + fromLabels + " from source labels)" +
+      " (index: " + idx.exact.size + " full names, " + (idx.loose.size + idx.joined.size) + " other spellings, " +
+      NAMES.fromLabels.length + " correspondents from source labels; " + NAMES.where + ")" +
       (hits.length ? " — " + hits.length + " file(s)" +
-        (process.env.CI ? "" : ": " + hits.map(h => h.f + " [" + h.bad.join(", ") + "]").join("; ")) : ""));
+        (process.env.CI ? "" : ": " + hits.map(h => h.f + " [" + h.bad.join(", ") + "]").join("; ")) +
+        " — take the name out of the file (a card is named by its id, c042), or, if the word is not a person here," +
+        " mark the line ft-allow-names and say why in a comment; never add to ALLOW to make this pass" : ""));
   }
 }
 
