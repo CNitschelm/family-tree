@@ -9,7 +9,10 @@
  *                        family can read; Cory's Decide buttons (dec and decide: 3 Oct 2026, register R-0445);
  *                        the gate's check that a change set's research items really were
  *                        updated (claimsFor); matching people to cards (link); the sealed files carry the
- *                        family's copy and nothing more, byte for byte the same when nothing they show changed
+ *                        family's copy and nothing more, byte for byte the same when nothing they show changed;
+ *                        where our copy of each read is (`_copy`, 16 Nov 2026, register R-0759): private, checked
+ *                        against the source archive, and asked for before a source is found, none or done;
+ *                        show <investigation> prints each source's newest log entries only
  *   githooks/commit-msg  §0c: the two research files are committed only as research.js built them, and never
  *                        committed as deleted
  *   tools/crypt.js       a file that a page browsers may still hold uses (the live one, origin/main, or the
@@ -36,7 +39,13 @@ for (const f of ['tools/research.js', 'tools/payload.js', 'tools/crypt.js', 'too
   fs.copyFileSync(path.join(SRC, f), path.join(T, f));
 /* the hook as sh reads it: a checkout with Windows line endings must not fail the test for that alone */
 fs.writeFileSync(path.join(T, 'githooks', 'commit-msg'), fs.readFileSync(path.join(SRC, 'githooks', 'commit-msg'), 'utf8').replace(/\r\n/g, '\n'));
-const env = { ...process.env, FT_ROOT: T, FT_RESEARCH: path.join(T, 'research.json') };
+/* an invented source archive beside it; FT_ARCHIVE too, or a cloud shell's ~/.ft-env would point the tools at the real one */
+const ARCH = path.join(T, 'sources');
+fs.mkdirSync(path.join(ARCH, 'archive', 'hand'), { recursive: true });
+fs.writeFileSync(path.join(ARCH, 'archive', 'hand', 'booklet-pages.md'), 'Pages 1 to 4 read. No miller is named.\n');
+fs.writeFileSync(path.join(ARCH, 'archive', 'hand', 'booklet-p3.jpg'), 'an invented image');
+fs.writeFileSync(path.join(T, 'outside.txt'), 'not in the archive');
+const env = { ...process.env, FT_ROOT: T, FT_RESEARCH: path.join(T, 'research.json'), FT_ARCHIVE: ARCH };
 delete env.FT_PASSWORD;
 const RJ = require(path.join(T, 'tools', 'research.js'));
 const P = require(path.join(T, 'tools', 'payload.js'));
@@ -210,6 +219,124 @@ section('Cory\'s Decide buttons: dec and decide');
   ok(r.status === 0 && !('decide' in load()), 'decide "" removes the address');
 }
 
+// ------------------------------------------------------------------ where our copy is (16 Nov 2026, register R-0759)
+section('every read records where our copy is');
+{
+  const run = (...a) => spawnSync(process.execPath, [path.join(T, 'tools', 'research.js'), ...a], { cwd: T, env, encoding: 'utf8' });
+  const load = () => JSON.parse(fs.readFileSync(path.join(T, 'research.json'), 'utf8'));
+  const src = id => RJ.find(load(), id).s;
+  const said = r => (r.stdout + r.stderr).replace(/\s+/g, ' ');
+  fs.writeFileSync(path.join(T, 'research.json'), JSON.stringify(research(), null, 1));
+  /* the form of the field */
+  const shape = (v, re) => { const R = research(); R.investigations[0].qs[0].src[1]._copy = v; const e = errs(R); return re ? e.some(x => re.test(x)) : !e.length; };
+  ok(shape(['archive/hand/booklet-pages.md']) && shape('none: the reading room keeps no copies'), 'a list of archive paths, or "none: <why>", is valid');
+  ok(shape([], /s2\._copy must be a list/) && shape('none: too short', /s2\._copy must be .*12 characters/) && shape('somewhere', /s2\._copy must be/) &&
+    shape(['/etc/passwd'], /not a path inside the source archive/) && shape(['archive/../../x'], /not a path inside/) && shape(['a', 'a'], /twice/),
+    'an empty list, a short or missing why, a path out of the archive and a path given twice are refused');
+  /* closing a source needs it */
+  let r = run('set', 's2', 'st=none');
+  ok(r.status !== 0 && /node tools\/research\.js copy s2 <archive path>/.test(said(r)) && /node tools\/research\.js copy s2 "none: <why>"/.test(said(r)) && src('s2').st === 'ready',
+    'set st=none on a source with no copy is refused, nothing is written, and the message gives the copy command');
+  ok(run('set', 's2', 'st=found').status !== 0 && run('set', 's2', 'st=done').status !== 0 && src('s2').st === 'ready', 'so are found and done');
+  ok(run('set', 's2', 'st=wait', 'who=A neighbour', 'who_fr=Une voisine').status === 0 && src('s2').st === 'wait', 'a state that does not say it was read needs none');
+  /* recording it */
+  r = run('copy', 's2', 'archive/hand/not-there.md');
+  ok(r.status !== 0 && /is not in the source archive/.test(said(r)) && /File the copy there first/.test(said(r)) && src('s2')._copy === undefined, 'a path that is not in the archive is refused, with what to do');
+  r = run('copy', 's2', '../outside.txt');
+  ok(r.status !== 0 && /outside the source archive/.test(said(r)) && src('s2')._copy === undefined, 'so is a file that exists but lies outside it');
+  const before = load();
+  r = run('copy', 's2', 'archive/hand/booklet-pages.md');
+  ok(r.status === 0 && JSON.stringify(src('s2')._copy) === '["archive/hand/booklet-pages.md"]', 'copy <source> <archive path> records it (' + said(r).slice(0, 80) + ')');
+  ok(Math.abs(Date.now() - Date.parse(src('s2')._touched)) < 120e3 && RJ.claimsFor(load(), [{ id: 'cs1', at: new Date().toISOString(), research: 's2' }]).length === 0, 'and counts as moving the source (_touched)');
+  ok(JSON.stringify(RJ.publicCopy(load())) === JSON.stringify(RJ.publicCopy(before)), 'the family\'s copy does not change at all: no date moves for a private note');
+  r = run('copy', 's2', path.join(ARCH, 'archive', 'hand', 'booklet-p3.jpg'), 'archive/hand/booklet-pages.md');
+  ok(r.status === 0 && JSON.stringify(src('s2')._copy) === '["archive/hand/booklet-pages.md","archive/hand/booklet-p3.jpg"]', 'a second copy is added to the list (a full path inside the archive is stored from its root; one already there is not doubled)');
+  ok(run('copy', 's2', 'archive/hand').status === 0 && src('s2')._copy.length === 3, 'a folder of the archive is a copy too');
+  r = run('copy', 's2', 'none: the page showed nothing to keep');
+  ok(r.status !== 0 && /already records 3 copies/.test(said(r)) && /--replace/.test(said(r)) && Array.isArray(src('s2')._copy), 'a source with copies cannot also say none');
+  ok(run('copy', 's2', 'none: no').status !== 0 && run('copy', 's2', 'none:').status !== 0 && run('copy', 's2').status !== 0 && run('copy', 'i1', 'archive/hand').status !== 0 && run('copy', 's2', 'archive/hand', 'none: nothing was there to keep').status !== 0,
+    'a short why, no path, an investigation id, and paths mixed with none are refused');
+  r = run('copy', 's2', 'archive/hand/booklet-pages.md', '--replace');
+  ok(r.status === 0 && JSON.stringify(src('s2')._copy) === '["archive/hand/booklet-pages.md"]', '--replace starts the list again');
+  r = run('set', 's2', '_copy=archive/hand');
+  ok(r.status !== 0 && /node tools\/research\.js copy s2/.test(said(r)), 'set does not take the field: it points to copy');
+  r = run('set', 's2', 'st=none');
+  ok(r.status === 0 && src('s2').st === 'none', 'with its copy on record the source can be set to none' + (r.status ? ' (' + said(r).slice(0, 200) + ')' : ''));
+  r = run('copy', 's1', 'none: the ledger may not be photographed');
+  ok(r.status === 0 && src('s1')._copy === 'none: the ledger may not be photographed' && run('set', 's1', 'st=found').status === 0, '"none: <why>" is a record too, and lets the source close');
+  ok(run('copy', 's1', 'archive/hand/booklet-p3.jpg').status === 0 && JSON.stringify(src('s1')._copy) === '["archive/hand/booklet-p3.jpg"]', 'a copy filed later takes the place of "none"');
+  /* the sources closed before the rule are not refused, only counted */
+  ok(src('s3')._copy === undefined && run('set', 's3', 'st=done').status === 0 && src('s3').st === 'done', 'a source that was already found may move to done without one');
+  r = run('validate');
+  const notes = r.stdout.split('\n').filter(l => /^\s+NOTE\s/.test(l));
+  ok(r.status === 0 && notes.filter(l => /copy on record/.test(l)).length === 1 && /NOTE\s+1 of 3 consulted sources/.test(r.stdout) && /node tools\/research\.js copy <source>/.test(r.stdout),
+    'validate says how many consulted sources have no copy, in one line (' + notes.length + ' NOTE line(s))');
+  r = run('status');
+  ok(r.status === 0 && (r.stdout.match(/copy on record/g) || []).length === 1 && /Our copies: 1 of 3 consulted sources/.test(r.stdout), 'status shows the count once');
+  r = run('log', 's3', 'Looked at again.', 'Regardée de nouveau.');
+  ok(r.status === 0 && !/NOTE/.test(r.stdout), 'and no other command repeats it');
+  /* a recorded copy that has since left the archive */
+  fs.renameSync(path.join(ARCH, 'archive', 'hand', 'booklet-p3.jpg'), path.join(ARCH, 'archive', 'hand', 'moved.jpg'));
+  r = run('validate');
+  ok(r.status === 0 && /NOTE\s+1 source\(s\) record a copy that is not in the source archive now \(s1\)/.test(r.stdout), 'validate counts recorded copies that are no longer in the archive (a note, not an error)');
+  ok(RJ.validate(load(), { cards: null, quiet: true, archive: path.join(T, 'no-archive-here') }).notes.every(n => !/not in the source archive/.test(n)), 'where there is no archive to ask, it says nothing about them');
+  fs.renameSync(path.join(ARCH, 'archive', 'hand', 'moved.jpg'), path.join(ARCH, 'archive', 'hand', 'booklet-p3.jpg'));
+  /* a source that arrives as JSON */
+  const S = more => JSON.stringify(Object.assign({ t: 'The parish list', t_fr: 'La liste paroissiale', st: 'none' }, more));
+  r = run('add-source', 'i1', '1', S({}));
+  ok(r.status !== 0 && /"_copy"/.test(said(r)) && load().investigations[0].qs[0].src.length === 2, 'add-source refuses a source that arrives already consulted with no copy');
+  r = run('add-source', 'i1', '1', S({ _copy: ['archive/hand/not-there.md'] }));
+  ok(r.status !== 0 && /is not in the source archive/.test(said(r)) && load().investigations[0].qs[0].src.length === 2, 'and one whose copy is not in the archive');
+  r = run('add-source', 'i1', '1', S({ _copy: ['archive/hand/booklet-pages.md'] }));
+  ok(r.status === 0 && load().investigations[0].qs[0].src.length === 3, 'with its copy it goes in');
+  r = run('add-question', 'i1', JSON.stringify({ q: 'And the second mill?', q_fr: 'Et le second moulin ?', state: 'open', src: [JSON.parse(S({}))] }));
+  ok(r.status !== 0 && load().investigations[0].qs.length === 1, 'add-question holds its sources to the same');
+  /* never the family's */
+  const R = load();
+  ok(JSON.stringify(R).includes('_copy') && !JSON.stringify(RJ.publicCopy(R)).includes('_copy') && !JSON.stringify(RJ.publicCopy(R)).includes('booklet-pages'), '_copy and its paths stay out of the family\'s copy');
+}
+
+// ------------------------------------------------------------------ show, and log entries written for their reader
+section('show <investigation> prints the newest log entries; long entries and card ids draw a note');
+{
+  const run = (...a) => spawnSync(process.execPath, [path.join(T, 'tools', 'research.js'), ...a], { cwd: T, env, encoding: 'utf8' });
+  const R0 = research();
+  R0.investigations[0].qs[0].src[0].log = [1, 2, 3, 4, 5].map(n => ['2026-09-2' + n, 'Entry ' + n + '.', 'Entrée ' + n + '.']);
+  R0.investigations[0].qs[0].src[1].log = [['2026-09-21', 'Only one.', 'Une seule.']];
+  fs.writeFileSync(path.join(T, 'research.json'), JSON.stringify(R0, null, 1));
+  const logs = o => o.qs[0].src.map(s => s.log);
+  const noLogs = o => JSON.stringify(Object.assign({}, o, { qs: o.qs.map(q => Object.assign({}, q, { src: q.src.map(s => Object.assign({}, s, { log: 0 })) })) }));
+  let r = run('show', 'i1'), o = JSON.parse(r.stdout);
+  ok(r.status === 0 && logs(o)[0].length === 4 && logs(o)[0][0] === '… 2 earlier entries: add --log all (or --log <n>)' && logs(o)[0].slice(1).map(e => e[1]).join(' ') === 'Entry 3. Entry 4. Entry 5.',
+    'each source shows its newest 3 entries, and a line that says how many came before and how to see them');
+  ok(logs(o)[1].length === 1 && logs(o)[1][0][1] === 'Only one.', 'a source with 3 entries or fewer is shown as it is');
+  ok(noLogs(o) === noLogs(R0.investigations[0]), 'everything else in the output is unchanged');
+  r = run('show', 'i1', '--log', 'all'); o = JSON.parse(r.stdout);
+  ok(r.status === 0 && JSON.stringify(o) === JSON.stringify(R0.investigations[0]), '--log all prints the investigation in full');
+  r = run('show', 'i1', '--log', '4'); o = JSON.parse(r.stdout);
+  ok(logs(o)[0].length === 5 && logs(o)[0][0] === '… 1 earlier entry: add --log all (or --log <n>)', '--log <n> prints that many');
+  r = run('show', 'i1', '--log', '0'); o = JSON.parse(r.stdout);
+  ok(logs(o)[0].length === 1 && /^… 5 earlier entries/.test(logs(o)[0][0]), '--log 0 prints none, only the count');
+  ok(run('show', 'i1', '--log', 'some').status !== 0 && run('show', 'i1', '--log').status !== 0, '--log with anything else is refused');
+  r = run('show', 's1'); o = JSON.parse(r.stdout);
+  ok(r.status === 0 && o.log.length === 5 && o.investigation === 'i1', 'show <source> prints that source in full');
+  ok(JSON.stringify(JSON.parse(fs.readFileSync(path.join(T, 'research.json'), 'utf8'))) === JSON.stringify(R0), 'show changes nothing in the file');
+  /* entries are for the family: accepted, with a note */
+  const long = n => 'x'.repeat(n);
+  r = run('log', 's2', long(600), long(600));
+  ok(r.status === 0 && !/NOTE/.test(r.stdout), 'a log entry of 600 characters draws no note');
+  r = run('log', 's2', long(601), 'Court.');
+  ok(r.status === 0 && /NOTE\s+this log entry is 601 characters/.test(r.stdout) && /run notes/.test(r.stdout) && RJ.find(JSON.parse(fs.readFileSync(path.join(T, 'research.json'), 'utf8')), 's2').s.log.length === 3,
+    'one of 601 is accepted, with a note asking for the detail to go in the run notes');
+  r = run('log', 's2', 'Read for go12; ergo12 and gogo3 are words.', 'Lu pour go12.');
+  ok(r.status === 0 && /NOTE\s+this log entry names a decision card or item/.test(r.stdout), 'an entry that names a decision card is accepted, with a note');
+  run('log', 'v1', 'The item yc34 is done (rq5).', 'L\'élément yc34 est fait (rq5).');
+  run('log', 's1', 'The cargo12 of logo7 came, ago3.', 'Rien sur un algo12.');
+  r = run('validate');
+  ok(r.status === 0 && r.stdout.split('\n').filter(l => /decision card or item/.test(l)).length === 1 && /NOTE\s+2 log entries the family reads name a decision card or item/.test(r.stdout),
+    'validate counts the family-visible log entries that name one, as whole words, in one line');
+}
+
 // ------------------------------------------------------------------ link
 section('matching people to cards');
 {
@@ -229,12 +356,16 @@ section('the sealed files');
 {
   const PW = 'test-only-password', salt = Buffer.from('research-test-16').toString('base64'), iter = 1000;
   const R = research(); R.investigations[0]._why = 'a private note'; R.investigations[0].qs[0].src[0]._touched = '2026-10-01T10:00:00Z';
+  R.investigations[0].qs[0].src[0]._copy = ['archive/hand/booklet-pages.md']; R.investigations[1].qs[0].src[0]._copy = 'none: the stone itself is the record';
   const f = RJ.sealed(R, PW, { salt, iter });
   const key = P.keyFor(PW, salt, iter);
   const d = P.openBlob(key, f.data), c = P.openBlob(key, f.cards);
   const json = JSON.parse(zlib.inflateRawSync(d.bytes).toString('utf8'));
   ok(/^r:\d+$/.test(d.header) && c.header === 'q', 'research.bin and research-cards.bin open with the payload key (headers ' + d.header + ', ' + c.header + ')');
   ok(JSON.stringify(json) === JSON.stringify(RJ.publicCopy(R)) && !/"_/.test(JSON.stringify(json)), 'research.bin is the family\'s copy: no private key reaches it');
+  ok(!/_copy|booklet-pages|the stone itself/.test(JSON.stringify(json)) && !/_copy|booklet-pages/.test(c.bytes.toString('utf8')), 'where our copies are (_copy) reaches neither file');
+  { const R1 = JSON.parse(JSON.stringify(R)); R1.investigations.forEach(iv => iv.qs.forEach(q => q.src.forEach(s => { delete s._copy; })));
+    const f1 = RJ.sealed(R1, PW, { salt, iter }); ok(f1.data.equals(f.data) && f1.cards.equals(f.cards), 'and recording one leaves both files byte for byte the same'); }
   const cards = JSON.parse(c.bytes.toString('utf8'));
   ok(cards.cards.c001 && cards.cards.c001[0] === 1 && cards.cards.c001[1] === 'i1' && cards.invs.i1[2] === 'solo', 'the badge file: one open question on c001, in i1, ready to do');
   const R2 = JSON.parse(JSON.stringify(R)); R2.investigations[0].qs[0].src[0]._touched = '2026-10-03T09:00:00Z'; R2.investigations[0]._why = 'changed';

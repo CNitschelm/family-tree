@@ -8,7 +8,10 @@
  * with this tool in the same session, and the page reads a sealed copy of it.
  *
  *   node tools/research.js status                       what is open, tier by tier; what needs Cory's OK
- *   node tools/research.js show <id>                    one investigation, source or visit, in full
+ *   node tools/research.js show <id> [--log all|<n>]    one investigation, source or visit. An investigation
+ *                                                       shows the newest 3 log entries of each source (the largest
+ *                                                       one was 482 KB in full, more than a session can read);
+ *                                                       a source or a visit list is shown in full
  *   node tools/research.js validate                     schema, French, privacy, card links
  *   node tools/research.js build                        validate, then write media/research.bin and
  *                                                       media/research-cards.bin (and .research-stamp)
@@ -27,6 +30,18 @@
  *   node tools/research.js add-question <investigation> '<json>'
  *   node tools/research.js add-inv '<json>'
  *   node tools/research.js decide <https://claude.ai/artifact/…>  the address of Cory's private decisions page ("" removes it)
+ *   node tools/research.js copy <source> <archive path> [<archive path> …] | "none: <why>"   [--replace]
+ *
+ * Where our copy is (16 Nov 2026, register R-0759): every read is recorded with where our copy of what was
+ * read is, "nothing found" included, so a negative can be checked again without reading the source again.
+ * A source's `_copy` is a list of paths inside the source archive (FT_ARCHIVE, by default
+ * ../family-tree-sources; each must be there when it is recorded), or the one string "none: <why>" when
+ * there is truly nothing to keep. It is private ("_…"), so it never reaches the family's copy. `copy` adds
+ * to the list (--replace starts it again). From now on a source cannot be set to found, none or done (the
+ * states that say it was consulted) without one; the sources closed before this rule are only counted, by
+ * validate and status. A register read page by page also gets a page list: tools/pages.js.
+ * Log entries are for the family: one over 600 characters, or one that names a decision card or item
+ * (go12, yc34, rq5), is accepted with a note; the detail belongs in the run notes.
  *
  * A person's archive visits (5 Oct 2026): the page's #research/who/<name> gathers every visit list whose `who` is
  * that person. On a source in a visit list, `pos` is its place on the list (1, 2, 3 …, each once per list) and `pri`
@@ -69,12 +84,16 @@ const FILE = process.env.FT_RESEARCH || path.join(ROOT, "research.json");
 const OUT = { data: "research.bin", cards: "research-cards.bin" };
 const STAMP = path.join(ROOT, ".research-stamp");
 const DENY = path.join(ROOT, "ledger", "research-deny.txt");
+const ARCHIVE = process.env.FT_ARCHIVE || path.join(ROOT, "..", "family-tree-sources");   /* the same default as tools/ledger.js */
 
 const STATUSES = ["cory", "wait", "visit", "ready", "todo", "hold", "found", "none", "done"];
 const CLOSED = new Set(["found", "none", "done"]);
 const QSTATES = ["open", "lead", "partly", "answered"];
 const TIERS = ["solo", "assist", "others", "hold"];
-
+const SHOW_LOG = 3;      /* show <investigation>: the newest log entries printed for each source */
+const LOG_LONG = 600;    /* a log entry longer than this draws a note: the detail goes in the run notes */
+/* ids of decision cards and At-your-computer items, as whole words: they mean nothing to the family */
+const INTERNAL_ID = /(?<![\p{L}\d])(?:go|yc|rq)\d{1,4}(?![\p{L}\d])/u;
 
 /* ---------- tiers: the same rule as the page (index.html, resTier), tested to agree ---------- */
 function tierOf(s) {
@@ -121,6 +140,61 @@ function publicCopy(x) {
     return o;
   }
   return x;
+}
+
+/* ---------- where our copy is (`_copy`, private; register R-0759) ---------- */
+const NO_COPY = /^none\s*:\s*([\s\S]*)$/i;
+const NO_COPY_WHY = 12;   /* "none: <why>": the why must say something */
+/* a path inside the archive, as it is stored: relative, forward slashes, never climbing out */
+const relOk = p => typeof p === "string" && !!p && !/^[\/\\]|^[A-Za-z]:|\\|[\x00-\x1f]/.test(p) && !p.split("/").some(x => x === ".." || x === "." || x === "");
+/* what is wrong with a `_copy` value's form, or "" (whether the files are there is asked when it is recorded) */
+function copyShape(v) {
+  if (typeof v === "string") {
+    const m = NO_COPY.exec(v);
+    return m && m[1].trim().length >= NO_COPY_WHY ? "" : 'must be a list of archive paths, or "none: <why>" with a reason of ' + NO_COPY_WHY + " characters or more";
+  }
+  if (!Array.isArray(v) || !v.length) return 'must be a list of archive paths, or "none: <why>"';
+  const bad = v.find(p => !relOk(p));
+  if (bad !== undefined) return "holds " + JSON.stringify(bad) + ", which is not a path inside the source archive (relative, such as archive/hand/<file>)";
+  return new Set(v).size === v.length ? "" : "names one path twice";
+}
+/* one path as given on the command line → as stored; throws, with what to do, when it is not in the archive */
+function archivePath(given, root = ARCHIVE) {
+  let base;
+  try { base = fs.realpathSync(root); } catch (_) {
+    throw new Error("there is no source archive at " + root + ", so a copy cannot be checked. Set FT_ARCHIVE to the family-tree-sources clone (bash tools/cloud-setup.sh does it), then run this again.");
+  }
+  const abs = path.isAbsolute(given) ? given : path.join(base, given);
+  let real;
+  try { real = fs.realpathSync(abs); } catch (_) {
+    throw new Error(JSON.stringify(given) + " is not in the source archive (" + base + "). File the copy there first, then give its path from the archive's root, such as archive/hand/<file>.");
+  }
+  const rel = path.relative(base, real).split(path.sep).join("/");
+  if (!rel || rel.startsWith("../") || rel === ".." || path.isAbsolute(rel)) throw new Error(JSON.stringify(given) + " is outside the source archive (" + base + "). A copy is a file or folder inside it: file it there, then give that path.");
+  if (!relOk(rel)) throw new Error(JSON.stringify(given) + " cannot be recorded as an archive path (" + rel + "): rename the file without odd characters, then run this again.");
+  return rel;
+}
+/* the sources that say they were consulted (found, none, done) and record no copy */
+function withoutCopy(R) {
+  const out = []; let consulted = 0;
+  (R.investigations || []).forEach(iv => (iv.qs || []).forEach(q => (q.src || []).forEach(s => { if (CLOSED.has(s.st)) { consulted++; if (s._copy === undefined) out.push(s.id); } })));
+  return { consulted, ids: out };
+}
+/* recorded copies that are not in the archive now: null when there is no archive here to ask */
+function missingCopies(R, root = ARCHIVE) {
+  if (!fs.existsSync(path.join(root, "archive"))) return null;
+  const out = [];
+  (R.investigations || []).forEach(iv => (iv.qs || []).forEach(q => (q.src || []).forEach(s => {
+    if (Array.isArray(s._copy) && s._copy.some(p => relOk(p) && !fs.existsSync(path.join(root, p)))) out.push(s.id);
+  })));
+  return out;
+}
+const COPY_HOW = id => "node tools/research.js copy " + id + " <archive path> [<archive path> …]";
+const COPY_NONE = id => "node tools/research.js copy " + id + ' "none: <why>"';
+/* a source may be set to found, none or done only with its copy on record */
+function needCopy(s, how) {
+  if (!CLOSED.has(s.st) || s._copy !== undefined) return;
+  throw new Error("source " + s.id + " would be " + JSON.stringify(s.st) + " (consulted) with no record of where our copy of what was read is (register R-0759). " + how);
 }
 
 /* ---------- what the tree's cards need ---------- */
@@ -211,9 +285,9 @@ const PRIV = [
   [new RegExp("\\(\\s*" + FULL_DATE + "\\s*[–-]\\s*\\)", "u"), "an open life span with a full birth date (living people get a birth year only)"],
 ];
 function validate(R, opts = {}) {
-  const errors = [], warnings = [];
+  const errors = [], warnings = [], notes = [];   /* notes: counts that `validate` prints once, and no other command */
   const E = m => errors.push(m), W = m => warnings.push(m);
-  if (!R || typeof R !== "object") return { errors: ["research.json is not an object"], warnings };
+  if (!R || typeof R !== "object") return { errors: ["research.json is not an object"], warnings, notes };
   if (R.schema !== 1) E("schema must be 1");
   if (!isDate(R.updated || "")) E("updated must be a date (YYYY-MM-DD)");
   if (R.decide !== undefined && !/^https:\/\/claude\.ai\/artifact\/[A-Za-z0-9_-]+$/.test(String(R.decide))) E("decide must be the address of Cory's private decisions page (https://claude.ai/artifact/…)");
@@ -222,6 +296,7 @@ function validate(R, opts = {}) {
   const needFr = (o, k, where) => { if (typeof o[k] === "string" && o[k].trim() && !(typeof o[k + "_fr"] === "string" && o[k + "_fr"].trim())) E(where + ": " + k + " has no French (" + k + "_fr)"); };
   const needEn = (o, k, where) => { if (!(typeof o[k] === "string" && o[k].trim())) E(where + ": " + k + " is required"); };
   const dateOk = (d, where, req) => { if (!d) { if (req) E(where + " needs a date"); return; } if (!isDate(d)) E(where + ": " + JSON.stringify(d) + " is not a date"); else if (d > (opts.today || today())) E(where + ": " + d + " is in the future"); };
+  let internal = 0;   /* log entries the family reads that name a decision card or item */
   const logOk = (log, where) => {
     if (log === undefined) return;
     if (!Array.isArray(log)) return E(where + ".log must be a list");
@@ -230,6 +305,7 @@ function validate(R, opts = {}) {
       dateOk(e[0], where + ".log[" + i + "]", true);
       if (!String(e[1] || "").trim()) E(where + ".log[" + i + "] has no English");
       if (!String(e[2] || "").trim()) E(where + ".log[" + i + "] has no French");
+      if (INTERNAL_ID.test(String(e[1])) || INTERNAL_ID.test(String(e[2]))) internal++;
       if (i && isDate(e[0]) && isDate(log[i - 1][0]) && e[0] < log[i - 1][0]) W(where + ".log is out of date order at " + i);
     });
   };
@@ -299,6 +375,7 @@ function validate(R, opts = {}) {
         if (s.by && !TIERS.includes(s.by)) E(ws + ": by must be one of " + TIERS.join(", "));
         touchedOk(s, ws);
         decOk(s, ws);
+        if (s._copy !== undefined) { const p = copyShape(s._copy); if (p) E(ws + "._copy " + p + " (" + COPY_HOW(ws) + ")"); }
         if (s.visit && !visits[s.visit]) E(ws + ": visit " + s.visit + " does not exist");
         if (s.st === "visit" && !s.visit) W(ws + ": needs a visit, but names no visit list");
         if (s.pri !== undefined && !["A", "B", "C"].includes(s.pri)) E(ws + ": pri must be A (do first), B (if time allows) or C (only at the end)");
@@ -326,7 +403,12 @@ function validate(R, opts = {}) {
     deny.forEach(re => { if (re.test(v)) E(where + ": names someone on the private do-not-publish list (ledger/research-deny.txt)"); });
   });
   if (!fs.existsSync(DENY) && !opts.quiet) W("no ledger/research-deny.txt: names researched but never to be published are not being checked");
-  return { errors, warnings };
+  const wc = withoutCopy(R);
+  if (wc.ids.length) notes.push(wc.ids.length + " of " + wc.consulted + " consulted sources (found, none, done) have no copy on record. They were closed before the rule; when one is read again, record it: " + COPY_HOW("<source>") + ' | "none: <why>"');
+  const gone = opts.archive === null ? null : missingCopies(R, opts.archive);
+  if (gone && gone.length) notes.push(gone.length + " source(s) record a copy that is not in the source archive now (" + gone.slice(0, 5).join(", ") + (gone.length > 5 ? ", …" : "") + "): file it again or correct the path, " + COPY_HOW("<source>") + " --replace");
+  if (internal) notes.push(internal + " log entries the family reads name a decision card or item (go…, yc…, rq…). In new entries say what was done, not the card: the id means nothing to a reader");
+  return { errors, warnings, notes };
 }
 
 /* ---------- sealing ---------- */
@@ -472,6 +554,8 @@ function status(R) {
   const decs = [];
   (R.investigations || []).forEach(iv => { if (iv.dec) decs.push(iv.id + " → " + iv.dec); iv.qs.forEach(q => q.src.forEach(s => { if (s.dec) decs.push(s.id + " → " + s.dec); })); });
   Object.entries(R.visits || {}).forEach(([id, v]) => { if (v.dec) decs.push(id + " → " + v.dec); });
+  const wc = withoutCopy(R);
+  if (wc.ids.length) lines.push("\nOur copies: " + wc.ids.length + " of " + wc.consulted + " consulted sources (found, none, done) have no copy on record (closed before the rule). Before a source is set to found, none or done: " + COPY_HOW("<source>") + ' | "none: <why>"');
   if (decs.length) lines.push("\nDecide buttons, item → Cory's card (a go… card is a Begin research button: Claude alone, online, R-0448)" + (R.decide ? "" : " (NO decide address: they do not show)") + ":\n  " + decs.join(", "));
   return lines.join("\n");
 }
@@ -492,6 +576,11 @@ function main(argv) {
   const day = di >= 0 ? args.splice(di, 2)[1] : today();
   if (!isDate(day)) throw new Error("--date must be YYYY-MM-DD");
   const writeLink = args.includes("--write"); if (writeLink) args.splice(args.indexOf("--write"), 1);
+  const replace = args.includes("--replace"); if (replace) args.splice(args.indexOf("--replace"), 1);
+  const li = args.indexOf("--log");
+  const logArg = li >= 0 ? args.splice(li, 2)[1] : undefined;
+  if (li >= 0 && !/^(all|\d{1,4})$/.test(logArg || "")) throw new Error("--log takes all, or how many of each source's newest log entries to show (--log 10)");
+  const keepLog = logArg === undefined ? SHOW_LOG : logArg === "all" ? Infinity : +logArg;
   const cmd = args.shift();
   const R = load();
   const touch = iv => { if (!iv.updated || iv.updated < day) iv.updated = day; if (!R.updated || R.updated < day) R.updated = day; };
@@ -509,16 +598,32 @@ function main(argv) {
     build(R, pw);
     console.log("rebuilt media/" + OUT.data + " and media/" + OUT.cards + " — commit them (and nothing else is needed for a research-only update)");
   };
+  /* a source that arrives as JSON: its copy, when it names one, must be in the archive, and it cannot arrive
+     already found, none or done without one */
+  const newCopy = s => {
+    if (!s || typeof s !== "object") return;
+    if (Array.isArray(s._copy)) s._copy = [...new Set(s._copy.map(p => archivePath(String(p))))];
+    needCopy(s, 'Nothing was written. Put the copy in the JSON, as "_copy": ["<archive path>", …] (paths inside the source archive) or "_copy": "none: <why>", or add the source as not yet read and record the copy with:  ' + COPY_HOW("<its id>"));
+  };
   switch (cmd) {
     case "status": console.log(status(R)); return;
     case "show": {
       const f = find(R, args[0]); if (!f) throw new Error("no investigation, source or visit " + args[0]);
-      console.log(JSON.stringify(f.kind === "inv" ? f.iv : f.kind === "src" ? Object.assign({ investigation: f.iv.id, question: f.qi + 1, q: f.q.q }, f.s) : f.v, null, 1)); return;
+      /* an investigation: each source's newest log entries only, with a line that says how many came before and
+         how to see them (the largest investigation was 482 KB in full). Everything else is printed as it is. */
+      const newest = log => {
+        if (!Array.isArray(log) || log.length <= keepLog) return log;
+        const n = log.length - keepLog;
+        return ["… " + n + (n === 1 ? " earlier entry" : " earlier entries") + ": add --log all (or --log <n>)", ...log.slice(n)];
+      };
+      const short = iv => Object.assign({}, iv, { qs: (iv.qs || []).map(q => Object.assign({}, q, { src: (q.src || []).map(s => s.log ? Object.assign({}, s, { log: newest(s.log) }) : s) })) });
+      console.log(JSON.stringify(f.kind === "inv" ? short(f.iv) : f.kind === "src" ? Object.assign({ investigation: f.iv.id, question: f.qi + 1, q: f.q.q }, f.s) : f.v, null, 1)); return;
     }
     case "validate": {
       const v = validate(R);
       v.warnings.forEach(w => console.log("  note  " + w));
       if (v.errors.length) { console.error("INVALID — " + v.errors.length + " problem(s):\n" + v.errors.map(e => "  - " + e).join("\n")); process.exit(1); }
+      v.notes.forEach(w => console.log("  NOTE  " + w));
       const n = (R.investigations || []).reduce((a, iv) => a + iv.qs.reduce((b, q) => b + q.src.length, 0), 0);
       console.log("research.json is valid: " + R.investigations.length + " investigations, " + n + " sources, updated " + R.updated); return;
     }
@@ -545,14 +650,19 @@ function main(argv) {
     case "set": {
       const id = args.shift(), f = find(R, id); if (!f || f.kind === "inv") throw new Error("set takes a source or a visit id; for an investigation use: inv");
       const kv = parseKV(args), o = f.kind === "src" ? f.s : f.v;
+      const was = o.st;
       const allowed = ["st", "who", "who_fr", "since", "next", "next_fr", "why", "why_fr", "where", "where_fr", "how", "how_fr", "by", "visit", "t", "t_fr", "dec", "pri", "pos", "access", "access_fr"];
       for (const [k, v] of Object.entries(kv)) {
+        if (k === "_copy" || k === "copy") throw new Error("set does not record a copy (it has to be checked against the source archive). Use:  " + COPY_HOW(id) + '  or  ' + COPY_NONE(id));
         if (!allowed.includes(k)) throw new Error("set: " + k + " is not something set changes (" + allowed.join(", ") + ")");
         if (v === "") delete o[k];
         else if (k === "pos") { if (!/^\d{1,2}$/.test(v)) throw new Error("set: pos is a place on the visit list, 1 to 99"); o[k] = +v; }
         else o[k] = v;
       }
       if (kv.st && !kv.since) o.since = day;
+      /* a source that was already found, none or done before the rule may move among those states; a new one may not close without its copy */
+      if (f.kind === "src" && kv.st && !CLOSED.has(was)) needCopy(o, "Nothing was written. First record the copy:  " + COPY_HOW(id) +
+        "  (paths inside the source archive), or, when there is truly nothing to keep:  " + COPY_NONE(id) + "  Then run this set again.");
       if (f.kind === "src") touch(f.iv); else if (!R.updated || R.updated < day) R.updated = day;
       mark(o, f.kind === "src" ? f.iv : null);
       return commit("set " + Object.keys(kv).join(", ") + " on " + id);
@@ -566,7 +676,12 @@ function main(argv) {
       o.log.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
       if (f.kind === "src") touch(f.iv); else if (!R.updated || R.updated < day) R.updated = day;
       mark(o, f.kind === "src" ? f.iv : null);
-      return commit("logged on " + id + " (" + day + ")");
+      commit("logged on " + id + " (" + day + ")");
+      /* accepted all the same: these two only ask for the next entry to be written for its reader */
+      const long = Math.max(en.length, fr.length);
+      if (long > LOG_LONG) console.log("  NOTE  this log entry is " + long + " characters. The family reads every entry on the Research tab: next time keep it to the result (" + LOG_LONG + " characters or fewer) and put the detail in the run notes (family-tree-private/_work/<run>/NOTES.md).");
+      if (INTERNAL_ID.test(en) || INTERNAL_ID.test(fr)) console.log("  NOTE  this log entry names a decision card or item (go…, yc…, rq…). The family reads it and the id means nothing to them: next time say what was done instead.");
+      return;
     }
     case "answer": case "state": {
       const id = args.shift(), qn = +args.shift(), f = find(R, id);
@@ -595,6 +710,7 @@ function main(argv) {
       const s = JSON.parse(args.shift() || "{}");
       if (!s.id) s.id = nextId(R, "s");
       if (!s.since && !CLOSED.has(s.st)) s.since = day;
+      newCopy(s);
       f.iv.qs[qn - 1].src.push(s);
       touch(f.iv); mark(s, f.iv);
       return commit("added source " + s.id + " to " + id + " question " + qn);
@@ -602,17 +718,39 @@ function main(argv) {
     case "add-question": {
       const id = args.shift(), f = find(R, id); if (!f || f.kind !== "inv") throw new Error("add-question takes an investigation id and the question as JSON");
       const q = JSON.parse(args.shift() || "{}"); q.src = q.src || [];
-      q.src.forEach(s => { if (!s.id) s.id = nextId(R, "s"); });
+      q.src.forEach(s => { if (!s.id) s.id = nextId(R, "s"); newCopy(s); });
       f.iv.qs.push(q); touch(f.iv); mark(f.iv, ...q.src);
       return commit("added question " + f.iv.qs.length + " to " + id);
     }
     case "add-inv": {
       const iv = JSON.parse(args.shift() || "{}");
       if (!iv.id) iv.id = nextId(R, "i");
+      (iv.qs || []).forEach(q => (q.src || []).forEach(newCopy));
       iv.updated = day; (R.investigations = R.investigations || []).push(iv);
       mark(iv, ...(iv.qs || []).flatMap(q => q.src || []));
       if (!R.updated || R.updated < day) R.updated = day;
       return commit("added investigation " + iv.id);
+    }
+    case "copy": {   /* where our copy of what a source's read saw is: paths inside the source archive, or "none: <why>" */
+      const id = args.shift(), f = find(R, id || "");
+      const usage = "usage: copy <source> <archive path> [<archive path> …]   or   copy <source> \"none: <why>\"   (--replace starts the list again)";
+      if (!f || f.kind !== "src") throw new Error("copy takes a source id (an investigation's sources: node tools/research.js show <investigation>). " + usage);
+      if (!args.length) throw new Error(usage);
+      const o = f.s, has = Array.isArray(o._copy) && o._copy.length > 0;
+      if (args.some(a => NO_COPY.test(a))) {
+        if (args.length > 1) throw new Error('give archive paths, or the one string "none: <why>", not both. ' + usage);
+        const why = NO_COPY.exec(args[0])[1].trim();
+        if (why.length < NO_COPY_WHY) throw new Error('"none: <why>" needs a reason of ' + NO_COPY_WHY + " characters or more (what was read, and why nothing could be kept). " + usage);
+        if (has && !replace) throw new Error(id + " already records " + o._copy.length + " cop" + (o._copy.length === 1 ? "y" : "ies") + " (" + o._copy.join(", ") + "), so it cannot also say none. If those paths are wrong, run this again with --replace.");
+        o._copy = "none: " + why;
+      } else {
+        const list = has && !replace ? o._copy.slice() : [];
+        for (const a of args) { const rel = archivePath(a); if (!list.includes(rel)) list.push(rel); }
+        o._copy = list;
+      }
+      /* private, so the dates the family sees do not move; _touched says the source was worked on */
+      mark(o, f.iv);
+      return commit("recorded on " + id + " where our copy is: " + (typeof o._copy === "string" ? o._copy : o._copy.length + " path" + (o._copy.length === 1 ? "" : "s") + " in the source archive"));
     }
     case "decide": {   /* the address of Cory's private decisions page, which the Decide buttons open */
       const url = args.shift();
@@ -624,7 +762,9 @@ function main(argv) {
     default:
       console.error("usage: node tools/research.js status | show <id> | validate | build | check | link [--write] |\n" +
         "       set <id> k=v … | log <id> \"<en>\" \"<fr>\" | answer <inv> <no.> \"<en>\" \"<fr>\" | state <inv> <no.> <state> |\n" +
-        "       inv <inv> k=v … | add-source <inv> <no.> '<json>' | add-question <inv> '<json>' | add-inv '<json>' | decide <url>   [--date YYYY-MM-DD]");
+        "       inv <inv> k=v … | add-source <inv> <no.> '<json>' | add-question <inv> '<json>' | add-inv '<json>' | decide <url>   [--date YYYY-MM-DD]\n" +
+        "       copy <source> <archive path> [<archive path> …] | copy <source> \"none: <why>\"   [--replace]\n" +
+        "       show <investigation> prints each source's newest " + SHOW_LOG + " log entries: add --log all (or --log <n>) for more");
       process.exit(2);
   }
 }
@@ -634,4 +774,4 @@ if (require.main === module) {
   catch (e) { console.error("FAILED: " + e.message); process.exit(1); }
 }
 module.exports = { password, FILE, OUT, STAMP, STATUSES, QSTATES, TIERS, tierOf, invTier, load, validate, publicCopy, cardIndex, sealed, build, check,
-  claimsFor, lastTouched, blobId, link, status, find, isDate };
+  claimsFor, lastTouched, blobId, link, status, find, isDate, ARCHIVE, copyShape, archivePath, withoutCopy, missingCopies };
