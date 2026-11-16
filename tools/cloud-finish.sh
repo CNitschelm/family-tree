@@ -239,12 +239,12 @@ if [ "$PUBLISH" = notes ]; then
        die "the notes could not be pushed: GitHub's newer commits change a file that this session has changed or made too,
   and not committed (${FT_CONFLICTS% }), so they cannot be taken in. Everything here is as it was (the notes committed, not
   pushed; that file as this session left it). Do NOT rebase by hand: with uncommitted state that leaves conflict
-  marks in the file. See both sides: git -C \"$PRIV\" diff -- <file> (this session's change) and
-  git -C \"$PRIV\" diff HEAD origin/main -- <file> (theirs). To get the notes up now: copy this session's file
-  aside (mkdir -p \$HOME/.ft-tmp && cp <file> \$HOME/.ft-tmp/), put it back as committed (git -C \"$PRIV\" checkout --
-  <file>; one git does not track here: move it aside instead), run this again, then make this session's change again
-  on top of theirs (research.json: with tools/research.js). If the two cannot be put together with certainty,
-  stop there and say so in this session's report." ;;
+  marks in the file. See both sides, from inside family-tree-private (cd \"$PRIV\"): git diff -- <file> is this
+  session's change, git diff HEAD origin/main -- <file> is theirs. To get the notes up now, there too: copy this
+  session's file aside (mkdir -p \$HOME/.ft-tmp && cp <file> \$HOME/.ft-tmp/), put it back as committed (git checkout
+  -- <file>; one git does not track here: mv it aside instead), run this again, then make this session's change
+  again on top of theirs (research.json: with tools/research.js). If the two cannot be put together with
+  certainty, stop there and say so in this session's report." ;;
     *) die "the notes could not be pushed; they are committed here. $(ft_push_report)" ;;
   esac
 fi
