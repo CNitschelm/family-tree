@@ -511,9 +511,12 @@ else
 fi
 
 # ------------------------------------------------------------------ 6. the writer lock (run after 5: released last)
-# A release that fails after everything went up used to be one WARNING line in the middle of the output, and
-# the finish still ended with exit 0: the lock then kept every other session out for up to 12 hours (it was
-# held 32 hours once, 12-14 Nov 2026). Now it is the last thing the finish says, and it exits 4.
+# A lock can be left held in two ways. After a STATE SPLIT (exit 2, in 5) the finish stops before it releases
+# the lock, which then stays held until someone releases it: after the split of 12 Nov 2026 it was held 32 hours
+# in all, which is why that message now says that the lock stays held, with the command for afterwards. The
+# other way is a release that fails after everything went up: that used to be one WARNING line in the middle of
+# the output, with exit 0, and the lock then kept every other session out for up to 12 hours. Now it is the
+# last thing the finish says, and it exits 4.
 LOCK_LEFT=0
 unlock() {
   local gh

@@ -33,7 +33,11 @@
 # origin/main or the queue's head), a lock release that fails after queuing (exit 4, said last), setup's stop
 # when a private repository is not attached, and the queue that has waited (a warning at setup and in
 # tools/doctor.js, which is run from the copy under test with FT_ROOT) with the note about the platform's
-# "unpushed commits" message.
+# "unpushed commits" message. From the review of that work: a fault on GitHub's own side is tried again, not
+# taken for a refusal; a folder of ignored files is named once; a source list whose commit cannot be pushed, or
+# that manifest.js calls incomplete, stops neither a finish nor a checkpoint and never reaches the archive; the
+# checkpoint's two kinds of clash each get their own way out; and every setup that may write ends with the
+# standing note about the platform's push reminder.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SEED="${1:?usage: cloud-selftest.sh <site clone>}"
