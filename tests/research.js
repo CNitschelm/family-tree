@@ -324,7 +324,17 @@ section('every read records where our copy is');
   ok(r.status === 0 && src('s2').st === 'none', 'with its copy on record the source can be set to none' + (r.status ? ' (' + said(r).slice(0, 200) + ')' : ''));
   r = run('copy', 's1', 'none: the ledger may not be photographed');
   ok(r.status === 0 && src('s1')._copy === 'none: the ledger may not be photographed' && run('set', 's1', 'st=found').status === 0, '"none: <why>" is a record too, and lets the source close');
-  ok(run('copy', 's1', 'archive/hand/booklet-p3.jpg').status === 0 && JSON.stringify(src('s1')._copy) === '["archive/hand/booklet-p3.jpg"]', 'a copy filed later takes the place of "none"');
+  /* a thin reason closes a source too ("none: nothing to keep" did, in review): the tool cannot judge one, so it
+     says what "none:" is for when one is recorded, and validate and status keep every such source in sight */
+  ok(/NOTE: s1 now records that nothing was kept\./.test(said(r)) && /A "nothing found" has a copy too: the saved result page, or the register's page list/.test(said(r)) &&
+     /node tools\/research\.js copy s1 <archive path>/.test(said(r)), 'recording "none:" prints a NOTE: a nothing-found has a copy too, and how to file one after all');
+  { const v = run('validate'), st = run('status');
+    ok(v.status === 0 && /NOTE\s+1 consulted source is closed on "none: <why>", with no copy kept: s1\./.test(v.stdout) &&
+       st.status === 0 && /Closed with no copy kept \("none: <why>"\): 1 — s1\n/.test(st.stdout) && JSON.stringify(RJ.closedOnNone(load())) === '["s1"]',
+      'validate and status count and name the sources closed on "none:"'); }
+  r = run('copy', 's1', 'archive/hand/booklet-p3.jpg');
+  ok(r.status === 0 && JSON.stringify(src('s1')._copy) === '["archive/hand/booklet-p3.jpg"]', 'a copy filed later takes the place of "none"');
+  ok(!/NOTE/.test(r.stdout) && !/closed on "none/.test(run('validate').stdout) && !/Closed with no copy kept/.test(run('status').stdout), 'and the source is then no longer listed (a copy of files draws no NOTE)');
   /* the sources closed before the rule are not refused, only counted */
   ok(src('s3')._copy === undefined && run('set', 's3', 'st=done').status === 0 && src('s3').st === 'done', 'a source that was already found may move to done without one');
   r = run('validate');

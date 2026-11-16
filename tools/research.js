@@ -257,6 +257,17 @@ function missingCopies(R, root = ARCHIVE) {
   })));
   return out;
 }
+/* The sources closed (found, none, done) on "none: <why>": nothing was kept of what was read. The reason is
+   only checked for its length, so a thin one closes a source ("none: nothing to keep" did, in review on
+   16 Nov 2026) and the read can then never be checked again. The tool cannot judge a reason. It can say what
+   "none:" is for when one is recorded, and keep every such source in sight: validate and status count and
+   name them. */
+function closedOnNone(R) {
+  const out = [];
+  (R.investigations || []).forEach(iv => (iv.qs || []).forEach(q => (q.src || []).forEach(s => { if (CLOSED.has(s.st) && typeof s._copy === "string") out.push(s.id); })));
+  return out;
+}
+const NONE_IS_FOR = "A \"nothing found\" has a copy too: the saved result page, or the register's page list (node tools/pages.js; archive/coverage/<key>.tsv), is what lets it be checked again. \"none:\" is only for a read that left nothing to save, and its reason says what was read and why nothing could be kept.";
 const COPY_HOW = id => "node tools/research.js copy " + id + " <archive path> [<archive path> …]";
 const COPY_NONE = id => "node tools/research.js copy " + id + ' "none: <why>"';
 /* a source may be set to found, none or done only with its copy on record */
@@ -473,6 +484,9 @@ function validate(R, opts = {}) {
   if (!fs.existsSync(DENY) && !opts.quiet) W("no ledger/research-deny.txt: names researched but never to be published are not being checked");
   const wc = withoutCopy(R);
   if (wc.ids.length) notes.push(wc.ids.length + " of " + wc.consulted + " consulted sources (found, none, done) have no copy on record. They were closed before the rule; when one is read again, record it: " + COPY_HOW("<source>") + ' | "none: <why>"');
+  const bare = closedOnNone(R);
+  if (bare.length) notes.push(bare.length + (bare.length === 1 ? " consulted source is" : " consulted sources are") + ' closed on "none: <why>", with no copy kept: ' + bare.join(", ") +
+    ". " + NONE_IS_FOR + " Where there is something to file after all, file it and run: " + COPY_HOW("<source>") + " (it takes the place of \"none\")");
   const gone = opts.archive === null ? null : missingCopies(R, opts.archive);
   if (gone && gone.length) notes.push(gone.length + " source(s) record a copy that is not in the source archive now (" + gone.slice(0, 5).join(", ") + (gone.length > 5 ? ", …" : "") + "): file it again or correct the path, " + COPY_HOW("<source>") + " --replace");
   if (internal) notes.push(internal + " log entries the family reads name a decision card or item (go…, yc…, rq…). In new entries say what was done, not the card: the id means nothing to a reader");
@@ -624,6 +638,8 @@ function status(R) {
   Object.entries(R.visits || {}).forEach(([id, v]) => { if (v.dec) decs.push(id + " → " + v.dec); });
   const wc = withoutCopy(R);
   if (wc.ids.length) lines.push("\nOur copies: " + wc.ids.length + " of " + wc.consulted + " consulted sources (found, none, done) have no copy on record (closed before the rule). Before a source is set to found, none or done: " + COPY_HOW("<source>") + ' | "none: <why>"');
+  const bare = closedOnNone(R);
+  if (bare.length) lines.push("\nClosed with no copy kept (\"none: <why>\"): " + bare.length + " — " + bare.join(", ") + "\n  Each can never be checked again from our own files; node tools/research.js show <source> gives its reason.");
   if (decs.length) lines.push("\nDecide buttons, item → Cory's card (a go… card is a Begin research button: Claude alone, online, R-0448)" + (R.decide ? "" : " (NO decide address: they do not show)") + ":\n  " + decs.join(", "));
   return lines.join("\n");
 }
@@ -673,6 +689,7 @@ function main(argv) {
   const newCopy = s => {
     if (!s || typeof s !== "object") return;
     if (Array.isArray(s._copy)) s._copy = [...new Set(s._copy.map(p => archivePath(String(p))))];
+    if (typeof s._copy === "string" && NO_COPY.test(s._copy)) console.log("NOTE: this source arrives with \"none:\" as its copy. " + NONE_IS_FOR);
     needCopy(s, 'Nothing was written. Put the copy in the JSON, as "_copy": ["<archive path>", …] (paths inside the source archive) or "_copy": "none: <why>", or add the source as not yet read and record the copy with:  ' + COPY_HOW("<its id>"));
   };
   switch (cmd) {
@@ -820,7 +837,10 @@ function main(argv) {
       }
       /* private, so the dates the family sees do not move; _touched says the source was worked on */
       mark(o, f.iv);
-      return commit("recorded on " + id + " where our copy is: " + (typeof o._copy === "string" ? o._copy : o._copy.length + " path" + (o._copy.length === 1 ? "" : "s") + " in the source archive"));
+      commit("recorded on " + id + " where our copy is: " + (typeof o._copy === "string" ? o._copy : o._copy.length + " path" + (o._copy.length === 1 ? "" : "s") + " in the source archive"));
+      if (typeof o._copy === "string") console.log("NOTE: " + id + " now records that nothing was kept. " + NONE_IS_FOR + " If this read left a result page or a page list, file it and run:  " + COPY_HOW(id) +
+        "  (it takes the place of \"none\"). node tools/research.js validate and status name every source closed on \"none:\".");
+      return;
     }
     case "decide": {   /* the address of Cory's private decisions page, which the Decide buttons open */
       const url = args.shift();
@@ -844,4 +864,4 @@ if (require.main === module) {
   catch (e) { console.error((e.refused ? "REFUSED: " : "FAILED: ") + e.message); process.exit(1); }
 }
 module.exports = { password, FILE, OUT, STAMP, STATUSES, QSTATES, TIERS, tierOf, invTier, load, save, writerProblem, validate, publicCopy, cardIndex, sealed, build, check,
-  claimsFor, lastTouched, blobId, link, status, find, isDate, ARCHIVE, copyShape, archivePath, tooWide, withoutCopy, missingCopies };
+  claimsFor, lastTouched, blobId, link, status, find, isDate, ARCHIVE, copyShape, archivePath, tooWide, withoutCopy, missingCopies, closedOnNone };
