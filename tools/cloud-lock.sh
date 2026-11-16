@@ -109,7 +109,7 @@ do_release() { # $1 = holder. 0 released (or already free); 1 not pushed (FT_WHY
        setwho ""
        FT_WHY="the lock changed on GitHub meanwhile (taken over or released by someone else); nothing released: $(lockjs status)"
        return 1 ;;
-    *) FT_WHY="the release is committed but NOT pushed (GitHub out of reach?): run this again"; return 1 ;;
+    *) FT_WHY="the release is committed but NOT pushed. $(ft_push_report)"; return 1 ;;
   esac
 }
 
@@ -136,20 +136,27 @@ case "$cmd" in
     git -C "$PRIV" add ledger/LOCK || refuse "could not stage ledger/LOCK"
     git -C "$PRIV" diff --cached --quiet -- ledger/LOCK && refuse "ledger/LOCK did not change (tools/lock.js take wrote nothing)"
     git -C "$PRIV" commit -q -m "Take the writer lock" -- ledger/LOCK || refuse "could not commit ledger/LOCK"
-    base="$(git -C "$PRIV" rev-parse HEAD~1)"; pushed=0; why="GitHub could not be reached"
+    base="$(git -C "$PRIV" rev-parse HEAD~1)"; pushed=0; why="GitHub could not be reached"; said=""
     for i in 1 2 3; do
-      if git -C "$PRIV" push -q origin HEAD:main 2>/dev/null; then pushed=1; break; fi
+      if pout="$(git -C "$PRIV" push -q origin HEAD:main 2>&1)"; then pushed=1; break; fi
+      ft_push_failed "$(ft_push_kind "$pout")" "$pout" "$PRIV"; said="$FT_PUSH_SAID"   # git's own words, kept for the refusal
+      case "$FT_PUSH_KIND" in
+        moved|unreachable) ;;                                           # look at GitHub and try again, below
+        *) why="the lock could not be pushed. ${FT_PUSH_WHY%.}"; break ;;   # the server refused it: no retry helps
+      esac
       sleep $((2 ** i))
       git -C "$PRIV" fetch -q origin main 2>/dev/null || continue
-      if ! git -C "$PRIV" diff --quiet "$base" origin/main -- ledger/LOCK; then why="the lock changed on GitHub while taking it"; break; fi
+      if ! git -C "$PRIV" diff --quiet "$base" origin/main -- ledger/LOCK; then why="the lock changed on GitHub while taking it"; said=""; break; fi
       trc=0; ft_take_in "$PRIV" rebase || trc=$?
-      [ "$trc" = 0 ] || { why="GitHub's newer commits could not be taken in (${FT_CONFLICTS:-$FT_WHY})"; break; }
+      [ "$trc" = 0 ] || { why="GitHub's newer commits could not be taken in (${FT_CONFLICTS:-$FT_WHY})"; said=""; break; }
       base="$(git -C "$PRIV" rev-parse HEAD~1)"
     done
     if [ "$pushed" = 0 ]; then
       git -C "$PRIV" reset -q --keep "$base" || true
       ft_ff "$PRIV" || true
-      echo "REFUSED: $why. The lock is as GitHub has it:"; lockjs status; exit 1
+      echo "REFUSED: $why. The lock is as GitHub has it:"; lockjs status
+      [ -z "$said" ] || printf '  git said, at the last try:\n%s\n' "$said"
+      exit 1
     fi
     # the lock is ours: look at the queue again, since the holder before may have queued work just before letting go
     if ! qfetch; then why="cannot reach GitHub after taking the lock"

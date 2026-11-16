@@ -352,6 +352,56 @@ says "dropped" "…naming it"
 quiet git -C "$PB" pull -q --ff-only && : > "$PB/.dropped-site-commits" && gnohook -C "$PB" commit -qam "Update working state" && quiet git -C "$PB" push -q origin HEAD:main
 git -C "$A" reset -q --hard HEAD~1 && quiet git -C "$PA" pull -q --ff-only
 
+echo "6b. a failed push says why (16 Nov 2026)"
+# what GitHub prints for each kind of refusal, as git shows it; ft_push_kind tells them apart
+kind_is() { test "$( . "$TOOLS/cloud-lib.sh"; ft_push_kind "$2" )" = "$1"; }
+check "a push rejected because the remote moved is told from the rest" kind_is moved ' ! [rejected]        HEAD -> main (fetch first)
+error: failed to push some refs to the remote'
+check "…a file over the size limit" kind_is large "remote: error: File big.bin is 120.00 MB; this exceeds GitHub's file size limit of 100.00 MB
+remote: error: GH001: Large files detected.
+ ! [remote rejected] HEAD -> main (pre-receive hook declined)"
+check "…a protected branch" kind_is protected 'remote: error: GH006: Protected branch update failed for refs/heads/main.
+ ! [remote rejected] HEAD -> main (protected branch hook declined)'
+check "…a session without push access" kind_is denied "remote: Permission to owner/repo.git denied to someone.
+fatal: unable to access 'https://example.invalid/owner/repo.git/': The requested URL returned error: 403"
+check "…a hook that declined it" kind_is refused ' ! [remote rejected] HEAD -> main (pre-receive hook declined)'
+check "…and a server that was not reached" kind_is unreachable "fatal: unable to access 'https://example.invalid/': Could not resolve host: example.invalid"
+# "GitHub" refuses pushes to a repo's main with the words in $T/refuse-<repo> while that file is there
+for g in "$GHA" "$GHP"; do n="$(basename "$g" .git)"; cat > "$g/hooks/update" <<EOF
+#!/bin/sh
+[ "\$1" = refs/heads/main ] && [ -e "$T/refuse-$n" ] && { cat "$T/refuse-$n" >&2; exit 1; }
+exit 0
+EOF
+chmod +x "$g/hooks/update"; done
+echo "one more" > "$AA/archive/hand-c.txt" && git -C "$AA" add archive/hand-c.txt && gnohook -C "$AA" commit -qm "add hand copies of new sources"
+printf '%s\n' "error: File archive/big.bin is 120.00 MB; this exceeds GitHub's file size limit of 100.00 MB" "error: GH001: Large files detected." > "$T/refuse-family-tree-sources"
+pm0="$(gp rev-parse main)"; echo "a line" >> "$PA/OPEN-ITEMS.md"
+refuse "finish stops when GitHub refuses the archive push for a file's size" fin A "Update working state"
+says "over its size limit" "…and says that, not that GitHub is out of reach"
+says "exceeds GitHub's file size limit" "…with git's own words"
+says "changes nothing" "…and that running it again does not help"
+test "$(gp rev-parse main)" = "$pm0" && ok "…having pushed nothing" || no "pushed after a refused archive push"
+refuse "…the notes checkpoint stops on it too" in_cloud A env FT_PUBLISH=notes bash "$TOOLS/cloud-finish.sh" "Save research notes"
+says "over its size limit" "…with the same reason"
+rm -f "$T/refuse-family-tree-sources"
+printf '%s\n' "Permission to owner/family-tree-private.git denied to someone." > "$T/refuse-family-tree-private"
+refuse "finish stops when the session may not push the private state" fin A "Update working state"
+says "may not push to family-tree-private" "…and says so, with what to do"
+says "archive: pushed" "…the archive's commits had gone up first, as before"
+test -z "$(git -C "$PA" log --oneline '@{upstream}..HEAD')" && ! git -C "$PA" diff --quiet HEAD -- OPEN-ITEMS.md && ok "…the state commit is undone, its changes kept" || no "state after a refused private push"
+refuse "the lock is not taken when GitHub refuses its push" lock A take "session-a" "refused"
+says "may not push to family-tree-private" "…and says why"
+test -z "$(git -C "$PA" log --oneline '@{upstream}..HEAD')" && ok "…leaving no lock commit behind" || no "lock commit left after a refused push"
+rm -f "$T/refuse-family-tree-private"
+git -C "$PA" remote set-url --push origin "file://$T/gh/no-such-repo.git"
+refuse "finish stops when the private repo cannot be reached for the push" fin A "Update working state"
+says "could not be reached" "…and says to run it again"
+says "git said:" "…with git's own words"
+git -C "$PA" remote set-url --delete --push origin "file://$T/gh/no-such-repo.git"
+check "…and goes through once it can be reached" fin A "Update working state"
+gp show main:OPEN-ITEMS.md | grep -q "a line" && ok "…with the state" || no "state not pushed after the retry"
+quiet git -C "$PB" pull -q --ff-only
+
 echo "7. the queue and the airlock"
 publish() { gp push -q "$GHS" site-queue:refs/heads/main; }  # what the airlock does
 verdict() { # $1 = result: write family-tree-private's airlock-status for the current queue

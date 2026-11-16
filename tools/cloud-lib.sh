@@ -133,30 +133,100 @@ ft_ff() {
   [ "$rc" = 0 ]
 }
 
+# ft_push_kind <what git printed when a push failed>: what kind of failure it was (16 Nov 2026: every failure
+# but a same-lines conflict used to be reported as "GitHub out of reach? run this again", git's own words thrown
+# away, so a file over the size limit or a session without push access looked like a network fault). Prints
+#   moved        rejected because the remote has newer commits (or two pushes met at the same moment)
+#   large        refused by the server: a file over its size limit
+#   protected    refused by the server: a protected branch, or a repository rule
+#   denied       refused by the server: this session may not push there (no access, a sign-in not accepted)
+#   refused      refused by the server otherwise (a hook on its side declined the push)
+#   unreachable  anything else: the server was not reached, or failed on its side
+# The server's refusals are looked for first: "[remote rejected]" holds the word "rejected" too.
+ft_push_kind() {
+  local o; o="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  case "$o" in
+    *"cannot lock ref"*|*"failed to lock"*|*"failed to update ref"*) echo moved ;;
+    *gh001*|*"large files detected"*|*"file size limit"*|*"http 413"*|*"error: 413"*) echo large ;;
+    *gh006*|*"protected branch"*|*gh013*|*"repository rule violations"*) echo protected ;;
+    *"permission to "*" denied"*|*"permission denied"*|*"authentication failed"*|*"could not read username"*|\
+    *"could not read password"*|*"invalid username or password"*|*"repository not found"*|*"repository '"*"' not found"*|\
+    *"error: 401"*|*"error: 403"*|*"error: 404"*|*"http 401"*|*"http 403"*|*"http 404"*) echo denied ;;
+    *"[remote rejected]"*|*"hook declined"*|*"remote: error:"*) echo refused ;;
+    *"[rejected]"*|*"fetch first"*|*non-fast-forward*) echo moved ;;
+    *) echo unreachable ;;
+  esac
+}
+
+# ft_push_failed <kind> <what git printed> <repo>: record a failed push for the caller's message.
+#   FT_PUSH_KIND  the kind (as ft_push_kind names it, or "rebase": GitHub's newer commits could not be taken in)
+#   FT_PUSH_WHY   what it means and what to do next, in a sentence or two
+#   FT_PUSH_SAID  git's own last lines, indented (a sign-in inside an address is cut out: never print a secret)
+ft_push_failed() {
+  local name; name="$(basename "$3")"
+  FT_PUSH_KIND="$1"
+  FT_PUSH_SAID="$(printf '%s\n' "$2" | sed -E 's#(https?://)[^/@[:space:]]*@#\1#g' | grep -v -e '^[[:space:]]*$' -e '^hint:' \
+    | tail -n 8 | cut -c1-300 | sed 's/^/    /')"
+  [ -n "$FT_PUSH_SAID" ] || FT_PUSH_SAID="    (git printed nothing)"
+  case "$1" in
+    large) FT_PUSH_WHY="GitHub refused it: a file in these commits is over its size limit (100 MB). Running this again
+  changes nothing: take the file out of $name's unpushed commits (git -C \"$3\" log --stat origin/main..HEAD
+  shows them; git -C \"$3\" reset --soft origin/main undoes them and keeps the files), then run this again." ;;
+    protected) FT_PUSH_WHY="GitHub refused it: main of $name is protected, or a repository rule refuses these commits.
+  Running this again changes nothing, and only Cory can change the rule: stop, and tell him what git said." ;;
+    denied) FT_PUSH_WHY="GitHub refused it: this session may not push to $name (no push access, or its sign-in was not
+  accepted). Running this again changes nothing: $name must be attached to this session with push access (Cory
+  adds it, or starts a session that has it); then run this again." ;;
+    refused) FT_PUSH_WHY="GitHub's side declined the push of $name (git's lines below say why). Running this again
+  changes nothing until that is put right." ;;
+    moved) FT_PUSH_WHY="GitHub's main of $name kept moving while this was pushed (another session is pushing too):
+  run this again." ;;
+    rebase) FT_PUSH_WHY="GitHub has newer commits of $name, and this clone's commits could not be put on top of them.
+  Look at both sides (git -C \"$3\" status; git -C \"$3\" log --oneline HEAD...origin/main), then run this again." ;;
+    *) FT_PUSH_WHY="GitHub could not be reached, or failed on its side: run this again in a few minutes. If it fails
+  the same way again, git's lines below are the reason." ;;
+  esac
+}
+
+# ft_push_report: the text a caller puts after "<what> could not be pushed. " (FT_PUSH_WHY, then git's lines).
+ft_push_report() { printf '%s\n  git said:\n%s' "$FT_PUSH_WHY" "$FT_PUSH_SAID"; }
+
 # ft_push_main <repo>: push HEAD to origin's main. If GitHub has newer commits, rebase once onto them and
 # push again (uncommitted changes are set aside for the rebase and put back after it). Returns
 #   0  pushed;
 #   2  GitHub's newer commits change the same lines as this clone's commits or its uncommitted changes, or
 #      add untracked files it has with other contents: everything is put back as it was, nothing is pushed,
 #      and FT_CONFLICTS names the files;
-#   1  anything else (GitHub out of reach, say): nothing is pushed.
+#   3  the server refused the push (a file too large, a protected branch, no push access, a hook): nothing is
+#      pushed, and it is not tried again, since trying again changes nothing;
+#   1  anything else (GitHub out of reach, say), after the retries: nothing is pushed.
+# For 1 and 3, FT_PUSH_KIND, FT_PUSH_WHY and FT_PUSH_SAID say what happened, in git's own words too
+# (ft_push_report puts them together). FT_RETRY_WAIT=0 (tests) takes the waits between tries away.
 # Never use it for the site repo: a payload commit carries the whole payload, so it is never rebased.
 ft_push_main() {
-  local r="$1" i out rc=0
-  FT_CONFLICTS=""
+  local r="$1" i out="" kind="" rc=0 w="${FT_RETRY_WAIT:-1}"
+  FT_CONFLICTS=""; FT_PUSH_KIND=""; FT_PUSH_WHY=""; FT_PUSH_SAID=""
   for i in 1 2 3; do
     out="$(git -C "$r" push -q origin HEAD:main 2>&1)" && return 0
-    case "$out" in *rejected*|*"fetch first"*|*non-fast-forward*) break ;; esac   # newer commits: rebase now
-    sleep $((2 ** i))
+    kind="$(ft_push_kind "$out")"
+    case "$kind" in
+      moved) break ;;                                    # newer commits: rebase now
+      unreachable) ;;                                    # try again
+      *) ft_push_failed "$kind" "$out" "$r"; return 3 ;;
+    esac
+    sleep $(( w * 2**i ))
   done
-  git -C "$r" fetch -q origin main 2>/dev/null || return 1
+  if ! out="$(git -C "$r" fetch -q origin main 2>&1)"; then ft_push_failed unreachable "$out" "$r"; return 1; fi
   ft_take_in "$r" rebase || rc=$?
+  if [ "$rc" = 1 ]; then ft_push_failed rebase "$FT_WHY" "$r"; fi
   [ "$rc" = 0 ] || return "$rc"
   for i in 1 2 3; do
-    git -C "$r" push -q origin HEAD:main 2>/dev/null && return 0
-    sleep $((2 ** i))
+    out="$(git -C "$r" push -q origin HEAD:main 2>&1)" && return 0
+    kind="$(ft_push_kind "$out")"
+    case "$kind" in moved|unreachable) ;; *) ft_push_failed "$kind" "$out" "$r"; return 3 ;; esac
+    sleep $(( w * 2**i ))
   done
-  return 1
+  ft_push_failed "$kind" "$out" "$r"; return 1
 }
 
 # ft_lock_on_github <repo>: the writer lock as GitHub has it (origin/main:ledger/LOCK, fetched by the caller):

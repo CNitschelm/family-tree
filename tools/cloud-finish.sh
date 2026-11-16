@@ -81,7 +81,7 @@ push_archive() { # the source archive's own commits (hand copies, urls.tsv), bef
     0) ARCH_PUSHED=1; echo "archive: pushed family-tree-sources $(git -C "$ARCH" rev-parse --short HEAD)" ;;
     2) die "the source archive could not be pushed: GitHub's newer commits change the same files ($FT_CONFLICTS).
   Its commits are as they were; look at what came in (git -C \"$ARCH\" log HEAD..origin/main)." ;;
-    *) die "the source archive could not be pushed (GitHub out of reach?): run this again" ;;
+    *) die "the source archive could not be pushed. $(ft_push_report)" ;;
   esac
 }
 
@@ -103,7 +103,7 @@ if [ "$PUBLISH" = notes ]; then
     2) die "the notes could not be pushed: GitHub's newer commits change the same files ($FT_CONFLICTS).
   Everything here is as it was (the notes committed, other changes uncommitted). Look at what came in
   (git -C \"$PRIV\" log HEAD..origin/main), or finish (which commits everything first)." ;;
-    *) die "the notes could not be pushed (GitHub out of reach?); they are committed here: run this again" ;;
+    *) die "the notes could not be pushed; they are committed here. $(ft_push_report)" ;;
   esac
 fi
 
@@ -276,9 +276,10 @@ if [ "$(git -C "$PRIV" rev-list --count '@{upstream}..HEAD' 2>/dev/null || echo 
        die "family-tree-private could not be pushed: GitHub has newer commits that change the same files
   ($FT_CONFLICTS). This session's state is uncommitted again. Look at what came in
   (git -C \"$PRIV\" log HEAD..origin/main) before going on. $NOTES_HINT" ;;
-    *) [ "$made" = 1 ] && git -C "$PRIV" reset -q --soft HEAD~1
-       die "family-tree-private could not be pushed (GitHub out of reach?); this session's state is uncommitted
-  again. Run this again." ;;
+    *) why="$(ft_push_report)"; [ "$made" = 1 ] && git -C "$PRIV" reset -q --soft HEAD~1
+       die "family-tree-private could not be pushed; this session's state is uncommitted again.
+  $why
+  $NOTES_HINT" ;;
   esac
 else
   echo "state: nothing new"
