@@ -5,7 +5,6 @@
 // tools/change.js refuses a new doc pin, or a change of grade, without evidence from our copy
 // of the source, and checks/run.js (check C3) reads every pin's note against its grade.
 //
-// Its body is gone: every tracked file here is public and served by the site, so a retired script
-// keeps nothing but this note (register R-0761; tests/run.js, "No names in the plaintext repo").
+// Its body is gone.
 console.error('RETIRED: for one card run node tools/card.js <id>; for every pin run node checks/run.js --only=C3.');
 process.exit(1);

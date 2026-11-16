@@ -4,7 +4,6 @@
 // (OPERATING.md, "The loop"). This tool wrote data.json or patch files outside that loop — the route
 // by which grades were set in bulk and later flipped back — so it now refuses to run.
 //
-// Its body is gone: every tracked file here is public and served by the site, so a retired script
-// keeps nothing but this note (register R-0761; tests/run.js, "No names in the plaintext repo").
+// Its body is gone.
 console.error('RETIRED: use node tools/change.js — see OPERATING.md, "The loop".');
 process.exit(1);
