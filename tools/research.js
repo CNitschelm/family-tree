@@ -153,6 +153,11 @@ const refusal = msg => Object.assign(new Error(msg), { refused: true });
 /* ---------- one writer (OPERATING.md, "One writer") ---------- */
 const WRITES = new Set(["set", "log", "answer", "state", "inv", "add-source", "add-question", "add-inv", "decide", "copy", "build"]);
 const TAKE = who => 'bash tools/cloud-lock.sh take "' + (who || "<who>") + '" "<what>"';
+/* How a command learns who holds the lock. On the cloud platform each command runs in a shell of its own,
+   which is neither a login nor an interactive shell, so it does not read ~/.ft-env by itself: "open a new
+   shell" and a ". ~/.ft-env" run as a command of its own both change nothing (found in review, 16 Nov 2026).
+   The one thing that works is to start the command itself with it, as tools/change.js says too. */
+const WITH_ENV = "start the command with  . ~/.ft-env &&  (each command runs in a shell of its own, which does not read that file by itself)";
 /* why this shell may not write now, or "": the lock is read by tools/ledger.js, as lock.js and change.js read it */
 function writerProblem(env = process.env) {
   if (env.FT_READONLY === "1") return "this session was set up read-only (FT_READONLY=1): it writes nothing and pushes nothing. Record this from a session that may write: start one with bash tools/cloud-setup.sh (without FT_READONLY), take the lock there (" + TAKE() + ") and run the command again.";
@@ -160,13 +165,14 @@ function writerProblem(env = process.env) {
   try { l = require("./ledger.js").lockState(); }
   catch (e) { return "the writer lock cannot be read (tools/ledger.js does not load: " + e.message.split("\n")[0] + "). Put the file back (git checkout -- tools/ledger.js) and run this again."; }
   const who = env.FT_WHO || "";
-  if (!l) return "nobody holds the writer lock. Take it first:  " + TAKE(who) + "  Then run this command again, in a new shell or after  . ~/.ft-env  (the lock's holder is read from FT_WHO).";
+  if (!l) return "nobody holds the writer lock. Take it first:  " + TAKE(who) + "  Then run this command again, and " + WITH_ENV + ": the lock's holder is read from FT_WHO, which the take puts there.";
   const held = 'the writer lock is held by "' + l.who + '" since ' + l.since + (l.what ? " (" + l.what + ")" : "");
   if (l.stale) return held + ", over 12 hours ago, so it no longer counts" + (l.who === who ? " and another session may take it" : "") + ". Take it again:  " + TAKE(who || undefined) + "  (if that is refused because the site has uncommitted changes, commit media/research.bin and media/research-cards.bin first). Then run this command again.";
   /* ~/.ft-env has FT_WHO only when cloud-lock.sh took the lock: after tools/lock.js alone (doctor.js named it
-     for an abandoned lock until 16 Nov 2026) reading the file again changes nothing, so the message goes on to
-     the step that does */
-  if (!who) return held + ", and this shell does not say who it is (FT_WHO is not set). If this session took the lock, run  . ~/.ft-env  (or open a new shell) and run this command again. If FT_WHO is still not set after that (echo \"$FT_WHO\" prints nothing), the lock was taken without cloud-lock.sh: take it again under the same name, which renews it and sets FT_WHO:  " + TAKE(l.who) + "  (do what it says if it refuses), then  . ~/.ft-env  and this command again. If another session took the lock, wait until it is free (bash tools/cloud-lock.sh status), then:  " + TAKE();
+     for an abandoned lock until 16 Nov 2026) reading the file changes nothing, so the message goes on to the
+     step that does. It says so only after a look into the file itself: a shell that has not read the file
+     has no FT_WHO either, and that is the common case, not a lock taken the wrong way. */
+  if (!who) return held + ", and this shell does not say who it is (FT_WHO is not set). If this session took the lock, " + WITH_ENV + " and run it again. Only if  grep FT_WHO ~/.ft-env  shows nothing was the lock taken without cloud-lock.sh: then take it again under the same name, which renews it and sets FT_WHO:  " + TAKE(l.who) + "  (do what it says if it refuses), and run this command again, started with  . ~/.ft-env && . If another session took the lock, wait until it is free (bash tools/cloud-lock.sh status), then:  " + TAKE();
   if (l.who !== who) return held + ": another session is writing, and this one is \"" + who + "\". Wait until it is free (bash tools/cloud-lock.sh status), then take it:  " + TAKE(who) + "  and run this command again.";
   return "";
 }

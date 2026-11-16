@@ -18,8 +18,9 @@ Since 16 Nov 2026 the research tools also hold to these (register R-0759 for the
 - **`research.js` writes only under the writer lock.** Every command that writes (`set`, `log`, `answer`,
   `state`, `inv`, `add-source`, `add-question`, `add-inv`, `decide`, `copy`, `build`, `link --write`) is
   refused unless the lock is held, under 12 hours old, by the name in `FT_WHO`
-  (`bash tools/cloud-lock.sh take "<who>" "<what>"` sets it; in a shell opened before that, run
-  `. ~/.ft-env` first). It is refused in a read-only session (`FT_READONLY=1`) too. `status`, `show`,
+  (`bash tools/cloud-lock.sh take "<who>" "<what>"` sets it, in `~/.ft-env`; start the command with
+  `. ~/.ft-env &&`, because each command runs in a shell of its own, which does not read that file by
+  itself). It is refused in a read-only session (`FT_READONLY=1`) too. `status`, `show`,
   `validate`, `check` and `link` only read and need no lock.
 - **A source is closed only with its copy on record.** Before a source is set to `found`, `none` or
   `done` (the states that say it was consulted), say where our copy of what was read is, "nothing found"
@@ -252,8 +253,9 @@ source added under another kind is checked as a source, with a kept warning.
 
 And for every kind:
 - **Writing needs the writer lock in hand.** `change.js` writes only while `ledger/LOCK` names this
-  session (`FT_WHO`, which `bash tools/cloud-lock.sh take "<who>" "<what>"` sets; in a shell opened
-  before that, start the command with `. ~/.ft-env &&`). It refuses while the lock is free, held by
+  session (`FT_WHO`, which `bash tools/cloud-lock.sh take "<who>" "<what>"` sets, in `~/.ft-env`; start
+  the command with `. ~/.ft-env &&`, because each command runs in a shell of its own, which does not
+  read that file by itself). It refuses while the lock is free, held by
   another session, or over 12 hours old, and always in a read-only session (`FT_READONLY=1`). `--dry`
   writes nothing, so it needs no lock: it runs while another session holds the lock, and in a read-only
   session, and says who holds it. "Would apply cleanly" is not "applied".
@@ -335,7 +337,7 @@ or merge is unfinished, while the airlock has refused the queue (PUBLISH BLOCKED
 with public main (QUEUE CONFLICT), and when this clone holds a commit a queue rebuild dropped. Site commits
 go out only under it: `cloud-finish.sh` refuses them unless `<who>` holds the lock on GitHub, under 12 hours
 old. `change.js` and `research.js` write only while this session holds it: the lock must name `FT_WHO`, which
-`take` puts in `~/.ft-env` (a shell opened before that runs `. ~/.ft-env` first), and be under 12 hours old; in
+`take` puts in `~/.ft-env` (a command reads it only when it starts with `. ~/.ft-env &&`), and be under 12 hours old; in
 a read-only session (`FT_READONLY=1`) they never write. A dry run of `change.js` needs no lock. A lock older
 than 12 hours counts as abandoned and is
 simply taken; `bash tools/cloud-lock.sh take "<who>" "<what>" --steal` takes over a younger one whose session

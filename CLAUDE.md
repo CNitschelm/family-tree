@@ -254,8 +254,9 @@ bio-research-notes.md and the other private files) and `family-tree-sources/` si
 has only the two private repos attached and clones this one read-only, so it cannot push here. When one of
 the two private repos is not attached to the session, setup stops and says what to attach.
 `cloud-setup.sh` links each entry of `family-tree-private/.private-paths` into this folder (the
-deny-by-default `.gitignore` ignores the links) and writes `~/.ft-env`, which every new shell reads:
-`FT_RESEARCH` points into family-tree-private, so research.js's rewrites land there, and `cloud-lock.sh
+deny-by-default `.gitignore` ignores the links) and writes `~/.ft-env`. Start every tool command with
+`. ~/.ft-env &&`: each command runs in a shell of its own, which does not read that file by itself.
+In it, `FT_RESEARCH` points into family-tree-private, so research.js's rewrites land there, and `cloud-lock.sh
 take` adds `FT_WHO`, so change.js, research.js and the gate know the holder: the two tools write only while
 the lock names `FT_WHO` (it also brings this clone up to the newest queued work first). Edit a private file at its real path
 (`family-tree-private/OPEN-ITEMS.md`): a tool that saves by rename would replace the link with a copy that

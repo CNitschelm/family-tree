@@ -19,8 +19,10 @@
 # AGAIN (the holder before may have queued work just before letting go), then brings the site clone up to
 # the newest published or queued commit and rebuilds data.json, so the stretch starts from all of it.
 # cloud-finish.sh releases the lock only after it has queued the site, so nobody takes it in between.
-# `take` puts FT_WHO=<who> in ~/.ft-env (every new shell reads it), so tools/change.js and checks/gate.js
-# recognise the holder; `release` removes it.
+# `take` puts FT_WHO=<who> in ~/.ft-env, so tools/change.js, tools/research.js and checks/gate.js recognise
+# the holder; `release` removes it. A command reads that file only when it starts with ". ~/.ft-env &&": on
+# the cloud platform each command runs in a shell of its own, neither a login nor an interactive shell, which
+# does not read it by itself (the line setup puts in ~/.bashrc and ~/.profile serves a terminal only).
 # A lock push that GitHub refuses (no push access, a protected branch) is not tried again, and the refusal
 # says why in git's own words (cloud-lib.sh, ft_push_kind); cloud-finish.sh exits 4 when its release failed.
 
@@ -170,7 +172,7 @@ case "$cmd" in
     fi
     site_catch_up
     setwho "$who"
-    echo "lock taken by \"$who\" and pushed (FT_WHO set in ~/.ft-env)" ;;
+    echo "lock taken by \"$who\" and pushed (FT_WHO set in ~/.ft-env: start each tool command with  . ~/.ft-env &&  so it reads it)" ;;
   release)
     [ -n "$who" ] || { echo 'usage: cloud-lock.sh release "<who>"'; exit 2; }
     do_release "$who" || refuse "$FT_WHY" ;;

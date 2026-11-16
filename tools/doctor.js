@@ -242,7 +242,8 @@ if (!exists("ledger/register.jsonl") || !exists("ledger/changes.jsonl")) {
       else
         add("INFO", `ledger/LOCK held by "${l.who}" for ${hours.toFixed(1)} h`, l.what || "",
           "another session is writing: wait for it (bash tools/cloud-lock.sh status reads the lock as GitHub has it now). " +
-          "If this session took it, FT_WHO is not set in this shell: run  . ~/.ft-env  first. " +
+          "If this session took it, FT_WHO is not set in this shell: start the command with  . ~/.ft-env &&  " +
+          "(each command runs in a shell of its own, which does not read that file by itself). " +
           "Only if that session is gone: " + TAKE + " --steal");
     }
   } catch (_) { /* no lock file: free */ }

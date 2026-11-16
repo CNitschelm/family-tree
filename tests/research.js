@@ -412,6 +412,8 @@ section('every command that writes needs the writer lock');
   lock(null);
   let r = run(...LOG);
   ok(refused(r, /nobody holds the writer lock/) && TAKE.test(said(r)) && said(r).includes('take "' + WHO + '"'), 'with the lock free a write is refused, nothing is written, and the message gives the command to take it');
+  /* each command runs in a shell of its own, which does not read ~/.ft-env: "a new shell" never helped */
+  ok(/start the command with \. ~\/\.ft-env &&/.test(said(r)) && !/new shell/.test(said(r)), 'and says to start the command with ". ~/.ft-env &&", not to open a new shell');
   fs.rmSync(path.join(T, 'ledger', 'LOCK'));
   ok(refused(run(...LOG), /nobody holds the writer lock/), 'the same with no lock file at all');
   lock('another-session');
@@ -419,8 +421,9 @@ section('every command that writes needs the writer lock');
   ok(refused(r, /held by "another-session"/) && /Wait until it is free/.test(said(r)) && TAKE.test(said(r)), 'held by another session: refused, with who holds it and what to do');
   lock(WHO);
   r = runAs({ FT_WHO: '' }, ...LOG);
-  ok(refused(r, /FT_WHO is not set/) && /\. ~\/\.ft-env/.test(said(r)), 'held, but this shell does not say who it is (no FT_WHO): refused, with how to say it');
-  ok(/If FT_WHO is still not set after that/.test(said(r)) && said(r).includes('take it again under the same name, which renews it and sets FT_WHO: bash tools/cloud-lock.sh take "' + WHO + '" "<what>"') && /If another session took the lock, wait until it is free/.test(said(r)),
+  ok(refused(r, /FT_WHO is not set/) && /start the command with \. ~\/\.ft-env &&/.test(said(r)) && !/new shell/.test(said(r)),
+    'held, but this shell does not say who it is (no FT_WHO): refused, with how to say it (start the command with ". ~/.ft-env &&")');
+  ok(/Only if grep FT_WHO ~\/\.ft-env shows nothing was the lock taken without cloud-lock\.sh/.test(said(r)) && said(r).includes('take it again under the same name, which renews it and sets FT_WHO: bash tools/cloud-lock.sh take "' + WHO + '" "<what>"') && /If another session took the lock, wait until it is free/.test(said(r)),
     'and, for a lock taken without cloud-lock.sh (nothing put FT_WHO in ~/.ft-env), with the command that renews it under the holder\'s name and sets it');
   lock('another "session"');
   r = runAs({ FT_WHO: '' }, ...LOG);
