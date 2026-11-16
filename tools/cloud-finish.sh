@@ -3,7 +3,7 @@
 # the machine unless it is pushed, so every session that changed anything ends with this.
 #
 #   bash cloud-finish.sh "<one neutral line for the private commit>" ["<who holds the writer lock>"]
-#   FT_PUBLISH=notes bash cloud-finish.sh "Save research notes"      # the notes checkpoint
+#   FT_PUBLISH=notes bash cloud-finish.sh "Save research notes"      # the notes checkpoint (below)
 #
 # The site goes into the QUEUE: family-tree-private's branch site-queue. The airlock (the private
 # repo family-tree-airlock, which no session or routine has attached) checks every queued commit and
@@ -13,9 +13,12 @@
 # the changes the airlock does not publish (tools, tests, documents), only while the queue is empty.
 # Site commits go out only under the writer lock: <who> must hold it, on GitHub, and it must be under
 # 12 hours old.
-# FT_PUBLISH=notes commits and pushes family-tree-private's _work/ folder only (a long task's running
-# notes), and the source archive's own commits: no other private file, no site commit, no lock. It is the
-# checkpoint during long work, and the way to keep the notes when a finish stopped.
+# FT_PUBLISH=notes commits and pushes the private files that do not describe the site's state: family-tree-
+# private's _work/ (a long task's running notes), notes/, OPEN-ITEMS.md, CHANGE-LOG-COMMITS.md and
+# ledger/pending/ (change files not applied yet), and the source archive's own commits. Nothing else: no
+# research.json, no ledger (changes.jsonl, the register, LOCK, the link-confidence files), which must match
+# the site and go only with a full finish; no site commit, no lock. It is the checkpoint during long work,
+# and the way to keep the notes when a finish stopped. It refuses to push other private commits.
 #
 #  1. stops if setup has not finished in this session, if a rebase or merge is unfinished, if a private
 #     file sits outside family-tree-private (it would vanish with the machine), if a link was replaced by
@@ -51,7 +54,7 @@ ARCH="${FT_ARCHIVE:-}"; [ -n "$ARCH" ] && [ -e "$ARCH/.git" ] || ARCH=""
 SITE="${SITE:-https://family.corynitschelm.com/}"
 PUBLISH="${FT_PUBLISH:-queue}"
 QUEUE_MAX=30                                # the airlock's MAX_COMMITS (family-tree-airlock, rules.py)
-msg="${1:?usage: cloud-finish.sh \"<one-line message>\" [\"<who>\"]}"; who="${2:-}"
+msg="${1:?usage: cloud-finish.sh \"<one-line message>\" [\"<who>\"]   (FT_PUBLISH=notes: the notes checkpoint; FT_PUBLISH=direct: straight to public main)}"; who="${2:-}"
 ARCH_PUSHED=0
 die() { # $1 = message, $2 = exit code (1: nothing pushed; 2: STATE SPLIT)
   local tail=""
@@ -145,25 +148,41 @@ note_unsaved() {
 }
 
 # ------------------------------------------------------------------ the notes checkpoint (FT_PUBLISH=notes)
+# What it saves: the private files that do not describe the site's state (16 Nov 2026; until then _work/ only,
+# so a session that died lost its notes/, open items and changelog entries since its last full finish). Never
+# research.json, the ledger's changes.jsonl or register, ledger/LOCK or the link-confidence files: those must
+# match the site, so they go only with a full finish.
+NOTES_PATHS="_work notes OPEN-ITEMS.md CHANGE-LOG-COMMITS.md ledger/pending"
+NOTES_RE='^(_work/|notes/|ledger/pending/|OPEN-ITEMS\.md$|CHANGE-LOG-COMMITS\.md$)'
 if [ "$PUBLISH" = notes ]; then
   note_unsaved
-  no_big_files _work
+  np=()
+  for p in $NOTES_PATHS; do
+    { [ -e "$PRIV/$p" ] || [ -n "$(git -C "$PRIV" ls-files -- "$p" | head -n 1)" ]; } && np+=("$p")
+  done
+  [ "${#np[@]}" -eq 0 ] || no_big_files "${np[@]}"
   push_archive
-  [ -d "$PRIV/_work" ] || { echo "notes: family-tree-private has no _work folder: nothing to save"; exit 0; }
+  [ "${#np[@]}" -gt 0 ] || { echo "notes: family-tree-private has none of the notes files ($NOTES_PATHS): nothing to save"; exit 0; }
   git -C "$PRIV" rev-parse -q --verify '@{upstream}' >/dev/null || die "family-tree-private's branch does not follow GitHub"
-  git -C "$PRIV" add -A -- _work || die "could not stage _work"
-  if git -C "$PRIV" diff --cached --quiet -- _work; then echo "notes: nothing new in _work"
-  else git -C "$PRIV" commit -q -m "$msg" -- _work || die "the notes commit failed"; fi
-  other=$(git -C "$PRIV" log --name-only --format= '@{upstream}..HEAD' | grep -v -e '^$' -e '^_work/' -e '^ledger/LOCK$' | sort -u | head -5 | tr '\n' ' ')
+  git -C "$PRIV" add -A -- "${np[@]}" || die "could not stage the notes"
+  cp=()                                     # of those, the ones git now knows (an empty folder is no pathspec for commit)
+  for p in "${np[@]}"; do
+    { [ -n "$(git -C "$PRIV" ls-files -- "$p" | head -n 1)" ] || ! git -C "$PRIV" diff --cached --quiet -- "$p"; } && cp+=("$p")
+  done
+  if [ "${#cp[@]}" -eq 0 ] || git -C "$PRIV" diff --cached --quiet -- "${cp[@]}"; then echo "notes: nothing new ($NOTES_PATHS)"
+  else git -C "$PRIV" commit -q -m "$msg" -- "${cp[@]}" || die "the notes commit failed"; fi
+  other=$(git -C "$PRIV" log --name-only --format= '@{upstream}..HEAD' | grep -v -e '^$' -e '^ledger/LOCK$' | grep -vE "$NOTES_RE" | sort -u | head -5 | tr '\n' ' ')
   [ -z "$other" ] || die "family-tree-private has unpushed commits that are not notes ($other). They may be a state the
   site does not have, so the checkpoint does not push them: finish with cloud-finish.sh (no FT_PUBLISH)."
   [ "$(git -C "$PRIV" rev-list --count '@{upstream}..HEAD')" -gt 0 ] || exit 0
   rc=0; ft_push_main "$PRIV" || rc=$?
   case $rc in
     0) echo "notes: pushed family-tree-private $(git -C "$PRIV" rev-parse --short HEAD)"; exit 0 ;;
-    2) die "the notes could not be pushed: GitHub's newer commits change the same files ($FT_CONFLICTS).
-  Everything here is as it was (the notes committed, other changes uncommitted). Look at what came in
-  (git -C \"$PRIV\" log HEAD..origin/main), or finish (which commits everything first)." ;;
+    2) die "the notes could not be pushed: GitHub's newer commits change the same lines ($FT_CONFLICTS).
+  Everything here is as it was (the notes committed, other changes uncommitted). Another session wrote to the
+  same file. Put the two together by hand: git -C \"$PRIV\" rebase --autostash origin/main, keep both sides'
+  lines in each file it names, git -C \"$PRIV\" add <the file>, git -C \"$PRIV\" rebase --continue; then run
+  this again. (git -C \"$PRIV\" rebase --abort puts everything back.)" ;;
     *) die "the notes could not be pushed; they are committed here. $(ft_push_report)" ;;
   esac
 fi

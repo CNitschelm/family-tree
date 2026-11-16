@@ -265,15 +265,24 @@ for i in $(seq 1 31); do mc A "n$i"; done
 refuse "more commits than the airlock takes at once are refused" fin A "Update working state" "session-a"
 says "at most 30" "…and says why"
 git -C "$A" reset -q --hard HEAD~31; quiet lock A release "session-a"
-echo "checkpoint" >> "$PA/_work/go1/NOTES.md"; echo "not yet" >> "$PA/OPEN-ITEMS.md"
+echo "checkpoint" >> "$PA/_work/go1/NOTES.md"; echo "an open item" >> "$PA/OPEN-ITEMS.md"; echo "a memory" >> "$PA/notes/memory.md"
+echo "a deploy's story" >> "$PA/CHANGE-LOG-COMMITS.md"; mkdir -p "$PA/ledger/pending" && echo '{"why":"a draft"}' > "$PA/ledger/pending/draft.json"
+printf '{"investigations":[],"updated":"2026-10-19"}\n' > "$PA/research.json"; echo '{"id":"CS-1"}' >> "$PA/ledger/changes.jsonl"
+echo '{"id":"R-0001"}' >> "$PA/ledger/register.jsonl"; echo '{"links":{}}' > "$PA/ledger/link-confidence.json"
 check "the notes checkpoint pushes _work" in_cloud A env FT_PUBLISH=notes bash "$TOOLS/cloud-finish.sh" "Save research notes"
 gp show main:_work/go1/NOTES.md | grep -q checkpoint && ok "…GitHub has the notes" || no "notes not pushed"
-if ! gp show main:OPEN-ITEMS.md | grep -q "not yet" && ! git -C "$PA" diff --quiet HEAD -- OPEN-ITEMS.md; then
-  ok "…and nothing else: other private changes stay uncommitted here"; else no "notes took other files"; fi
-gnohook -C "$PA" commit -qm "Update working state" -- OPEN-ITEMS.md
+gp show main:OPEN-ITEMS.md | grep -q "an open item" && gp show main:notes/memory.md | grep -q "a memory" && gp show main:CHANGE-LOG-COMMITS.md | grep -q "a deploy's story" \
+  && gp show main:ledger/pending/draft.json | grep -q "a draft" && ok "…and notes/, the open items, the changelog and the pending change files (16 Nov 2026)" || no "the checkpoint left a notes file behind"
+if ! gp show main:research.json | grep -q 2026-10-19 && ! gp show main:ledger/changes.jsonl | grep -q CS-1 && ! gp show main:ledger/register.jsonl | grep -q R-0001 \
+   && ! gp show main:ledger/link-confidence.json >/dev/null 2>&1 && ! git -C "$PA" diff --quiet HEAD -- research.json ledger/changes.jsonl ledger/register.jsonl \
+   && [ -n "$(git -C "$PA" ls-files --others --exclude-standard -- ledger/link-confidence.json)" ]; then
+  ok "…and nothing that must match the site: research.json, the ledger and the line figures stay uncommitted here"; else no "notes took state files"; fi
+check "a second checkpoint with nothing new is fine" in_cloud A env FT_PUBLISH=notes bash "$TOOLS/cloud-finish.sh" "Save research notes"
+says "nothing new" "…and says so"
+gnohook -C "$PA" commit -qm "Update working state" -- research.json
 refuse "the checkpoint does not push other unpushed private commits" in_cloud A env FT_PUBLISH=notes bash "$TOOLS/cloud-finish.sh" "Save research notes"
 says "not notes" "…and says why"
-git -C "$PA" reset -q --hard origin/main
+git -C "$PA" reset -q --hard origin/main; rm -f "$PA/ledger/link-confidence.json"
 quiet lock A take "session-a" "conflict"
 echo "a's line" >> "$PA/OPEN-ITEMS.md"
 quiet git -C "$PB" pull -q --ff-only && echo "b's line" >> "$PB/OPEN-ITEMS.md" && gnohook -C "$PB" commit -qam "Update working state" && quiet git -C "$PB" push -q origin HEAD:main
