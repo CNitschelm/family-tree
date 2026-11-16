@@ -1,4 +1,16 @@
 #!/usr/bin/env node
+// RETIRED 16 Nov 2026 (R-0760). A photo reaches the site through the change loop like every other edit:
+// make the two JPEGs, then a change file that sets the card's img and imgL (tools/change.js), then
+// node tools/crypt.js encrypt and node checks/gate.js (OPERATING.md, "The loop"). This tool decrypted,
+// wrote data.json itself and encrypted again, outside the ledger, the lock and the gate: the last tool
+// that still did, so the gate could not explain a payload it had made. It now refuses to run. Kept as a
+// record of the sizes it used (a 160 px JPEG, quality 80, for the card; up to 720 px, quality 82, for
+// the full-size viewer).
+console.error('RETIRED: a photo goes in through the change loop. Write a change file that sets the card\'s "img" and "imgL" ' +
+  '(kind "fact", with the evidence for whose picture it is) and run node tools/change.js <file>, then node tools/crypt.js encrypt ' +
+  'and node checks/gate.js. See OPERATING.md, "The loop".');
+process.exit(1);
+
 /*
  * Add or replace a person's photo in the encrypted family-tree data.
  *

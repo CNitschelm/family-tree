@@ -28,6 +28,23 @@ if git diff --cached --name-only 2>/dev/null | grep -qx 'index.html'; then
   [ "$stamp" = "$iv" ] || die "index.html is staged, but checks/gate.js has not passed on this payload
   (staged iv $iv; .gate-stamp says ${stamp:-nothing}). Run:  node checks/gate.js
   It proves every change is in the ledger with its evidence and the tests pass."
+  # 0a. The stamp must come from a gate run against the payload that is live (origin/main) or the head of
+  # the queue of commits waiting to be published (refs/remotes/queue/site-queue, when this clone has it).
+  # A run with any other --base can pass with nothing to explain: against a revision that already holds
+  # this payload the gate finds no difference, and until 16 Nov 2026 its stamp let the commit through.
+  # The stamp's second line says what the run compared with; a stamp without one was not written by the gate.
+  over=$(sed -n '2p' "$root/.gate-stamp" 2>/dev/null | tr -d '\r')
+  case "$over" in
+    *" PASS "*" over origin/main"|*" PASS "*" over refs/remotes/origin/main") ;;
+    *" PASS "*" over queue/site-queue"|*" PASS "*" over refs/remotes/queue/site-queue")
+      git rev-parse -q --verify refs/remotes/queue/site-queue >/dev/null 2>&1 || die "index.html is staged, and .gate-stamp says the gate
+  compared it with the queue's head, but this clone has no refs/remotes/queue/site-queue. Run:  node checks/gate.js
+  (it compares with origin/main, the payload that is live)." ;;
+    *) die "index.html is staged, but .gate-stamp does not say PASS over origin/main (or the queue's head):
+  ${over:-it has no second line}
+  A gate run with another --base proves nothing about what is live. Run:  node checks/gate.js
+  with no --base, then commit again." ;;
+  esac
   # 0b. The bios, notes and places, and the bio pictures, live beside the page, encrypted, in media/
   # (tools/payload.js, 1 Oct 2026). A page committed without them shows no bios at all.
   loose=$( (git ls-files --others --exclude-standard -- media; git diff --name-only -- media) 2>/dev/null)

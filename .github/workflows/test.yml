@@ -15,3 +15,4 @@ jobs:
         env:
           FT_PASSWORD: ${{ secrets.FT_PASSWORD }}
       - run: node tests/research.js
+      - run: node tests/ledger.js

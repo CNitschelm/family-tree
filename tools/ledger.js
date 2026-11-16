@@ -514,7 +514,7 @@ function assertLock(who) {
   if (who && l.who === who) return;
   if (process.env.FT_WHO && l.who === process.env.FT_WHO) return;
   throw new Error(`ledger/LOCK is held by "${l.who}" since ${l.since} (${l.what || ''}). ` +
-    `Another session is editing. Wait, or — if that session is dead — run: node tools/lock.js take "<you>" --steal`);
+    `Another session is editing: wait for it. If that session is gone, take the lock over:  bash tools/cloud-lock.sh take "<who>" "<what you are doing>" --steal`);
 }
 
 // ------------------------------------------------------------------ payload history

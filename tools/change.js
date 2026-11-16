@@ -3,7 +3,11 @@
 /*
  * change — the only way an edit gets into data.json.  (OPERATING.md, "The loop")
  *
- *   node tools/change.js <changes.json> [--dry] [--who "<session>"]
+ *   node tools/change.js <changes.json> [--dry]
+ *
+ * It writes only while this session holds the writer lock (ledger/LOCK names FT_WHO; take it with
+ * bash tools/cloud-lock.sh take "<who>" "<what>"), and never in a read-only session (FT_READONLY=1).
+ * --dry checks a file without the lock and writes nothing.
  *
  * A change file says what to change, what kind of change it is, and on what evidence.
  * This tool applies it only if:
@@ -32,13 +36,20 @@
  *     { "card": "c042", "op": "add", "list": "src", "item": { "l": "…", "u": "https://…" }, "kind": "source" },
  *     { "card": "c042", "op": "remove", "list": "pl", "at": "t=residence,k=chenoa", "kind": "fact", "evidence": [ … ] },
  *     { "op": "addCard", "parent": "c042", "union": 0, "at": 1, "item": { "name": "…", "years": "…", … },
- *       "kind": "structure", "register": "R-…" }      a new card needs an owner entry; "at" = its place among the siblings
+ *       "kind": "structure", "register": "R-…", "evidence": [ … ] }
+ *                a new card needs Cory's decision (R-0437 for a child of a man of the line, else an owner entry
+ *                that names the parent) and evidence, like any fact; "at" = its place among the siblings
  *   ]
  * }
  * and, since 3 Oct 2026, what it does to the Research view's data (CLAUDE.md, "Research"):
  *   "research": "i3 s9a"            the research items this change moves (investigation, source or visit ids)
  *   "research": "none: <why>"       or why it moves none
- * kind: fact | grade | source | wording | translation | structure | owner
+ * kind: fact | grade | source | wording | translation | structure | owner. Each kind has its own fields (R-0760):
+ *   source      src[…] and sources[…] only: labels, addresses, quotes, a source added or removed
+ *   structure   a card added or removed, a gazetteer entry (gaz.<key>), an exact duplicate removed ("dup_of": its index)
+ *   wording, translation   never a name, a spouse's name or a pin's place
+ *   owner       cites a live entry of Cory's that names the card
+ *   A new pin, marriage or paragraph is a fact and needs evidence, whatever it is called.
  * evidence item: { src, quote } | { src, absent: ["word", …] } | { src, read: "image"|"pdf"|"original", transcription }
  *                and always "opened": the date the source was actually opened.
  *                A source read from an image (a register page, a film image, a newspaper page) needs the image
@@ -46,6 +57,8 @@
  *                item says "no_image": "<why, and what will fetch it>" and the ledger marks the edit image_missing.
  * optional per edit: "register": "R-0042", "effect": "consistent"|"reopen", "reverts": "why this comes back",
  *                    "fr": "exempt: <why the French differs>", "note": "…"
+ * Every warning printed here is kept on the edit's record in the ledger ("warnings"), and the gate prints
+ * them again before a commit: a warning never refuses, so it must not be lost either.
  */
 const fs = require('fs');
 const path = require('path');
@@ -54,15 +67,19 @@ const L = require('./ledger.js');
 const args = process.argv.slice(2);
 const file = args.find(a => !a.startsWith('--') && args[args.indexOf(a) - 1] !== '--who');
 const dry = args.includes('--dry');
-const who = args.includes('--who') ? args[args.indexOf('--who') + 1] : (process.env.FT_WHO || 'session');
-if (!file) { console.error('usage: node tools/change.js <changes.json> [--dry] [--who "<session>"]'); process.exit(2); }
+// The name that counts is FT_WHO: cloud-lock.sh sets it when it takes the lock. --who is kept for a
+// dry run on a machine that has no lock; it cannot stand in for the holder when writing (below).
+const who = process.env.FT_WHO || (args.includes('--who') ? args[args.indexOf('--who') + 1] : 'session');
+if (!file) { console.error('usage: node tools/change.js <changes.json> [--dry]'); process.exit(2); }
 
-const errors = [], warnings = [];
-const err = (i, m) => errors.push(`edit ${i + 1}: ${m}`);
-const warn = (i, m) => warnings.push(`edit ${i + 1}: ${m}`);
-// what an edit's ledger record keeps besides the edit itself: the images it rests on that are not on file
+const errors = [], warnings = [], fileWarnings = [];
+// what an edit's ledger record keeps besides the edit itself: its warnings (R-0760: until 16 Nov 2026
+// they scrolled past and were gone) and the images it rests on that are not on file
 const kept = [];
-const keep = i => (kept[i] = kept[i] || { noImage: [] });
+const keep = i => (kept[i] = kept[i] || { noImage: [], warnings: [] });
+const err = (i, m) => errors.push(`edit ${i + 1}: ${m}`);
+const warn = (i, m) => { warnings.push(`edit ${i + 1}: ${m}`); keep(i).warnings.push(m); };
+const fileWarn = m => { warnings.push(m); fileWarnings.push(m); };
 
 let cs;
 try { cs = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { console.error(`cannot read ${file}: ${e.message}`); process.exit(2); }
@@ -82,10 +99,25 @@ if (typeof cs.research !== 'string' || !cs.research.trim()) {
   if (R) {
     const unknown = cs.research.split(/[\s,;]+/).filter(Boolean).filter(id => !RJ.find(R, id));
     if (unknown.length) errors.push('"research" names ' + unknown.join(', ') + ', which research.json does not have');
-  } else warnings.push('research.json is not here, so the research ids were not checked (the gate will check them)');
+  } else fileWarn('research.json is not here, so the research ids were not checked (the gate will check them)');
 }
 
 try { L.assertLock(who); } catch (e) { console.error('REFUSED: ' + e.message); process.exit(1); }
+// Writing needs the lock in hand, not merely nobody else's (R-0760). Until 16 Nov 2026 a change applied
+// while the lock was free, and a read-only session could write: two sessions could each build a payload
+// on the other's stale copy. FT_WHO is set by cloud-lock.sh take, in ~/.ft-env.
+if (!dry) {
+  const refuse = m => { console.error('REFUSED: ' + m); process.exit(1); };
+  if (process.env.FT_READONLY === '1') refuse('this session is read-only (FT_READONLY=1), so it may not change data.json. ' +
+    'Check the file here with --dry, and apply it in a session set up for writing (bash tools/cloud-setup.sh without FT_READONLY).');
+  const lock = L.lockState(), me = process.env.FT_WHO;
+  const take = 'bash tools/cloud-lock.sh take "<who>" "<what you are doing>"';
+  if (!lock) refuse(`the writer lock is free, and a change is written only by the session that holds it. Take it first:\n    ${take}\n  then run this again (or check the file now with --dry).`);
+  if (lock.stale) refuse(`the writer lock ran out (taken by "${lock.who}" at ${lock.since}, over 12 hours ago). Take it again:\n    ${take}\n  then run this again.`);
+  if (!me) refuse(`ledger/LOCK is held by "${lock.who}", but this shell has no FT_WHO, so it cannot tell that it is that session. ` +
+    `If you took the lock, start the command with:  . ~/.ft-env &&   Otherwise take it:\n    ${take}`);
+  if (lock.who !== me) refuse(`ledger/LOCK is held by "${lock.who}", and this session is "${me}". Wait for that session, or take the lock once it is free:\n    ${take}`);
+}
 
 // data.json must be exactly the payload in index.html, or that payload plus change sets the
 // ledger recorded. Anything else is a hand edit or a stale copy — the 4 Aug 2026 failure, when a
@@ -123,13 +155,26 @@ const tokDiff = (a, b) => {
 };
 
 // ---- evidence: is what the edit leans on really in our copy of the source?
+// The latest day it can be anywhere (UTC+14): "opened" is written in the writer's own day.
+const LATEST_TODAY = new Date(Date.now() + 14 * 3600e3).toISOString().slice(0, 10);
+const realDate = d => typeof d === 'string' && /^\d{4}-\d\d-\d\d$/.test(d) && !isNaN(Date.parse(d + 'T00:00:00Z')) &&
+  new Date(d + 'T00:00:00Z').toISOString().slice(0, 10) === d;
+const SHORT_QUOTE = 8;
 function checkEvidence(i, e, needed) {
   const ev = e.evidence || [];
   if (!ev.length) { if (needed) err(i, `a ${e.kind} change needs "evidence" — the source you opened, and the words in it (quote) or the words it lacks (absent)`); return; }
   ev.forEach((x, j) => {
     const tag = `evidence ${j + 1}`;
     if (!x.src) return err(i, `${tag}: no "src"`);
+    // The small things nothing checked before 16 Nov 2026 (R-0760): "opened": "never", "absent": [] and a
+    // quote of one space all passed. None had been used; each is refused now, so none ever is.
     if (!x.opened) err(i, `${tag}: say when the source was opened ("opened": "YYYY-MM-DD") — an unopened source is not evidence`);
+    else if (!realDate(x.opened)) err(i, `${tag}: "opened": ${JSON.stringify(x.opened)} is not a date — write the day the source was opened as "YYYY-MM-DD"`);
+    else if (x.opened > LATEST_TODAY) err(i, `${tag}: "opened": "${x.opened}" is later than today — write the day the source was actually opened`);
+    if (x.quote !== undefined && (typeof x.quote !== 'string' || !/[\p{L}\p{N}]/u.test(x.quote)))
+      return err(i, `${tag}: "quote" has no letter or digit in it — quote the words of the source the edit rests on`);
+    if (x.absent !== undefined && (!Array.isArray(x.absent) || !x.absent.length || x.absent.some(w => typeof w !== 'string' || !w.trim())))
+      return err(i, `${tag}: "absent" must be a list of the words the source lacks, each a real word: "absent": ["arrived", "1907"]`);
     if (x.src === 'owner') {
       if (e.kind !== 'owner') err(i, `${tag}: "src": "owner" is only for kind "owner" (Cory's own instruction)`);
       if (!x.quote) err(i, `${tag}: quote Cory's instruction`);
@@ -151,6 +196,60 @@ function checkEvidence(i, e, needed) {
     if (x.read && !x.transcription && !x.quote) err(i, `${tag}: "read": "${x.read}" needs "transcription" — what the page says, in its words`);
     checkImage(i, x, tag);
   });
+  // a quote that proves only that the source was opened (the audit's "died"): kept as a warning
+  const words = ev.filter(x => x.src !== 'owner').flatMap(x => [x.quote, x.transcription]).filter(w => typeof w === 'string' && w.trim());
+  if (ev.some(x => x.src !== 'owner' && x.quote) && words.every(w => w.trim().length < SHORT_QUOTE))
+    warn(i, `the only words quoted are ${words.map(w => JSON.stringify(w)).join(', ')}, under ${SHORT_QUOTE} characters: that shows the source was opened, not what it says. Next time quote the passage the edit rests on.`);
+}
+// ---- a year or number the evidence does not show (R-0760)
+// The quote check proves a source was copied, not that it says what the edit says: of 102 real edits that
+// swapped a year, 19 had the new year in none of their quoted text. It cannot be a refusal (an act writes
+// its years in words, an age is worked out), so it is a warning, and warnings are kept.
+// What a card says about its sources (labels, addresses, document captions) and its pictures are left
+// out: a page number in a label is not a fact about the person. On the evidence side every run of digits
+// counts ("2ten", "27th", "B.15788", "25- 3-1752"), and so does the year the source was opened ("read in 2026").
+const SKIP_KEYS = new Set(['img', 'imgL', 'u', 'url', 'id', 'src', 'sources', 'docs']);
+const textOf = v => v == null ? '' : typeof v === 'object'
+  ? Object.entries(v).filter(([k]) => Array.isArray(v) || !SKIP_KEYS.has(k)).map(([, x]) => textOf(x)).join(' \n ')
+  : (typeof v === 'string' && (v.startsWith('data:') || v.length > 20000) ? '' : String(v));
+const plain = t => t.replace(/^0+(?=\d)/, '');
+const figures = v => [...new Set(L.years(v).concat(L.numbers(v)).map(plain))];
+function checkFigures(i, e, before, after, field) {
+  if (e.kind !== 'fact' || (field && SKIP_KEYS.has(L.parsePath(field).key || L.parsePath(field).head))) return;
+  const had = new Set(figures(textOf(before)));
+  const added = figures(textOf(after)).filter(t => !had.has(t));
+  if (!added.length) return;
+  const ev = e.evidence || [];
+  const said = new Set((ev.flatMap(x => [x.quote, x.transcription]).filter(w => typeof w === 'string').join(' \n ').match(/\d+/g) || []).map(plain)
+    .concat(ev.map(x => String(x.opened || '').slice(0, 4))));
+  const loose = added.filter(t => !said.has(t));
+  if (loose.length) warn(i, `brings in ${loose.join(', ')}, which ${loose.length === 1 ? 'is' : 'are'} in none of this edit's quotes or transcriptions. ` +
+    `Check ${loose.length === 1 ? 'it' : 'each'} against the source (a figure the source writes in words, or one worked out from it, is fine).`);
+}
+// ---- who may touch what (Cory, 16 Nov 2026, R-0760)
+// The kind is what the writer calls the edit, and until then nothing held a kind to its own fields: an
+// edit called "source" or "structure" could change a year or add a marriage with no evidence, and
+// "owner" passed on any decision of Cory's, about any card. It had not been done; now it cannot be.
+const SOURCE_LISTS = new Set(['src', 'sources']);
+const THING = { pl: 'pin', union: 'marriage', bio: 'bio paragraph', bio_fr: 'bio paragraph', hl: 'highlight', hl_fr: 'highlight', docs: 'document', timeline: 'timeline entry' };
+function ownerEntry(i, e, cid) {
+  const r = regById.get(e.register);
+  if (!r || r.status !== 'owner') return err(i, 'kind "owner" must cite the register entry recording Cory\'s decision (status "owner")');
+  if (r.superseded_by) return err(i, `${r.id} was replaced by ${r.superseded_by}: read that entry and cite the one in force (it may have changed the answer)`);
+  if (!(r.cards || []).includes(cid)) err(i, `${r.id} does not name ${cid} (it names ${(r.cards || []).join(', ') || 'no card'}). An owner edit cites Cory's decision about this card: ` +
+    `find it with node tools/card.js ${cid}, or record his words as a new owner entry that lists ${cid}, then cite that.`);
+}
+// What a new card carries goes through what an "add" of the same thing would: its sources must be in
+// the archive and their quotes in our copies. (Its doc-graded pins rest on the edit's own evidence,
+// which addCard now requires.)
+function checkNewCard(i, item) {
+  for (const s of (item.src || [])) {
+    if (!s || !s.u) continue;
+    if (!L.archived(s.u).held) err(i, `the new card cites ${s.u}, which is not in the archive — archive it first (hand copy or capture), then cite it`);
+    else if (s.q && L.quoteIn(s.u, s.q).ok === false) err(i, `the new card's source quote is not in our copy of ${s.u}: "${String(s.q).slice(0, 90)}"`);
+  }
+  for (const s of ((item.profile || {}).sources || []))
+    if (s && s.url && !L.archived(s.url).held) err(i, `the new card cites ${s.url}, which is not in the archive — archive it first`);
 }
 // ---- an image on file for a fact read from an image (Cory, 16 Nov 2026, R-0755)
 // Until then a typed reading counted as our copy of a register page: 123 cited record images were held
@@ -160,7 +259,7 @@ function checkEvidence(i, e, needed) {
 const MIN_NO_IMAGE = 20;
 function checkImage(i, x, tag) {
   if (x.no_image !== undefined && (typeof x.no_image !== 'string' || x.no_image.trim().length < MIN_NO_IMAGE))
-    return err(i, `${tag}: "no_image" must say why the image cannot be filed now and what will fetch it, in at least ${MIN_NO_IMAGE} characters ("the site needs a sign-in; item yc12 on the At your computer list fetches it")`);
+    return err(i, `${tag}: "no_image" must say why the image cannot be filed now and what will fetch it, in at least ${MIN_NO_IMAGE} characters ("the site needs a sign-in; an item on the At your computer list fetches it")`);
   const fromImage = ['image', 'pdf', 'original'].includes(x.read) || L.imageSource(x.src);
   if (!fromImage) return;
   if (L.recordImage(x.src).held) { if (x.no_image) warn(i, `${tag}: "no_image" is given, but an image of ${x.src} is on file — take "no_image" out next time`); return; }
@@ -257,6 +356,8 @@ function checkReversal(i, e, card, field, fam, before, after, pinKey) {
 // ---- apply
 const working = JSON.parse(L.serialize(data));
 const applied = [];
+const SCOPE_ENTRY = 'R-0437';          // Cory's standing yes: the root's whole male line (CLAUDE.md, "Scope rule")
+const addedUnder = new Map();          // card id this change set added -> the owner entry it cited
 const retired = L.loadChanges().flatMap(c => c.retired || []);
 (cs.edits || []).forEach((e, i) => {
   if (!KINDS.has(e.kind)) return err(i, `"kind" must be one of ${[...KINDS].join(', ')}`);
@@ -264,14 +365,22 @@ const retired = L.loadChanges().flatMap(c => c.retired || []);
   if (!op) return err(i, 'say what to do: find/replace, from/to, or op add | remove | addCard | removeCard');
   // ---- whole cards: only on a decision of Cory's in the register (CLAUDE.md, "Scope rule": since
   //      3 Oct 2026 his standing yes covers the root's male line; anyone else still needs his word)
+  // Until 16 Nov 2026 this branch returned before any other check: a new card needed no evidence (19 of
+  // 305 had none, 10 of them with doc-graded pins), any owner entry would do, even a replaced one, and an
+  // "id" in the item overrode the id this tool assigns (R-0760).
   if (op === 'addCard' || op === 'removeCard') {
     const r = regById.get(e.register);
     if (!r || r.status !== 'owner') return err(i, `${op} needs "register" citing Cory's decision (an entry with status "owner")`);
+    if (r.superseded_by) return err(i, `${op}: ${r.id} was replaced by ${r.superseded_by} — read that entry and cite the one in force (it may have changed the answer)`);
     if (op === 'addCard') {
       const parent = L.findCard(working, e.parent || '');
       if (!parent || parent.ambiguous) return err(i, `parent ${e.parent} not found`);
       const u = (parent.node.unions || [])[e.union || 0];
       if (!u) return err(i, `parent ${e.parent} has no union ${e.union || 0}`);
+      if (!e.item || typeof e.item !== 'object' || Array.isArray(e.item)) return err(i, 'addCard needs "item": the new card');
+      if (e.item.id !== undefined) return err(i, 'the new card\'s "item" carries an "id" — take it out: ids are assigned here, in order, and never reused');
+      if ((e.item.unions || []).some(x => x && (x.c || []).length))
+        return err(i, 'the new card\'s "item" carries children — add each child with its own addCard edit, so each gets its own id and its own evidence');
       const node = { id: L.nextId(working, retired), ...e.item };
       if (!node.name) return err(i, 'the new card needs a name');
       // "at": the new card's place among the union's children (the tree draws them in this order;
@@ -279,14 +388,31 @@ const retired = L.loadChanges().flatMap(c => c.retired || []);
       const kids = (u.c = u.c || []);
       const at = e.at === undefined ? kids.length : Number(e.at);
       if (!Number.isInteger(at) || at < 0 || at > kids.length) return err(i, `"at" must be a position from 0 to ${kids.length} among the children of ${e.parent}'s union ${e.union || 0}`);
+      // The decision must be about this place on the tree. R-0437 is the standing yes for a child of a man
+      // of the line; any other entry must name the parent (or the new card), or the parent is itself a card
+      // this change set adds under the same entry (a decision that draws several generations at once).
+      const pid = parent.node.id;
+      if (r.id === SCOPE_ENTRY) {
+        let through = null;
+        for (let c = parent; c && !through; c = c.parent ? L.findCard(working, c.parent.id) : null) if (c.node.g === 'f') through = c.node.id;
+        if (through) err(i, `${SCOPE_ENTRY} is Cory's standing yes for the children of a man of the line, and ${pid} is ${through === pid ? 'a daughter' : 'below a daughter (' + through + ')'}. ` +
+          `Her children are drawn only on his own decision: cite the owner entry that names ${pid}, or leave the card out and record the lead in the research data (CLAUDE.md, "Scope rule").`);
+      } else if (!(r.cards || []).includes(pid) && !(r.cards || []).includes(node.id) && addedUnder.get(pid) !== r.id)
+        err(i, `${r.id} does not name the parent ${pid} (it names ${(r.cards || []).join(', ') || 'no card'}). A new card cites ${SCOPE_ENTRY} (a child of a man of the line, proven from a document we hold) ` +
+          `or the owner entry in which Cory decided this card: one whose "cards" list ${pid}. If he decided it and the entry does not say so, record his words as a new owner entry that lists ${pid}.`);
+      checkEvidence(i, e, true);
+      checkNewCard(i, e.item);
+      checkFigures(i, { ...e, kind: 'fact' }, null, e.item);
       kids.splice(at, 0, node);
-      applied.push({ ...e, op, card: node.id, before: null, after: node });
+      addedUnder.set(node.id, r.id);
+      applied.push({ ...e, op, card: node.id, before: null, after: node, _i: i });
     } else {
       const c = L.findCard(working, e.card || '');
       if (!c || c.ambiguous || !c.parent) return err(i, `card ${e.card} not found (or it is the root)`);
+      if (!(r.cards || []).includes(c.node.id)) return err(i, `${r.id} does not name ${c.node.id} (it names ${(r.cards || []).join(', ') || 'no card'}). A card comes off the tree only on Cory's decision about that card: cite the owner entry that lists ${c.node.id}.`);
       const u = c.parent.unions[c.unionIdx];
       u.c.splice(u.c.indexOf(c.node), 1);
-      applied.push({ ...e, op, before: c.node, after: null, retired: [c.node.id] });
+      applied.push({ ...e, op, before: c.node, after: null, retired: [c.node.id], _i: i });
     }
     return;
   }
@@ -307,8 +433,25 @@ const retired = L.loadChanges().flatMap(c => c.retired || []);
         (card.node[head] = card.node[head] || []);
       const dupKey = x => JSON.stringify(head === 'src' ? x.u || x.l : head === 'sources' ? x.url || x.label : head === 'pl' ? [x.k, x.t, x.y] : x);
       if (arr.some(x => dupKey(x) === dupKey(e.item))) return err(i, `${head} already has this item`);
-      if (['fact', 'grade'].includes(e.kind)) checkEvidence(i, e, true);
-      if (head === 'pl' && e.item.c === 'doc' && !['fact', 'grade'].includes(e.kind)) checkEvidence(i, { ...e, kind: 'grade' }, true);
+      // A new source is a "source" edit. A new pin, marriage, paragraph, highlight or document asserts
+      // something: it is a fact with evidence, or Cory's own decision. The decision runner called its new
+      // marriages "structure", with evidence (19 real edits): that still applies, checked as the fact it
+      // is, with a warning that is kept. Without evidence it is refused.
+      // (A refusal here does not stop the item going in: the edits after it are then judged on the state
+      // the file means, and one mistake is reported once, not again as every later edit's surprise.)
+      if (e.kind === 'source' && !SOURCE_LISTS.has(head))
+        err(i, `kind "source" is for a card's sources (src, sources). A new ${THING[head] || head} is a fact: say "kind": "fact" and give the evidence`);
+      else if (e.kind === 'owner') ownerEntry(i, e, cid);
+      else if (e.kind === 'fact' || e.kind === 'grade') checkEvidence(i, e, true);
+      else if (!SOURCE_LISTS.has(head)) {
+        if (!(e.evidence || []).length) err(i, `a new ${THING[head] || head} is a change of fact, whatever the edit is called: say "kind": "fact" and give the evidence (kind "${e.kind}" is not for this)`);
+        else {
+          warn(i, `kind "${e.kind}" on a new ${THING[head] || head}: it was checked as a fact, with its evidence. Say "kind": "fact" next time.`);
+          checkEvidence(i, { ...e, kind: 'fact' }, true);
+        }
+      }
+      if (head === 'pl' && e.item.c === 'doc' && e.kind === 'owner') checkEvidence(i, { ...e, kind: 'grade' }, true);
+      if (!SOURCE_LISTS.has(head) && e.kind !== 'owner') checkFigures(i, { ...e, kind: 'fact' }, null, e.item);
       if (head === 'src' && e.item.u && e.item.q) { const q = L.quoteIn(e.item.u, e.item.q); if (q.ok === false) err(i, `the new source's quote is not in our copy of ${e.item.u}`); if (!L.archived(e.item.u).held) err(i, `${e.item.u} is not in the archive — archive it first`); }
       if (head === 'src' && e.item.u && !L.archived(e.item.u).held) err(i, `${e.item.u} is not in the archive — archive it first (hand copy or capture), then cite it`);
       if (head === 'sources' && e.item.url && !L.archived(e.item.url).held) err(i, `${e.item.url} is not in the archive — archive it first`);
@@ -326,7 +469,18 @@ const retired = L.loadChanges().flatMap(c => c.retired || []);
       if (e.from === undefined) return err(i, 'remove needs "from": the item exactly as it stands (a guard against removing the wrong one)');
       if (JSON.stringify(item) !== JSON.stringify(e.from)) return err(i, `${head}[${e.at}] is not the item in "from"`);
       if (head === 'pl') fam = `pin:${item.t}`;
-      if (e.kind !== 'structure' || !e.dup_of) checkEvidence(i, e, e.kind !== 'owner');
+      if (e.kind === 'source' && !SOURCE_LISTS.has(head))
+        return err(i, `kind "source" is for a card's sources (src, sources). Taking out a ${THING[head] || head} is a fact: say "kind": "fact" and give the evidence`);
+      if (e.kind === 'structure') {
+        // the one removal that needs no evidence: an exact duplicate, the other copy staying
+        const j = e.dup_of === undefined || e.dup_of === null || e.dup_of === '' ? NaN : Number(e.dup_of);
+        if (!Number.isInteger(j) || j < 0 || j >= arr.length || j === at || JSON.stringify(arr[j]) !== JSON.stringify(item))
+          return err(i, `kind "structure" removes a list item only when it is an exact duplicate of one that stays: give "dup_of": <the index in ${head} of the identical item>` +
+            (e.dup_of === undefined ? '' : ` (${head}[${e.dup_of}] is not identical to ${head}[${at}])`) + `. Any other removal is a fact: say "kind": "fact" and give the evidence.`);
+      } else {
+        if (e.kind === 'owner') ownerEntry(i, e, cid);
+        checkEvidence(i, e, e.kind !== 'owner');
+      }
       checkRegister(i, e, card, fam, JSON.stringify(item), '');
       arr.splice(at, 1);
       applied.push({ ...e, op, card: cid, field: `${head}[${at}]`, before: item, after: null, _i: i });
@@ -354,7 +508,16 @@ const retired = L.loadChanges().flatMap(c => c.retired || []);
   if (JSON.stringify(before) === JSON.stringify(after)) return err(i, 'this edit changes nothing');
 
   let fam; try { fam = L.family(card.node, e.field); } catch (x) { fam = e.field; }
-  // kind rules
+  // kind rules: each kind keeps to its own fields (R-0760)
+  const { head: fhead, key: fkey } = L.parsePath(e.field);
+  if (e.kind === 'source' && !SOURCE_LISTS.has(fhead))
+    err(i, `kind "source" is for a card's sources (src[…], sources[…]: labels, addresses, quotes), and ${e.field} is not one. ` +
+      `If what the card asserts changes, say "kind": "fact" and give the evidence; if only the words change, "wording" or "translation".`);
+  if (e.kind === 'structure' && fhead !== 'gaz')
+    err(i, `kind "structure" is for a card added or removed, a gazetteer entry (gaz.<key>) and an exact duplicate removed, and ${e.field} is none of these. ` +
+      `Say "kind": "fact" and give the evidence (or "wording"/"translation" if nothing the card asserts changes).`);
+  if ((e.kind === 'wording' || e.kind === 'translation') && (e.field === 'name' || (fhead === 'union' && fkey === 's') || (fhead === 'pl' && fkey === 'k')))
+    err(i, `${e.field} is ${e.field === 'name' ? 'the person\'s name' : fhead === 'union' ? 'a spouse\'s name' : 'the place a pin stands on'}: changing it is a change of fact, not of ${e.kind}. Say "kind": "fact" and give the evidence.`);
   if (e.kind === 'wording' || e.kind === 'translation') {
     const d = tokDiff(before, after);
     if (d.length) err(i, `a ${e.kind} edit may not change years or numbers, and this one changes ${d.join(', ')} — it is a fact change: say "kind": "fact" and give the evidence`);
@@ -363,6 +526,7 @@ const retired = L.loadChanges().flatMap(c => c.retired || []);
   }
   if (e.kind === 'translation' && !L.isFrench(e.field)) err(i, '"translation" is for the French field of a pair');
   if (e.kind === 'fact' || e.kind === 'grade') checkEvidence(i, e, true);
+  checkFigures(i, e, before, after, e.field);
   if (e.kind === 'grade' && !/(^|\.)(c|occ_c)$/.test(e.field)) warn(i, 'kind "grade" on a field that is not a grade (pl[…].c or occ_c)');
   if (/(^|\.)(c|occ_c)$/.test(e.field) && e.kind !== 'grade' && e.kind !== 'owner') err(i, 'a change of grade is kind "grade", with the evidence for the new grade');
   if (e.kind === 'source') {
@@ -380,10 +544,7 @@ const retired = L.loadChanges().flatMap(c => c.retired || []);
       }
     }
   }
-  if (e.kind === 'owner') {
-    const r = regById.get(e.register);
-    if (!r || r.status !== 'owner') err(i, 'kind "owner" must cite the register entry recording Cory\'s decision (status "owner")');
-  }
+  if (e.kind === 'owner') ownerEntry(i, e, cid);
   checkRegister(i, e, card, fam, before, after);
   let pinKey = null;
   if (/^pl\[/.test(e.field)) { const pin = L.getField(card.node, e.field.replace(/\.[a-z_0-9]+$/, '')); if (pin) pinKey = { k: pin.k, t: pin.t, y: e.field.endsWith('.y') ? undefined : pin.y }; }
@@ -392,12 +553,6 @@ const retired = L.loadChanges().flatMap(c => c.retired || []);
   applied.push({ card: cid, field: e.field, op, kind: e.kind, before, after, evidence: e.evidence, register: e.register,
     effect: e.effect, reverts: e.reverts, fr: e.fr, note: e.note, _i: i });
 });
-// each record says which of its evidence rests on an image that is not on file yet, and why
-for (const a of applied) {
-  const k = kept[a._i];
-  delete a._i;
-  if (k && k.noImage.length) { a.image_missing = true; a.no_image = k.noImage; }
-}
 
 // ---- English and French must carry the same years, field pair by field pair
 const touchedPairs = new Map();
@@ -406,17 +561,25 @@ for (const a of applied) {
   const tw = L.twin(a.field);
   if (!tw) continue;
   const en = L.isFrench(a.field) ? tw : a.field, fr = L.isFrench(a.field) ? a.field : tw;
-  touchedPairs.set(`${a.card}|${en}`, { card: a.card, en, fr, exempt: a.fr });
+  touchedPairs.set(`${a.card}|${en}`, { card: a.card, en, fr, exempt: a.fr, i: a._i });
 }
-for (const { card, en, fr, exempt } of touchedPairs.values()) {
+for (const { card, en, fr, exempt, i } of touchedPairs.values()) {
   const c = L.findCard(working, card);
   let E, F; try { E = L.getField(c.node, en); F = L.getField(c.node, fr); } catch (_) { continue; }
   if (typeof E !== 'string' || typeof F !== 'string') continue;
   if (L.multiset(L.years(E)) !== L.multiset(L.years(F))) {
     const msg = `${card} ${en} / ${fr}: the English gives ${L.years(E).join(', ') || 'no year'}, the French ${L.years(F).join(', ') || 'no year'}`;
-    if (exempt && /^exempt:/.test(exempt)) warnings.push(msg + ` (exempt: ${exempt.slice(7).trim()})`);
+    if (exempt && /^exempt:/.test(exempt)) warn(i, msg + ` (exempt: ${exempt.slice(7).trim()})`);
     else errors.push(msg + ' — change both, or add "fr": "exempt: <why>" to the edit');
   }
+}
+
+// each record keeps its warnings, and says which of its evidence rests on an image not on file yet, and why
+for (const a of applied) {
+  const k = kept[a._i];
+  delete a._i;
+  if (k && k.warnings.length) a.warnings = k.warnings;
+  if (k && k.noImage.length) { a.image_missing = true; a.no_image = k.noImage; }
 }
 
 // ---- verdict
@@ -432,6 +595,7 @@ const rec = {
   before_hash: beforeHash, after_hash: afterHash, edits: applied,
   retired: applied.flatMap(a => a.retired || []),
 };
+if (fileWarnings.length) rec.warnings = fileWarnings;
 const noImage = applied.filter(a => a.image_missing).length;
 const reminder = () => { if (noImage) console.log(`  REMINDER: ${noImage} edit(s) rest on an image that is not on file (image_missing in the ledger). File each image in the archive as soon as it can be had; the gate counts them until then.`); };
 if (dry) { console.log(`[dry] ${applied.length} edit(s) would apply cleanly; data.json not written`); reminder(); process.exit(0); }

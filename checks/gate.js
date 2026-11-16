@@ -13,15 +13,19 @@
  *      copy, nothing lost (this is how a UI commit once undid a week of findings unseen);
  *   3. every edit's evidence still holds against the archive: its quote is in our copy of
  *      the source, and a "no record says X" is still true of that copy (it also counts the edits
- *      marked image_missing: read from an image that is not on file yet; that never fails the gate);
+ *      marked image_missing: read from an image that is not on file yet; that never fails the gate),
+ *      and it prints every warning change.js kept with these edits, so whoever commits reads them;
  *   4. every register entry an edit cites exists, and nothing reuses a retired card id;
- *   5. tests/run.js and tests/research.js pass, and the prose linter finds no new HIGH on any card;
+ *   5. tests/run.js, tests/research.js and tests/ledger.js (this loop's own tests) pass, and the prose
+ *      linter finds no new HIGH on any card;
  *   6. research.json is valid, media/research.bin and research-cards.bin are exactly what it makes, and
  *      every change set above that says it moves research items shows them moved in research.json
  *      (Cory, 2 Oct 2026: the Research view is kept current without anyone asking).
- * On a pass it writes .gate-stamp with the payload's iv. The commit-msg hook refuses to
- * commit an index.html whose iv has no passing stamp — so skipping the gate is not an option,
- * and neither is editing after it passed.
+ * On a pass it writes .gate-stamp: the payload's iv, then a line that says PASS and what it was
+ * compared with. The commit-msg hook refuses to commit an index.html whose iv has no passing stamp,
+ * or whose stamp was made against anything but the live payload (origin/main) or the queue's head
+ * (--base=queue/site-queue) — so skipping the gate is not an option, neither is editing after it
+ * passed, and neither is passing it against a base that already holds the change.
  */
 const fs = require('fs');
 const path = require('path');
@@ -118,6 +122,15 @@ if (noImage.length) {
   for (const e of noImage) for (const m of (e.no_image || []))
     console.log(`        ${e.cs} ${e.card} ${e.field || e.list || e.op}: ${m.src} (${m.why})`);
 } else console.log('  ok  no edit in this trail is marked image_missing');
+// Warnings never refuse an edit, so until 16 Nov 2026 they were printed once and lost (R-0760). change.js
+// now keeps them on each edit's record, and they are printed here on every run until the payload ships.
+const kept = trail.flatMap(c => (c.warnings || []).map(w => `${c.id}: ${w}`))
+  .concat(edits.flatMap(e => (e.warnings || []).map(w => `${e.cs} ${e.card} ${e.field || e.list || e.op}: ${w}`)));
+console.log(`\n== 3b. warnings kept with these edits (${kept.length})`);
+if (kept.length) {
+  console.log('  Read each one: a warning is something change.js could not judge. If one shows a mistake, correct it with a new change file before committing.');
+  kept.forEach(w => console.log('  !!  ' + w.replace(/\n/g, '\n      ')));
+} else console.log('  ok  none');
 
 // ---------------------------------------------------------------- 4. register citations, ids
 section('4. register and card ids');
@@ -148,6 +161,13 @@ const tr = spawnSync(process.execPath, [path.join(L.ROOT, 'tests', 'research.js'
 const trl = (tr.stdout || '').trim().split('\n');
 if (tr.status !== 0) fail(`tests/research.js failed: ${trl.slice(-1)[0]}\n    ` + trl.filter(l => /^\s*FAIL/.test(l)).slice(0, 10).join('\n    '));
 else console.log(`  ok  research tools: ${trl.slice(-1)[0]}`);
+/* this loop's own tests (change.js's refusals, the chain rule, this gate, the hook's stamp check). Until 16 Nov
+   2026 nothing ran them routinely and they broke unseen three times in two months (R-0760). They build their
+   own throwaway repo and read none of the real files. */
+const tg = spawnSync(process.execPath, [path.join(L.ROOT, 'tests', 'ledger.js')], { cwd: L.ROOT, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
+const tgl = ((tg.stdout || '') + (tg.stderr || '')).trim().split('\n');
+if (tg.status !== 0) fail(`tests/ledger.js failed: ${tgl.slice(-1)[0]}\n    ` + tgl.filter(l => /^\s*FAIL/.test(l)).slice(0, 10).join('\n    '));
+else console.log(`  ok  change loop: ${tgl.slice(-1)[0]}`);
 
 function lint(d) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-'));
@@ -208,5 +228,8 @@ section('7. the public numbers (stats.json)');
 }
 
 finish();
+// Two lines, read by the commit hook and by cloud-finish.sh: the iv, then what passed and over which base.
 fs.writeFileSync(STAMP, `${enc.iv}\n${new Date().toISOString()} PASS ${trail.length} change set(s) ${edits.length} edit(s) over ${base}\n`);
 console.log(`\nGATE: PASS — ${trail.length} change set(s), ${edits.length} edit(s), ${noImage.length} with an image still to file (image_missing). .gate-stamp written for iv ${enc.iv}; commit in GitHub Desktop.`);
+if (!/^(refs\/remotes\/)?(origin\/main|queue\/site-queue)$/.test(base))
+  console.log(`  note  this run compared with ${base}, not with origin/main or queue/site-queue: the commit hook will not take its stamp for an index.html commit. Run node checks/gate.js with no --base before committing.`);
