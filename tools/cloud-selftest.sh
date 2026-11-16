@@ -16,7 +16,7 @@
 # uncommitted copies, its commits pushed first), finish's stops (not set up, a rebase unfinished, a stray
 # private file, a replaced link at the top level and inside a public folder, uncommitted site changes,
 # files the airlock does not publish, a message with a body, an author or committer whose address may not be
-# published, a payload the gate did not pass, more commits
+# published (one written with capitals too) or whose name holds an @, a payload the gate did not pass, more commits
 # than the airlock takes, no writer lock or someone else's, a commit a queue rebuild dropped, other site
 # work under this session's commits, a private push that meets the same lines: undone), the airlock's
 # verdicts (refused blocks setup and the lock, a finish already under way still queues with a warning,
@@ -291,7 +291,19 @@ git -C "$A" reset -q --hard HEAD~1
 GIT_COMMITTER_EMAIL=someone@host.example gnohook -C "$A" commit -q --allow-empty -m "Update site media y"
 refuse "…and so is one whose committer has" fin A "Update working state" "session-a"
 says "the committer of this commit does not use an address that may be published" "…naming the committer"
-test "$(gp rev-parse site-queue)" = "$q0" && ok "…nothing was queued by either" || no "a commit with an address that may not be published was queued"
+git -C "$A" reset -q --hard HEAD~1
+# what the airlock refuses, the finish must refuse first: an address is compared as it is written, and a name
+# that holds an @ is an address where a name belongs (both went into the queue until the review of 16 Nov 2026)
+GIT_AUTHOR_EMAIL=Noreply@Anthropic.com gnohook -C "$A" commit -q --allow-empty -m "Update site media y"
+refuse "…and so is one whose address is the sessions' own written with capitals (the airlock compares as written)" fin A "Update working state" "session-a"
+says "compared as it is written" "…and says that capitals make it another address"
+git -C "$A" reset -q --hard HEAD~1
+GIT_COMMITTER_NAME=someone@host.example gnohook -C "$A" commit -q --allow-empty -m "Update site media y"
+refuse "…and one whose committer's name holds an @ (the airlock refuses an address where a name belongs)" fin A "Update working state" "session-a"
+says "the committer of this commit has a name that holds an @ sign" "…and says so, naming the committer"
+says "git config user.name" "…with the way to put it right"
+lacks "someone@" "…(the name itself is not printed)"
+test "$(gp rev-parse site-queue)" = "$q0" && ok "…nothing was queued by any of the four" || no "a commit with an address or a name that may not be published was queued"
 git -C "$A" reset -q --hard HEAD~1
 pc A AAAAAAAAAAAAAAA2; gstamp "$A" AAAAAAAAAAAAAAA9
 refuse "a payload the gate did not pass is refused" fin A "Update working state" "session-a"

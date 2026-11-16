@@ -33,7 +33,8 @@
 #  3. finds this session's own site commits (those on top of the newest published or queued commit)
 #     and stops BEFORE pushing anything when they cannot go out: other site work came in under them, a
 #     commit a queue rebuild dropped, a message the airlock refuses or that names someone, a commit whose
-#     author or committer has an address that may not be published, a payload the
+#     author or committer has an address that may not be published (compared as it is written) or a name
+#     that holds an @, a payload the
 #     gate did not pass (.gate-stamp: line 1 the payload's iv, line 2 "… PASS … over origin/main", or over the
 #     queue's head), no writer lock; for the queue also a QUEUE CONFLICT, more than the airlock's 30
 #     commits, a merge, a file it does not publish; for direct also unpublished commits in the queue

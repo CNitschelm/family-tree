@@ -168,17 +168,26 @@ done
 # 5. the author and the committer use an address the airlock publishes: the cloud sessions' own, or a
 # GitHub address ending in @users.noreply.github.com (the node guard's rule 5; 16 Nov 2026). An address in a
 # commit is as public as its message. `git var` gives both exactly as git is about to write them, an
-# --author, a -c user.email and an amend included; when it gives nothing, the commit is refused.
+# --author, a -c user.email and an amend included; when it gives nothing, the commit is refused. The address
+# is compared as it is written, capitals and all, and a name that holds an @ (an address typed where the name
+# belongs) is refused, because the airlock does both: a commit it refuses stops every session.
 for v in GIT_AUTHOR_IDENT GIT_COMMITTER_IDENT; do
-  a=$(git var "$v" 2>/dev/null | sed 's/.*<\([^<>]*\)>[^<>]*$/\1/' | tr 'A-Z' 'a-z')
+  ident=$(git var "$v" 2>/dev/null)
+  a=$(printf '%s\n' "$ident" | sed 's/.*<\([^<>]*\)>[^<>]*$/\1/')
   case $a in
     *[!\ -~]*|*\ *|*@*@*) a="" ;;
   esac
   case $a in
     noreply@anthropic.com|?*@users.noreply.github.com) ;;
     *) die "the address git would write for this commit ($v) is not one that may be published.
+  It is compared as it is written: with a capital letter in it, it is another address.
   Fix: git config user.email noreply@anthropic.com (the cloud sessions' own), or the GitHub account's
   address ending in @users.noreply.github.com. Then commit again (an amend: add --reset-author)." ;;
+  esac
+  n=$(printf '%s\n' "$ident" | sed 's/ *<[^<>]*>[^<>]*$//')
+  case $n in
+    *@*) die "the name git would write for this commit ($v) holds an @ sign: an address where a name belongs.
+  Fix: git config user.name \"<a name with no @ in it>\". Then commit again (an amend: add --reset-author)." ;;
   esac
 done
 exit 0

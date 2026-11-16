@@ -380,7 +380,10 @@ out built from each other's stale copies.
   `@users.noreply.github.com`: an address in a commit is as public and as permanent as its message. The
   hook refuses any other (16 Nov 2026), `cloud-finish.sh` checks each commit it is about to queue, §13
   checks the unpushed commits and the last 40 pushed ones, and the airlock refuses a queue that holds one.
-  Before the first commit in a clone, `git config user.email` must print one of the two. (An address
+  Before the first commit in a clone, `git config user.email` must print one of the two. The address is
+  compared as it is written: with a capital letter in it, it is another address and is refused. The name
+  beside it may not hold an `@` (an address typed where the name belongs). The airlock refuses both, so
+  the hook and `cloud-finish.sh` do too. (An address
   under `.invalid` passes only in a throwaway repository with no remote on the network: the suites use
   one. Where node is not on PATH the hook's shell fallback holds the same rules, reads no private list,
   and passes nothing under `.invalid`.)
@@ -388,7 +391,8 @@ out built from each other's stale copies.
   - *the message*: write a neutral line without the word and commit again. Nobody is taken off a list to
     let a message through.
   - *the address*: `git config user.email noreply@anthropic.com`, leave out `--author`, and commit
-    again (for an amend: `git commit --amend --reset-author --no-edit`).
+    again (for an amend: `git commit --amend --reset-author --no-edit`). *A name that holds an `@`*:
+    `git config user.name "<a name with no @ in it>"`, then the same.
   - *§13 on a commit that exists*: the newest one, not yet queued, is written again
     (`git commit --amend -m "<one neutral line>"`); this session's older unqueued ones are redone as one
     (`git reset --soft <the queue's head, or origin/main>`, then one new commit); one that is already
@@ -596,7 +600,7 @@ changes the site does not have.
 | `tools/change.js` | apply a change file, or refuse it (`--dry`: check it, write nothing) |
 | `checks/gate.js` | before every commit: payload = ledger, evidence still holds, the edits with an image still to file and the kept warnings printed, the three suites, no new HIGH lint; on a pass it writes `.gate-stamp` (the payload's iv, then PASS and the base it compared with) |
 | `tools/lock.js` | one writer at a time: the lock file itself (sessions take and release it with `tools/cloud-lock.sh`) |
-| `tools/check-commit-msg.js` | the commit guard the hook runs: one line, no capital, no name, an address that may be published; by hand on a commit that exists: `node tools/check-commit-msg.js <message file> <commit>` |
+| `tools/check-commit-msg.js` | the commit guard the hook runs: one line, no capital, no name, an address that may be published (as written) beside a name with no `@`; by hand on a commit that exists: `node tools/check-commit-msg.js <message file> <commit>` |
 | `tools/crypt.js` | decrypt / encrypt the payload |
 | `tools/payload.js` | the payload format (v3: the cards in the page, the rest in `media/`), used by every tool that reads or writes it |
 | `tools/doctor.js` | local state; also how long the queue has waited and the airlock's heartbeat |

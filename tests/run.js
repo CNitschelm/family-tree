@@ -1994,12 +1994,18 @@ section("Commit hygiene");
     ok(wired && fs.existsSync(hookFile) && fs.existsSync(guard),
       "commit-msg guard is wired up" +
       (wired ? "" : " — RUN: git config core.hooksPath githooks"));
-    /* the guard's address rule, on addresses nobody owns: the airlock's two forms and no other */
+    /* the guard's address rule, on addresses nobody owns: the airlock's two forms and no other. The airlock
+     * compares an address as it is written, so one with a capital in it is another address: until the review
+     * of 16 Nov 2026 the guard lowered it first and this test listed the capital form among those that pass. */
     const session = "noreply@" + NG.SESSION_HOST;
-    ok([session, session.toUpperCase(), "12345+someone@users.noreply.github.com"].every(a => NG.noreply(a)) &&
+    const capitals = [session.toUpperCase(), "Noreply@" + NG.SESSION_HOST, "12345+someone@Users.Noreply.GitHub.com", " " + session, session + " "];
+    ok([session, "12345+someone@users.noreply.github.com"].every(a => NG.noreply(a)) &&
        !["someone@host.example", "noreply@host.example", "no-reply@" + NG.SESSION_HOST, "someone@" + NG.SESSION_HOST, "noreply", "",
-         "someone@noreply.host.example", "noreply@", "a b@users.noreply.github.com", "@users.noreply.github.com", "t@example.invalid"].some(a => NG.noreply(a)),
-      "the guard passes the two addresses the airlock publishes, and nothing else");
+         "someone@noreply.host.example", "noreply@", "a b@users.noreply.github.com", "@users.noreply.github.com", "t@example.invalid"]
+         .concat(capitals).some(a => NG.noreply(a)),
+      "the guard passes the two addresses the airlock publishes, written as the airlock reads them, and nothing else");
+    ok(NG.plainName("test") && NG.plainName("") && !NG.plainName("someone@host.example") && !NG.plainName("a name <at> @"),
+      "a name that holds an @ (an address where a name belongs) does not pass, as at the airlock");
     ok(NG.noreply("t@example.invalid", { throwaway: true }) && !NG.noreply("someone@host.example", { throwaway: true }),
       "an address under .invalid passes only in a repository with no remote on the network");
     ok(NG.noreply("noreply@" + NG.WEB_HOST, { web: true }) && !NG.noreply("noreply@" + NG.WEB_HOST) && !NG.noreply("someone@" + NG.WEB_HOST, { web: true }) &&
@@ -2023,24 +2029,69 @@ section("Commit hygiene");
         fs.writeFileSync(path.join(T, "msg"), "Update site data payload\n");
         const base = { PATH: bin, HOME: T, GIT_CONFIG_NOSYSTEM: "1", GIT_AUTHOR_NAME: "test", GIT_COMMITTER_NAME: "test" };
         cp.execFileSync("git", ["init", "-q", repo], { env: { ...base, PATH: process.env.PATH }, stdio: "ignore" });
-        const hook = (author, committer) => {
+        const hook = (author, committer, names) => {
           const r = cp.spawnSync(path.join(bin, "sh"), [path.join(repo, "githooks", "commit-msg"), path.join(T, "msg")],
-            { cwd: repo, env: { ...base, GIT_AUTHOR_EMAIL: author, GIT_COMMITTER_EMAIL: committer }, encoding: "utf8" });
+            { cwd: repo, env: { ...base, ...(names || {}), GIT_AUTHOR_EMAIL: author, GIT_COMMITTER_EMAIL: committer }, encoding: "utf8" });
           return { code: r.status, out: (r.stdout || "") + (r.stderr || "") };
         };
         const github = "12345+someone@users.noreply.github.com", personal = "someone@host.example";
         const noNode = cp.spawnSync(path.join(bin, "sh"), ["-c", "command -v node"], { env: base }).status !== 0;
-        const good = [hook(session, session), hook(github, session), hook(session, github), hook(session.toUpperCase(), session)];
+        const good = [hook(session, session), hook(github, session), hook(session, github)];
         const bad = [hook(personal, session), hook(session, personal), hook("noreply@host.example", session), hook("@users.noreply.github.com", session),
-          hook("a@b@users.noreply.github.com", session), hook("t@example.invalid", session)];
+          hook("a@b@users.noreply.github.com", session), hook("t@example.invalid", session),
+          /* written with capitals: the airlock compares as written, and so must this */
+          hook(session.toUpperCase(), session), hook(session, "Noreply@" + NG.SESSION_HOST), hook(github.replace("users", "Users"), session)];
         ok(noNode && good.every(r => r.code === 0) && bad.every(r => r.code === 1 && /is not one that may be published/.test(r.out)) &&
            /GIT_AUTHOR_IDENT/.test(bad[0].out) && /GIT_COMMITTER_IDENT/.test(bad[1].out) && /git config user\.email/.test(bad[0].out),
-          "the hook's shell fallback (no node on PATH) passes the same two addresses and refuses any other, for the author and the committer" +
+          "the hook's shell fallback (no node on PATH) passes the same two addresses, as written, and refuses any other, for the author and the committer" +
           (noNode ? "" : " (node was still on the test's PATH)") +
           ([...good.filter(r => r.code !== 0), ...bad.filter(r => r.code !== 1)].map(r => " [" + r.code + ": " + r.out.trim().split("\n")[0] + "]")[0] || ""));
+        const named = [hook(session, session, { GIT_AUTHOR_NAME: personal }), hook(session, session, { GIT_COMMITTER_NAME: personal })];
+        ok(noNode && named.every(r => r.code === 1 && /holds an @ sign/.test(r.out) && /git config user\.name/.test(r.out)) &&
+           /GIT_AUTHOR_IDENT/.test(named[0].out) && /GIT_COMMITTER_IDENT/.test(named[1].out),
+          "…and refuses an author or committer name that holds an @, which the airlock refuses" +
+          (named.filter(r => r.code !== 1).map(r => " [" + r.code + ": " + r.out.trim().split("\n")[0] + "]")[0] || ""));
       } catch (e) {
         if (e.code === "ENOENT" || /command -v/.test(String(e.message))) console.log("  --  no sh and its tools here: the hook's shell fallback was not run");
         else ok(false, "the hook's shell fallback test ran (" + String(e.message).split("\n")[0] + ")");
+      }
+      fs.rmSync(T, { recursive: true, force: true });
+    }
+    /* The guard itself, asked about commits that exist: how tools/cloud-finish.sh asks it about each commit
+     * before it queues one. It reads that commit's own author and committer. Commits the airlock's rule refuses
+     * must be refused here too, or they go into the queue and a refused queue stops every session: an address
+     * with a capital in it, and a name that holds an @ (both passed until the review of 16 Nov 2026). A
+     * throwaway repository with no remote; the name index is this clone's own. */
+    {
+      const os = require("os");
+      const T = fs.mkdtempSync(path.join(os.tmpdir(), "ft-guard-"));
+      try {
+        const env = { ...process.env, GIT_CONFIG_NOSYSTEM: "1", HOME: T };
+        ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_AUTHOR_DATE", "GIT_COMMITTER_DATE"].forEach(k => delete env[k]);
+        cp.execFileSync("git", ["init", "-q", T], { env, stdio: "ignore" });
+        fs.writeFileSync(path.join(T, "msg"), "Update site data payload\n");
+        const tree = cp.execFileSync("git", ["mktree"], { cwd: T, env, input: "", encoding: "utf8" }).trim();
+        const made = (an, ae, cn, ce) => {
+          const sha = cp.execFileSync("git", ["commit-tree", "-m", "Update site data payload", tree],
+            { cwd: T, env: { ...env, GIT_AUTHOR_NAME: an, GIT_AUTHOR_EMAIL: ae, GIT_COMMITTER_NAME: cn, GIT_COMMITTER_EMAIL: ce }, encoding: "utf8" }).trim();
+          const r = cp.spawnSync("node", [guard, path.join(T, "msg"), sha], { cwd: T, env, encoding: "utf8" });
+          return { code: r.status, out: (r.stdout || "") + (r.stderr || "") };
+        };
+        const github = "12345+someone@users.noreply.github.com", personal = "someone@host.example";
+        const good = [made("test", session, "test", session), made("test", github, "test", session)];
+        const caps = [made("test", session.toUpperCase(), "test", session), made("test", session, "test", github.replace("users", "Users"))];
+        const named = [made(personal, session, "test", session), made("test", session, personal, session)];
+        ok(good.every(r => r.code === 0) &&
+           caps.every(r => r.code === 1 && /not use an address that may be published/.test(r.out) && /compared as it is written/.test(r.out)) &&
+           /the author of this commit/.test(caps[0].out) && /the committer of this commit/.test(caps[1].out) &&
+           named.every(r => r.code === 1 && /name that holds an @ sign/.test(r.out) && /git config user\.name/.test(r.out) && /--reset-author/.test(r.out)) &&
+           /the author of this commit/.test(named[0].out) && /the committer of this commit/.test(named[1].out) &&
+           ![...caps, ...named].some(r => r.out.includes("someone@")),
+          "the guard, asked about a commit, refuses what the airlock refuses: an address with a capital in it, a name that holds an @" +
+          ([...good.filter(r => r.code !== 0), ...caps.filter(r => r.code !== 1), ...named.filter(r => r.code !== 1)]
+            .map(r => " [" + r.code + ": " + r.out.trim().split("\n")[0] + "]")[0] || ""));
+      } catch (e) {
+        ok(false, "the guard's test on real commits ran (" + String(e.message).split("\n")[0] + ")");
       }
       fs.rmSync(T, { recursive: true, force: true });
     }

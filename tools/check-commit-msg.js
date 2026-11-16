@@ -15,7 +15,8 @@
  *   3. no capitalised word after the first — proper nouns are the tell
  *   4. no word that is a person's name: in the payload (cards, spouses, the correspondents its
  *      source labels name) or, where this clone has them, on the private lists (below)
- *   5. the author and the committer use an address the airlock publishes
+ *   5. the author and the committer use an address the airlock publishes, written as the
+ *      airlock reads it, and a name that is not an address
  *
  * Rule 3 is the one that actually does the work, and it is deliberately blunt.
  * The name index (rule 4) can only know people the payload lists as nodes or
@@ -40,6 +41,10 @@
  * a GitHub address ending in @users.noreply.github.com. An address under ".invalid" passes only
  * in a repository that cannot publish (no remote, or only remotes that are folders on this
  * machine): the test suites and the rehearsal commit with one in their throwaway repositories.
+ * An address is compared as it is written, capitals and all, because the airlock compares it so:
+ * until the review of 16 Nov 2026 this guard put it in lower case first, and passed a commit the
+ * airlock then refused. For the same reason a name that holds an @ (an address typed where the
+ * name belongs) is refused: the airlock refuses it, and a refused queue stops every session.
  *
  * It FAILS CLOSED. If it cannot build the name index it refuses the commit
  * rather than waving it through, because "could not check" and "checked and
@@ -307,21 +312,25 @@ function denyHits(text, deny) {
 }
 
 /* Rule 5. True for an address that may be published: the two forms the airlock lets through
- * (its rules.py), so the guard and the airlock cannot disagree about a commit. With
+ * (its rules.py), compared as written (no trimming, no lower case), so the guard and the airlock
+ * cannot disagree about a commit. With
  * opts.throwaway, an address under the reserved ".invalid" ending as well. With opts.web, the
  * address GitHub itself writes as the committer of an edit made on its web page (noreply at
  * WEB_HOST): tests/run.js asks that way about the committer of a commit already on main, which
  * no hook and no airlock ever saw; a commit made here never carries it. */
 const SESSION_HOST = "anthropic.com", WEB_HOST = "github.com";
 function noreply(email, opts) {
-  const m = String(email || "").trim().toLowerCase().match(/^([^@\s]+)@([^@\s]+)$/);
+  const m = String(email == null ? "" : email).match(/^([^@\s]+)@([^@\s]+)$/);
   if (!m) return false;
   const local = m[1], host = m[2];
   if (local === "noreply" && host === SESSION_HOST) return true;
-  if (host === "users.noreply.github.com" && local.length <= 100) return true;
+  if (host === "users.noreply.github.com" && [...local].length <= 100) return true;
   if (opts && opts.web && local === "noreply" && host === WEB_HOST) return true;
   return !!(opts && opts.throwaway) && /(?:^|\.)invalid$/.test(host);
 }
+/* Rule 5, the name. True for an author's or committer's name the airlock lets through: one with
+ * no @ in it. An address typed where the name belongs is as public as one in its own place. */
+const plainName = name => !String(name == null ? "" : name).includes("@");
 /* A repository that cannot publish: it has no remote, or every remote is a folder on this
  * machine. The suites' and the rehearsal's repositories are like that; a working clone never is. */
 function throwaway(cwd) {
@@ -336,10 +345,12 @@ function throwaway(cwd) {
 /* what to do about an address: one wording, here and in tests/run.js section 13 */
 const ADDRESS_FIX = "give this clone an address that may be published: git config user.email noreply@" + SESSION_HOST +
   " (the cloud sessions' own), or the GitHub account's address ending in @users.noreply.github.com";
+const NAME_FIX = "give this clone a name that is not an address: git config user.name \"<a name with no @ in it>\"";
 
 if (require.main !== module) {
   module.exports = { fold, words, nameForms, labelNames, privateLists, namesFromRecords, namesFromTables, listWords, listedAs,
-    nameWords, denyHits, noreply, throwaway, PRIVATE_FILES, LABEL_WORD_MIN, PUBLIC_WORDS, SESSION_HOST, WEB_HOST, ADDRESS_FIX, NOT_A_PERSON_HINT };
+    nameWords, denyHits, noreply, plainName, throwaway, PRIVATE_FILES, LABEL_WORD_MIN, PUBLIC_WORDS, SESSION_HOST, WEB_HOST, ADDRESS_FIX, NAME_FIX,
+    NOT_A_PERSON_HINT };
   return;
 }
 
@@ -406,21 +417,22 @@ const TECH = new Set(["github","actions","pages","readme","json","html","css",
 
 /* ---------- 5. the author and the committer ----------
  * (Before rule 4: it needs no name index.) Inside `git commit` the author is in the environment
- * and `git var` gives both addresses exactly as git is about to write them, an --author, a
- * -c user.email and an amend included. Called by hand with a commit id, that commit's own two
- * addresses are read. Called by hand with a message file alone, no commit is being made and
- * there is no address to check. */
+ * and `git var` gives both names and addresses exactly as git is about to write them, an --author,
+ * a -c user.email and an amend included. Called by hand with a commit id, that commit's own two
+ * are read. Called by hand with a message file alone, no commit is being made and there is
+ * nothing to check. */
 {
   const commit = process.argv[3];
-  const git = args => cp.execFileSync("git", args, { cwd: process.cwd(), stdio: ["ignore", "pipe", "ignore"] }).toString("utf8").trim();
+  const git = args => cp.execFileSync("git", args, { cwd: process.cwd(), stdio: ["ignore", "pipe", "ignore"] }).toString("utf8").replace(/\r?\n$/, "");
   let who = null;
   try {
     if (commit) {
-      const [ae, ce] = git(["log", "-1", "--format=%ae%x1f%ce", commit, "--"]).split("\x1f");
-      who = { author: ae, committer: ce };
+      const [ae, ce, an, cn] = git(["log", "-1", "--format=%ae%x1f%ce%x1f%an%x1f%cn", commit, "--"]).split("\x1f");
+      who = { author: { addr: ae, name: an }, committer: { addr: ce, name: cn } };
     } else if (process.env.GIT_INDEX_FILE || process.env.GIT_AUTHOR_EMAIL || process.env.GIT_COMMITTER_EMAIL) {
-      const addr = v => (git(["var", v]).match(/<([^<>]*)>[^<>]*$/) || [])[1];
-      who = { author: addr("GIT_AUTHOR_IDENT"), committer: addr("GIT_COMMITTER_IDENT") };
+      /* "<name> <<address>> <time> <zone>" */
+      const ident = v => { const m = git(["var", v]).match(/^(.*?) ?<([^<>]*)>[^<>]*$/); return m ? { addr: m[2], name: m[1] } : { addr: undefined, name: "" }; };
+      who = { author: ident("GIT_AUTHOR_IDENT"), committer: ident("GIT_COMMITTER_IDENT") };
     }
   } catch (e) {
     die("could not read the author and committer of this commit, so it is REFUSED.\n" +
@@ -430,18 +442,28 @@ const TECH = new Set(["github","actions","pages","readme","json","html","css",
   }
   if (who) {
     const loose = { throwaway: throwaway(process.cwd()) };
-    const bad = Object.keys(who).filter(k => !noreply(who[k], loose));
+    const bad = Object.keys(who).filter(k => !noreply(who[k].addr, loose));
+    const named = Object.keys(who).filter(k => !plainName(who[k].name));
+    const the = list => "the " + list.join(" and the ");
+    /* what to do next is the same for an address and for a name */
+    const then = commit ? "  Then, if " + commit + " is the newest commit and tools/cloud-finish.sh has not queued it yet:\n" +
+                          "  git commit --amend --reset-author --no-edit. If it is older or already queued, stop and report it to Cory."
+                        : "  Then commit again. If this commit amends one written under the other " + (bad.length ? "address" : "name") + ", the author stays\n" +
+                          "  as it was unless you say: git commit --amend --reset-author --no-edit";
     if (bad.length)
-      die("the " + bad.join(" and the ") + " of this commit " + (bad.length > 1 ? "do" : "does") + " not use an address that may be published" +
-          " (" + bad.map(k => k + ": …@" + String(who[k] || "none").replace(/^.*@/, "")).join(", ") + ").\n" +
+      die(the(bad) + " of this commit " + (bad.length > 1 ? "do" : "does") + " not use an address that may be published" +
+          " (" + bad.map(k => k + ": …@" + String(who[k].addr || "none").replace(/^.*@/, "")).join(", ") + ").\n" +
           "  An address in a commit is public and cannot be taken back, and the airlock refuses any other.\n" +
-          (bad.some(k => /invalid$/i.test(String(who[k]))) ? "  (An address under .invalid passes only in a throwaway repository, one with no remote on the network.)\n" : "") +
+          (bad.some(k => noreply(String(who[k].addr || "").trim().toLowerCase(), loose)) ? "  (An address is compared as it is written: with a capital letter or a space in it, it is another address.)\n" : "") +
+          (bad.some(k => /invalid$/i.test(String(who[k].addr))) ? "  (An address under .invalid passes only in a throwaway repository, one with no remote on the network.)\n" : "") +
+          (named.length ? "  (" + the(named).replace(/^t/, "T") + " also " + (named.length > 1 ? "have" : "has") + " a name that holds an @ sign, which the airlock refuses too: git config user.name \"<a name with no @ in it>\".)\n" : "") +
           "  Fix: " + ADDRESS_FIX.replace(": git", ":\n  git").replace(", or the", ",\n  or the") + ",\n" +
-          "  and leave out --author, GIT_AUTHOR_EMAIL and GIT_COMMITTER_EMAIL if one of them set this one.\n" +
-          (commit ? "  Then, if " + commit + " is the newest commit and tools/cloud-finish.sh has not queued it yet:\n" +
-                    "  git commit --amend --reset-author --no-edit. If it is older or already queued, stop and report it to Cory."
-                  : "  Then commit again. If this commit amends one written under the other address, the author stays\n" +
-                    "  as it was unless you say: git commit --amend --reset-author --no-edit"));
+          "  and leave out --author, GIT_AUTHOR_EMAIL and GIT_COMMITTER_EMAIL if one of them set this one.\n" + then);
+    if (named.length)
+      die(the(named) + " of this commit " + (named.length > 1 ? "have" : "has") + " a name that holds an @ sign: an address where a name belongs.\n" +
+          "  A name in a commit is as public as its address and cannot be taken back, and the airlock refuses this one.\n" +
+          "  Fix: " + NAME_FIX.replace(": git", ":\n  git") + ",\n" +
+          "  and leave out --author, GIT_AUTHOR_NAME and GIT_COMMITTER_NAME if one of them set this one.\n" + then);
   }
 }
 

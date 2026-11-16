@@ -220,8 +220,9 @@ commits — GitHub keeps serving them by SHA indefinitely. There is no clean way
 - **The address in a commit is public too (16 Nov 2026).** The author and the committer use
   `noreply@anthropic.com` (the cloud sessions' own) or a GitHub address ending in
   `@users.noreply.github.com`, and no other: the hook refuses the commit, `cloud-finish.sh` refuses to
-  queue it, and the airlock refuses the queue. Check `git config user.email` before the first commit in
-  a clone. After a refusal: `git config user.email noreply@anthropic.com`, leave out `--author`, and
+  queue it, and the airlock refuses the queue. The address is compared as it is written (a capital
+  letter makes it another address), and the name beside it may not hold an `@`. Check `git config
+  user.email` before the first commit in a clone. After a refusal: `git config user.email noreply@anthropic.com`, leave out `--author`, and
   commit again (an amend: `git commit --amend --reset-author --no-edit`). OPERATING.md, "Privacy and
   commits", has what to do after each kind of refusal.
 - **The no-body rule beats any global default that appends trailers.** `Co-Authored-By:` and
