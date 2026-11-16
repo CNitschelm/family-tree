@@ -623,6 +623,37 @@ test "$(git --git-dir="$GHA" rev-parse main)" = "$am1" && test -z "$(git -C "$AA
 cp "$T/data.keep" "$A/data.json"; rm -f "$A/.data-stamp"
 quiet git -C "$PB" pull -q --ff-only
 
+echo "6d2. the checkpoint when another session wrote to the same file (16 Nov 2026)"
+notes() { in_cloud A env FT_PUBLISH=notes bash "$TOOLS/cloud-finish.sh" "Save research notes"; }
+# its notes commit against another session's notes: put together by hand, as the message says
+quiet git -C "$PB" pull -q --ff-only && echo "b's item" >> "$PB/OPEN-ITEMS.md" && gnohook -C "$PB" commit -qam "Update working state" && quiet git -C "$PB" push -q origin HEAD:main
+echo "a's item" >> "$PA/OPEN-ITEMS.md"
+refuse "the checkpoint stops when another session's notes change the same lines" notes
+says "Put the two together by hand" "…and says how to put the two together"
+lacks "puts everything back" "…(without the claim that an abort puts everything back)"
+( cd "$PA" && git rebase -q --autostash origin/main >/dev/null 2>&1; printf '%s\n' "b's item" "a's item" > "$T/both" \
+  && grep -v -e '^<<<<<<<' -e '^=======' -e '^>>>>>>>' -e "s item$" OPEN-ITEMS.md > "$T/merged"; cat "$T/both" >> "$T/merged"; cp "$T/merged" OPEN-ITEMS.md \
+  && git add OPEN-ITEMS.md && GIT_EDITOR=true gnohook rebase --continue >/dev/null 2>&1 )
+check "…and after those steps the checkpoint goes through" notes
+gp show main:OPEN-ITEMS.md | grep -qx "a's item" && gp show main:OPEN-ITEMS.md | grep -qx "b's item" && ok "…with both sessions' lines" || no "the notes after a hand rebase"
+# a state file changed here and not committed against what another session pushed: no hand rebase (it would
+# leave conflict marks in the file and no rebase to continue or abort), the file set aside instead
+quiet git -C "$PB" pull -q --ff-only && printf '{"investigations":[],"updated":"by-b"}\n' > "$PB/research.json" && gnohook -C "$PB" commit -qam "Update working state" \
+  && quiet git -C "$PB" push -q origin HEAD:main
+printf '{"investigations":[],"updated":"by-a"}\n' > "$PA/research.json"; echo "a note to keep" >> "$PA/_work/go1/NOTES.md"
+refuse "the checkpoint stops when an uncommitted state file clashes with what another session pushed" notes
+says "this session has changed or made too" "…and says which kind of clash it is"
+says "(research.json)" "…naming the file"
+says "Do NOT rebase by hand" "…and not to rebase by hand"
+lacks "rebase --continue\|rebase --autostash" "…(none of the hand-rebase steps)"
+grep -q by-a "$PA/research.json" && ! ( . "$TOOLS/cloud-lib.sh"; ft_midop "$PA" ) && test -z "$(git -C "$PA" stash list)" \
+  && ok "…everything here is as it was: the file, no rebase open, nothing left set aside" || no "the clone after a refused checkpoint"
+mkdir -p "$T/A/home/.ft-tmp" && cp "$PA/research.json" "$T/A/home/.ft-tmp/" && git -C "$PA" checkout -- research.json
+check "…and after its steps (the file copied aside and put back as committed) the checkpoint goes through" notes
+gp show main:_work/go1/NOTES.md | grep -qx "a note to keep" && grep -q by-b "$PA/research.json" && grep -q by-a "$T/A/home/.ft-tmp/research.json" \
+  && ok "…GitHub has the notes, the file here is the other session's, this session's copy is kept" || no "the notes after the file was set aside"
+quiet git -C "$PB" pull -q --ff-only
+
 echo "6e. setup says when a repository is not attached (16 Nov 2026)"
 nosetup() { local n="$1"; shift; ( cd "$T/$n" && HOME="$T/$n/home" FT_SKIP_DECRYPT=1 FT_SKIP_TOOLS=1 "$@" bash "$TOOLS/cloud-setup.sh" ); }
 mkdir -p "$T/NA/home" && quiet git clone --depth 1 "file://$GHS" "$T/NA/family-tree"

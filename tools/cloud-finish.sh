@@ -223,11 +223,25 @@ if [ "$PUBLISH" = notes ]; then
   rc=0; ft_push_main "$PRIV" || rc=$?
   case $rc in
     0) echo "notes: pushed family-tree-private $(git -C "$PRIV" rev-parse --short HEAD)"; exit 0 ;;
-    2) die "the notes could not be pushed: GitHub's newer commits change the same lines ($FT_CONFLICTS).
+    2) # two different clashes come back as 2, and the way out differs (found in review, 16 Nov 2026): the notes
+       # commit against another session's notes (every file named is a notes file: put together by hand), or a
+       # state file this session has changed and not committed against what another session pushed (a hand
+       # rebase would leave conflict marks in it, with no rebase left to continue or abort)
+       mine=1; for f in $FT_CONFLICTS; do printf '%s\n' "$f" | grep -qE "$NOTES_RE" || mine=0; done
+       [ "$mine" = 1 ] && die "the notes could not be pushed: GitHub's newer commits change the same lines (${FT_CONFLICTS% }).
   Everything here is as it was (the notes committed, other changes uncommitted). Another session wrote to the
   same file. Put the two together by hand: git -C \"$PRIV\" rebase --autostash origin/main, keep both sides'
   lines in each file it names, git -C \"$PRIV\" add <the file>, git -C \"$PRIV\" rebase --continue; then run
-  this again. (git -C \"$PRIV\" rebase --abort puts everything back.)" ;;
+  this again. (To give up while that rebase is still open: git -C \"$PRIV\" rebase --abort.)"
+       die "the notes could not be pushed: GitHub's newer commits change a file that this session has changed or made too,
+  and not committed (${FT_CONFLICTS% }), so they cannot be taken in. Everything here is as it was (the notes committed, not
+  pushed; that file as this session left it). Do NOT rebase by hand: with uncommitted state that leaves conflict
+  marks in the file. See both sides: git -C \"$PRIV\" diff -- <file> (this session's change) and
+  git -C \"$PRIV\" diff HEAD origin/main -- <file> (theirs). To get the notes up now: copy this session's file
+  aside (mkdir -p \$HOME/.ft-tmp && cp <file> \$HOME/.ft-tmp/), put it back as committed (git -C \"$PRIV\" checkout --
+  <file>; one git does not track here: move it aside instead), run this again, then make this session's change again
+  on top of theirs (research.json: with tools/research.js). If the two cannot be put together with certainty,
+  stop there and say so in this session's report." ;;
     *) die "the notes could not be pushed; they are committed here. $(ft_push_report)" ;;
   esac
 fi
