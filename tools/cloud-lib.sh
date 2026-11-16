@@ -166,8 +166,10 @@ ft_ff() {
 #   large        refused by the server: a file over its size limit
 #   protected    refused by the server: a protected branch, or a repository rule
 #   denied       refused by the server: this session may not push there (no access, a sign-in not accepted)
-#   refused      refused by the server otherwise (a hook on its side declined the push)
-#   unreachable  anything else: the server was not reached, or failed on its side
+#   refused      refused by the server otherwise: a hook on its side declined the push
+#   unreachable  anything else: the server was not reached, or failed on its side. That includes a
+#                "[remote rejected]" the server gives for a fault of its own ("Internal Server Error",
+#                "failure", "unpacker error": GitHub's incidents read like that), which passes: tried again.
 # The server's refusals are looked for first: "[remote rejected]" holds the word "rejected" too.
 ft_push_kind() {
   local o; o="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
@@ -178,7 +180,7 @@ ft_push_kind() {
     *"permission to "*" denied"*|*"permission denied"*|*"authentication failed"*|*"could not read username"*|\
     *"could not read password"*|*"invalid username or password"*|*"repository not found"*|*"repository '"*"' not found"*|\
     *"error: 401"*|*"error: 403"*|*"error: 404"*|*"http 401"*|*"http 403"*|*"http 404"*|*"http code 403"*) echo denied ;;
-    *"[remote rejected]"*|*"hook declined"*|*"remote: error:"*) echo refused ;;
+    *"hook declined"*|*"pre-receive"*) echo refused ;;
     *"[rejected]"*|*"fetch first"*|*non-fast-forward*) echo moved ;;
     *) echo unreachable ;;
   esac
@@ -203,8 +205,9 @@ ft_push_failed() {
     denied) FT_PUSH_WHY="GitHub refused it: this session may not push to $name (no push access, or its sign-in was not
   accepted). Running this again changes nothing: $name must be attached to this session with push access (Cory
   adds it, or starts a session that has it); then run this again." ;;
-    refused) FT_PUSH_WHY="GitHub's side declined the push of $name (git's lines below say why). Running this again
-  changes nothing until that is put right." ;;
+    refused) FT_PUSH_WHY="GitHub's side declined the push of $name: a hook or check there refused these commits (git's
+  lines below say why). Running this again changes nothing while that holds: stop, and say so in this session's
+  report, with git's lines. (If they show a failure on GitHub's own side instead, run this again in a few minutes.)" ;;
     moved) FT_PUSH_WHY="GitHub's main of $name kept moving while this was pushed (another session is pushing too):
   run this again." ;;
     rebase) FT_PUSH_WHY="GitHub has newer commits of $name, and this clone's commits could not be put on top of them.
@@ -223,9 +226,9 @@ ft_push_report() { printf '%s\n  git said:\n%s' "$FT_PUSH_WHY" "$FT_PUSH_SAID"; 
 #   2  GitHub's newer commits change the same lines as this clone's commits or its uncommitted changes, or
 #      add untracked files it has with other contents: everything is put back as it was, nothing is pushed,
 #      and FT_CONFLICTS names the files;
-#   3  the server refused the push (a file too large, a protected branch, no push access, a hook): nothing is
-#      pushed, and it is not tried again, since trying again changes nothing;
-#   1  anything else (GitHub out of reach, say), after the retries: nothing is pushed.
+#   3  the server refused the push (a file too large, a protected branch, no push access, a hook that
+#      declined): nothing is pushed, and it is not tried again, since trying again changes nothing;
+#   1  anything else (GitHub out of reach, or a fault on its side), after the retries: nothing is pushed.
 # For 1 and 3, FT_PUSH_KIND, FT_PUSH_WHY and FT_PUSH_SAID say what happened, in git's own words too
 # (ft_push_report puts them together). FT_RETRY_WAIT=0 (tests) takes the waits between tries away.
 # Never use it for the site repo: a payload commit carries the whole payload, so it is never rebased.

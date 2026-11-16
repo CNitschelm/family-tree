@@ -410,6 +410,13 @@ fatal: unable to access 'https://example.invalid/owner/repo.git/': The requested
 check "…also when a proxy on the way refuses it" kind_is denied "fatal: unable to access 'https://example.invalid/owner/repo.git/': Received HTTP code 403 from proxy after CONNECT"
 check "…two pushes that met at the same moment (tried again, like a remote that moved)" kind_is moved " ! [remote rejected] HEAD -> main (cannot lock ref 'refs/heads/main': is at 1111111 but expected 2222222)"
 check "…a hook that declined it" kind_is refused ' ! [remote rejected] HEAD -> main (pre-receive hook declined)'
+# a "[remote rejected]" for a fault on GitHub's own side passes: it is tried again, as before these kinds existed
+check "…a fault on GitHub's own side, which is tried again like a server not reached" kind_is unreachable 'remote: Internal Server Error
+ ! [remote rejected] main -> main (Internal Server Error)
+error: failed to push some refs to the remote'
+check "…(another of its wordings)" kind_is unreachable 'remote: fatal error in commit_refs
+ ! [remote rejected] HEAD -> main (failure)'
+check "…(and a third)" kind_is unreachable ' ! [remote rejected] HEAD -> main (unpacker error)'
 check "…and a server that was not reached" kind_is unreachable "fatal: unable to access 'https://example.invalid/': Could not resolve host: example.invalid"
 # "GitHub" refuses pushes to a repo's main with the words in $T/refuse-<repo> while that file is there
 # (and, while $T/refuse-release is there, the push that releases the writer lock)
