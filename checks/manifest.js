@@ -33,8 +33,12 @@ const L = require('./lib.js');
 // which is private: it lives in family-tree-private and tools/cloud-setup.sh links it in, as it
 // does checks/priority-cards.json (16 Nov 2026, register R-0761). Its shape:
 //   { "risk": { "high": ["host.example", …], "medium": […], "low": […] },
-//     "kind": { "scan": […], "gated": […] } }
-// Each entry is a piece of a URL, matched as written, in any letter case.
+//     "kind": { "scan": […], "gated": […] },
+//     "image": ["host.example", …] }
+// Each entry is a piece of a URL, matched as written, in any letter case. "image" is not used here: it is
+// the image rule's list (tools/ledger.js, imageHosts), the hosts whose pages are pictures of records (a
+// collection of newspaper pages), each a piece of a host name. That rule needs the list to be there, empty
+// or not; this script only checks its shape.
 const RISK = [
   // one person's hosting bill away from gone — and the genealogy leans hardest on these
   [/astrosurf\.com|free\.fr|geneanet\.org|geni\.com|wikitree\.com|corynitschelm\.com/i, 'high'],
@@ -69,6 +73,7 @@ const shapeFault = p => {
       if (!Array.isArray(g[level]) || !g[level].every(x => typeof x === 'string' && x)) return '"' + group + '.' + level + '" is not a list of host names';
     }
   }
+  if (p.image !== undefined && (!Array.isArray(p.image) || !p.image.every(x => typeof x === 'string' && x))) return '"image" is not a list of host names';
   return null;
 };
 const INCOMPLETE = 3;   // the exit code for a run without the private hosts file (see the top of this file)

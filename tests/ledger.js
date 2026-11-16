@@ -39,6 +39,10 @@ const ok = (c, m) => { if (c) { pass++; console.log('  ok  ' + m); } else { fail
 fs.mkdirSync(path.join(T, 'tools')); fs.mkdirSync(path.join(T, 'checks'));
 for (const f of ['tools/ledger.js', 'tools/payload.js', 'tools/change.js', 'tools/crypt.js', 'tools/lock.js', 'tools/research.js', 'tools/card.js', 'tools/check-commit-msg.js', 'checks/gate.js'])
   fs.copyFileSync(path.join(SRC, f), path.join(T, f));
+// the private list of hosts, as tools/cloud-setup.sh links it in: the image rule reads its list "image"
+const HOSTS = path.join(T, 'checks', 'source-hosts.json');
+const hostsFile = o => fs.writeFileSync(HOSTS, JSON.stringify(o));
+hostsFile({ risk: {}, kind: {}, image: ['papers.example.invalid'] });
 const PW = 'test-only-password';
 fs.writeFileSync(path.join(T, '.password'), PW);
 const SALT = crypto.randomBytes(16).toString('base64'), ITER = 1000;
@@ -339,6 +343,31 @@ console.log('== an image on file for a fact read from an image');
     'a hand copy that says "image: none", or that names an OCR text, is not taken for a reading of an image');
   r = change(fact({ src: BY_HEADER, quote }), ['--dry']);
   ok(L.imageSource(BY_HEADER) && r.code === 1 && /holds no image/.test(r.out), 'a hand copy that says it was read from an image makes its source one, whatever the address looks like');
+  // A collection that says where particular people lived is not named in the public code: its host is in the
+  // private checks/source-hosts.json, list "image". With the list read, a page on such a host is a picture.
+  const PAPER = 'https://news.papers.example.invalid/page/1912-03-04/7', PAPER_PIC = 'https://papers.example.invalid/page/1913-01-02/3';
+  reading(PAPER); reading(PAPER_PIC); jpg(path.join(hand, sid(PAPER_PIC) + '.jpg'));
+  r = change(fact({ src: PAPER, quote }), DRY);
+  ok(L.imageSource(PAPER) && L.copyKind(PAPER) === 'typed reading only' && r.code === 1 && /holds no image/.test(r.out) && L.imageUnsure(PAPER) === '' && L.imageUnsure(URL_A) === '',
+    'a page on a host of the private list "image" is a picture of a record: our typed reading of it is refused while no image is on file');
+  r = change(fact({ src: PAPER_PIC, quote }), DRY);
+  ok(r.code === 0 && L.imageSource(PAPER_PIC) && !L.imageSource('https://example.invalid/papers.example.invalid/1'),
+    'with its image on file it is accepted; the piece is looked for in the host, not in the rest of the address' + (r.code ? ' [' + r.out.trim().split('\n').slice(0, 2).join(' / ').slice(0, 300) + ']' : ''));
+  // Without the list the tool cannot say "this address is not a picture". It must not guess: 14 cited sources of
+  // this kind had no image on file on 16 Nov 2026, and each would have passed as page text.
+  const hosts0 = fs.readFileSync(HOSTS, 'utf8');
+  const states = [['the file is not there', () => fs.rmSync(HOSTS), /checks\/source-hosts\.json, which lists the hosts whose pages are pictures of records, is not here\. Run bash tools\/cloud-setup\.sh/],
+    ['it has no list "image"', () => hostsFile({ risk: {}, kind: {} }), /has no list "image"/], ['it is not JSON', () => fs.writeFileSync(HOSTS, '{ not json'), /cannot be read/]];
+  for (const [what, make, says] of states) {
+    make();
+    r = change(fact({ src: URL_A, quote: 'He came to Valeton in 1908.' }), DRY);
+    const r2 = change(fact({ src: PAPER, quote }), DRY), r3 = change(fact({ src: P_HAND, read: 'image', transcription: quote }), DRY), r4 = change(fact({ src: PAPER_PIC, quote }), DRY);
+    ok(r.code === 1 && /cannot be told, so this evidence is not accepted as page text/.test(r.out) && says.test(r.out) && r2.code === 1 && says.test(r2.out) && !L.imageSource(PAPER) && !!L.imageUnsure(PAPER) &&
+       /page text, or a typed reading/.test(L.copyKind(URL_A)) && r3.code === 0 && r4.code === 0 && L.imageUnsure(P_NONE) === '' && L.imageUnsure('family:2026-09-03-letter-typed-only') === '',
+      `when the private list of picture hosts cannot be read (${what}), a quote from an address the public list does not know is refused, with what to do; evidence with its image on file still goes through`);
+  }
+  fs.writeFileSync(HOSTS, hosts0);
+  ok(change(fact({ src: URL_A, quote: 'He came to Valeton in 1908.' }), DRY).code === 0 && L.copyKind(URL_A) === 'page text', 'with the list back, page text is page text again');
   // "read" says what was read. A word the tool does not know is not a way round the rule: it is taken as a picture.
   r = change(fact({ src: URL_A, read: 'scan', transcription: quote }), DRY);
   ok(r.code === 1 && /holds no image/.test(r.out) && /"read": "scan" is not a word this tool knows/.test(r.out) && /"image", "pdf", "original"/.test(r.out) && /"text", "index entry"/.test(r.out),

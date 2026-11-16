@@ -290,7 +290,14 @@ function checkImage(i, x, tag, a) {
   // not in the archive at all, so the picture is the only copy there could be.
   const pictured = (x.read && !TEXT_READS.includes(x.read)) || L.imageSource(x.src);
   const blank = !pictured && x.read && !a.text;
-  if (!pictured && !blank) return;
+  if (!pictured && !blank) {
+    // Nothing the tools can see makes this address a picture. That "no" holds only when the private list of
+    // picture hosts was read (tools/ledger.js, imageHosts): without it a typed reading of a newspaper page
+    // would pass as page text, so the edit is refused, with what to do, unless the image is on file anyway.
+    const unsure = L.imageUnsure(x.src);
+    if (unsure && !L.recordImage(x.src).held) err(i, `${tag}: whether ${x.src} is a picture of a record cannot be told, so this evidence is not accepted as page text: ${unsure}.`);
+    return;
+  }
   // only an unknown word made it a picture: the writer may have meant words on a page, and must not be
   // sent to file an image, or to write "no_image", for a record that is text
   const guessed = pictured && !IMAGE_READS.includes(x.read) && !L.imageSource(x.src);

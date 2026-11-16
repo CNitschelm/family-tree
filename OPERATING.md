@@ -211,6 +211,11 @@ the evidence item says `"no_image": "<why, and what will fetch it>"`, in 20 char
 then applies, the ledger marks it `image_missing` with the reason, `change.js` prints a REMINDER, and the
 gate counts and lists every such edit on each run. File the image as soon as it can be had (a step that
 needs Cory's hands goes on his "At your computer" list).
+Which addresses are pictures is known from two lists: the large services named in `tools/ledger.js`, and
+the list `"image"` of the private `checks/source-hosts.json` (a collection that says where people lived
+is not named in public code). When that file or its list is not there, the tool cannot say that an
+address is *not* a picture: `change.js` then refuses evidence from an address it does not know, unless
+its image is on file, and says what to do (run setup; a routine stops and reports).
 
 **A new card.**
 
@@ -368,8 +373,9 @@ out built from each other's stale copies.
   and passes in CI and at the airlock. `FT_PRIVATE_LISTS=<folder>` names another folder that holds them
   at the same paths.
 - **`checks/source-hosts.json` is private too** (family-tree-private, linked by setup): the hosts that
-  say where particular people lived, studied and worked. `checks/manifest.js` reads it, and only the
-  large services every family history uses are named in the public file.
+  say where particular people lived, studied and worked. `checks/manifest.js` reads it, and the image
+  rule (`tools/ledger.js`) reads its list `"image"`, the hosts whose pages are pictures of records. Only
+  the large services every family history uses are named in the two public files.
 - **Commit messages: one neutral line**, ≤ 72 characters, no capitalised word after the first, no
   body, no trailers, no word that is a person's name. The `commit-msg` hook enforces it, and refuses an
   `index.html` the gate has not passed: `.gate-stamp` must hold the staged payload's iv and, on its second
@@ -587,7 +593,7 @@ changes the site does not have.
 | `map/<hash>.json` | the map's base layers (public geography, no family data), fetched on the first Map open; `tools/mapfile.js` | yes |
 | `tools/` `checks/` `tests/` `githooks/` | the tools above; `tests/run.js` (site), `tests/ledger.js` (this loop), `tests/research.js` (the research tools, the hook's research check, crypt.js's keep rule), all three run by the gate and by CI; `tests/browser.js` (load on open, in Chromium) | yes |
 | `research.json`, `.research-stamp`, `ledger/research-deny.txt` | the research state (the one source of the Research view), what `research.js build` last wrote, and names never to publish | no (family-tree-private; `.research-stamp` is rebuilt) |
-| `TRIMMED-PEOPLE.md`, `NOT-ADDED-PEOPLE.md`, `checks/source-hosts.json` | people taken off the tree, and people found and not added (with `ledger/research-deny.txt`, the private lists the name check reads); the hosts `checks/manifest.js` keeps out of its public file | no (family-tree-private) |
+| `TRIMMED-PEOPLE.md`, `NOT-ADDED-PEOPLE.md`, `checks/source-hosts.json` | people taken off the tree, and people found and not added (with `ledger/research-deny.txt`, the private lists the name check reads); the hosts `checks/manifest.js` and the image rule keep out of the public files | no (family-tree-private) |
 | `history.json` | Play's history notes: each with the page it was read on and the words that support it (only the captions, years and source go into media/history.bin) | no (family-tree-private) |
 | `data.json`, `.password`, `.data-stamp`, `.gate-stamp` | working copy, password, provenance stamps | no (rebuilt each session; the password is the environment variable `FT_PASSWORD`) |
 | `ledger/` | `register.jsonl` (settled questions), `changes.jsonl` (every applied change), `pending/` (change files), `history/` (payload history cache), `LOCK`, `link-confidence.json` (the line figures' ratings, with the `retired` list) and `link-confidence.stamp` (the hash of their last build) | no (family-tree-private) |

@@ -181,7 +181,7 @@ They live in family-tree-private and `cloud-setup.sh` links them in, so a sessio
 up has them; a bare checkout and CI do not (`FT_PRIVATE_LISTS` names another folder that holds
 them). A pass is still not proof: the comment above §14 lists what the check cannot see.
 `checks/source-hosts.json`, the hosts that say where particular people lived and worked, is
-private in the same way; `checks/manifest.js` reads it. The old versions of files in the public
+private in the same way; `checks/manifest.js` reads it, and so does the image rule (its list `"image"`). The old versions of files in the public
 history are accepted as they stand (R-0761): settled, do not re-raise it.
 
 Never commit `.password`, `data.json`, `evidence/`, or any research `.md`. `.gitignore` is

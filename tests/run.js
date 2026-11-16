@@ -663,11 +663,13 @@ section("Source list (manifest)");
     const over = run(kept);
     ok(over.code === 3 && over.tsv === kept["urls.tsv"] && fs.readFileSync(path.join(T, "sources", "MANIFEST.json"), "utf8") === kept["MANIFEST.json"],
       "…and the lists a full finish left in sources/ are as they were after such a run (a hand run once left incomplete ones there)");
-    fs.writeFileSync(hosts, JSON.stringify({ risk: { high: ["private-host.example"] }, kind: {} }));
+    /* ("image" is the image rule's list, tools/ledger.js: this script only checks its shape) */
+    fs.writeFileSync(hosts, JSON.stringify({ risk: { high: ["private-host.example"] }, kind: {}, image: ["pictures.example"] }));
     const full = run();
     ok(full.code === 0 && /high\t1\tpage\thttps:\/\/private-host\.example\/page\/2/.test(full.tsv) && !/not here/.test(full.out) && !/(First|Second|Spouse) Card/.test(full.tsv),
       "with the file it rates that host as the file says, names no card in the list, and leaves with 0");
-    const wrong = ["[]", "{ not json", JSON.stringify({ risk: "x", kind: {} }), JSON.stringify({ risk: { urgent: ["a.example"] }, kind: {} })].map(t => { fs.writeFileSync(hosts, t); return run(); });
+    const wrong = ["[]", "{ not json", JSON.stringify({ risk: "x", kind: {} }), JSON.stringify({ risk: { urgent: ["a.example"] }, kind: {} }),
+      JSON.stringify({ risk: {}, kind: {}, image: "pictures.example" })].map(t => { fs.writeFileSync(hosts, t); return run(); });
     ok(wrong.every(r => r.code === 1 && r.tsv === "" && /cannot be used/.test(r.out)),
       "a hosts file it cannot use stops it with exit code 1, and nothing is written");
     const fin = fs.readFileSync(path.join(ROOT, "tools", "cloud-finish.sh"), "utf8");

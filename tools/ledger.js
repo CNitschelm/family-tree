@@ -406,13 +406,37 @@ function recordImage(src) {
 const IMAGE_SOURCE = [
   /^https?:\/\/[^/]+\/ark:\/\d+\/[^/]+\/(dao\/|[0-9a-f]{8}-[0-9a-f]{4}-)/i,     // one page of a register in an archive's viewer
   /^https?:\/\/(www\.)?familysearch\.org\/ark:\/61903\/3:/i,                  // a film image
-  /^https?:\/\/idnc\.library\.[^/]+\//i,                                     // newspaper pages: three collections
-  /^https?:\/\/(www\.|chroniclingamerica\.|tile\.)?loc\.gov\//i,
+  /^https?:\/\/(www\.|chroniclingamerica\.|tile\.)?loc\.gov\//i,                  // newspaper pages: two large collections
   /^https?:\/\/([a-z0-9-]+\.)?newspapers\.com\//i,
 ];
+// Only the large services every family history uses are named above. A collection that says where
+// particular people lived is not named in this public file: such hosts are in the private
+// checks/source-hosts.json (checks/manifest.js describes the file; register R-0761), as its list "image":
+// pieces of a host name, in any letter case. An address whose host holds one of them is a picture of a
+// record. tools/cloud-setup.sh links the file in from family-tree-private.
+// Returns { hosts: [...] } or, when the list cannot be read, { hosts: null, why: <what to do> }. Without the
+// list this file cannot say "this address is not a picture", and tools/change.js then refuses rather than
+// guess: a fact read from a picture needs the picture on file.
+const HOSTS_FILE = path.join(ROOT, 'checks', 'source-hosts.json');
+function imageHosts() {
+  let p;
+  try { p = JSON.parse(fs.readFileSync(HOSTS_FILE, 'utf8')); }
+  catch (e) {
+    return { hosts: null, why: e.code === 'ENOENT'
+      ? 'the private file checks/source-hosts.json, which lists the hosts whose pages are pictures of records, is not here. Run bash tools/cloud-setup.sh (it links the file from family-tree-private), then run this again. If the file is still not here after that, it is not in family-tree-private yet (or its name is not in .private-paths): stop, change nothing, and report that'
+      : `the private file checks/source-hosts.json cannot be read (${String(e.message).split('\n')[0]}). Fix it in family-tree-private (its shape is at the top of checks/manifest.js), then run this again` };
+  }
+  const list = p && typeof p === 'object' ? p.image : undefined;
+  if (!Array.isArray(list) || !list.every(x => typeof x === 'string' && x))
+    return { hosts: null, why: 'the private file checks/source-hosts.json has no list "image" (the hosts whose pages are pictures of records; an empty list when there are none), so it is older than these tools. The list is added to that file in family-tree-private (its shape is at the top of checks/manifest.js). A routine stops here, changes nothing, and reports that' };
+  return { hosts: list.map(x => x.toLowerCase()) };
+}
+const hostOf = src => { try { return new URL(src).hostname.toLowerCase(); } catch (_) { return ''; } };
 function imageSource(src) {
   if (!src || /^family:/.test(src) || src === 'owner') return false;
   if (IMAGE_SOURCE.some(re => re.test(src))) return true;
+  const host = hostOf(src), listed = imageHosts().hosts;
+  if (host && listed && listed.some(h => host.includes(h))) return true;
   let head = [];
   try { head = headerOf(fs.readFileSync(path.join(ARCHIVE, 'archive', 'hand', sourceId(src) + '.txt'), 'utf8')); } catch (_) { return false; }
   // "# image: <where the picture is>" or "Read by hand from the archive's own image". A line that
@@ -421,13 +445,21 @@ function imageSource(src) {
   return head.some(l => !/\.txt\b|OCR text/i.test(l) &&
     (/^#\s*images?(\(s\))?( address)?\s*:\s*(?!\s|none\b)/i.test(l) || /\bread (by hand )?from (the|an)\b[^.;]*\bimages?\b/i.test(l)));
 }
+// Can imageSource's "no" for this address be relied on? "" when it can; otherwise why not: nothing this file
+// or our hand copy says makes the address a picture, and the private list of picture hosts could not be read.
+function imageUnsure(src) {
+  if (!/^https?:\/\//i.test(String(src || '')) || imageSource(src)) return '';
+  const s = imageHosts();
+  return s.hosts ? '' : s.why;
+}
 // What kind of copy we hold, in the words tools/card.js prints.
 function copyKind(src) {
   const a = archived(src);
   if (!a.held) return 'not held';
   if (recordImage(src).held) return 'image';
   if (imageSource(src)) return 'typed reading only';
-  return a.text ? 'page text' : 'no words and no image';
+  if (a.text) return imageUnsure(src) ? 'page text, or a typed reading (the private list of picture hosts could not be read)' : 'page text';
+  return 'no words and no image';
 }
 
 // ------------------------------------------------------------------ register
@@ -606,7 +638,7 @@ module.exports = {
   ROOT, LEDGER, ARCHIVE, DATA, serialize, hashData, loadData, saveData, cards, label, findCard, nextId,
   parsePath, resolve, getField, setField, twin, isFrench, leaves, family,
   years, numbers, multiset, properNouns, normText,
-  sourceId, archived, quoteIn, archiveState, recordImage, imageSource, copyKind, IMAGE_FILE,
+  sourceId, archived, quoteIn, archiveState, recordImage, imageSource, imageUnsure, imageHosts, copyKind, IMAGE_FILE,
   loadRegister, locksFor, loadChanges, appendChange, chain,
   lockState, assertLock, LOCK,
   git, readEnc, fingerprint, decryptEnc, payloadAt, history, mapIds, leafFamily,
