@@ -19,7 +19,10 @@
 #
 #  1. stops if setup has not finished in this session, if a rebase or merge is unfinished, if a private
 #     file sits outside family-tree-private (it would vanish with the machine), if a link was replaced by
-#     a real file (a tool rewrote it by rename), or if the source archive has uncommitted changes
+#     a real file (a tool rewrote it by rename), if the source archive has uncommitted changes, or if a
+#     new or changed file to be pushed is 95 MB or more (GitHub refuses one of 100 MB); it also names (a
+#     NOTE) the files git ignores under family-tree-private/_work/ and the archive's archive/inbox/, which
+#     are never pushed (both of these in the notes checkpoint too)
 #  2. stops if site files are changed but not committed (the change loop commits them: gate + hook)
 # 2b. keeps the line figures current: with .owner-key here, tools/linkconf.js sync (only when the ledger or
 #     the tree's links changed since the last build) and a commit of what it rebuilt; it stops when a line
@@ -85,8 +88,66 @@ push_archive() { # the source archive's own commits (hand copies, urls.tsv), bef
   esac
 }
 
+# ------------------------------------------------------------------ no file that GitHub will refuse (16 Nov 2026)
+# GitHub refuses a push that holds a file of 100 MB or more, and the archive is pushed first: one such file in
+# it stopped the notes and the state from being saved at all, with a message that blamed the network. Nothing
+# checked sizes (the PC's backup script had: 95 MB). The largest file today is the change ledger, at 13 MB.
+BIG=$((95 * 1024 * 1024))
+big_in() { # $1 = clone, $2 = all|commits, then paths (none: everything). Prints its new or changed files of $BIG
+  # bytes or more: with "all", those not committed yet (changed, staged or new; ignored ones are never pushed);
+  # always, those in commits GitHub does not have yet.
+  local r="$1" how="$2" f t sz; shift 2
+  if [ "$how" = all ]; then
+    while IFS= read -r -d '' f; do
+      [ -f "$r/$f" ] && [ ! -L "$r/$f" ] || continue
+      sz=$(stat -c %s -- "$r/$f" 2>/dev/null) || continue
+      [ "$sz" -ge "$BIG" ] && printf '%s/%s  (%s MB, not committed yet)\n' "$(basename "$r")" "$f" $((sz / 1048576))
+    done < <(git -C "$r" diff -z --name-only HEAD -- "$@" 2>/dev/null; git -C "$r" ls-files -z --others --exclude-standard -- "$@" 2>/dev/null)
+  fi
+  git -C "$r" rev-parse -q --verify origin/main >/dev/null 2>&1 || return 0
+  git -C "$r" rev-list --objects origin/main..HEAD 2>/dev/null \
+    | git -C "$r" cat-file --batch-check='%(objecttype) %(objectsize) %(rest)' 2>/dev/null \
+    | while read -r t sz f; do
+        [ "$t" = blob ] && [ "$sz" -ge "$BIG" ] && printf '%s/%s  (%s MB, in a commit GitHub does not have yet)\n' "$(basename "$r")" "$f" $((sz / 1048576))
+      done
+  return 0
+}
+no_big_files() { # $@ = the private paths about to be committed (none: all of family-tree-private). Stops before
+  # anything is committed or pushed. The archive's uncommitted files are not looked at: the finish never commits them.
+  local big=""
+  [ -z "$ARCH" ] || big="$(big_in "$ARCH" commits)"
+  big="$big
+$(big_in "$PRIV" all "$@")"
+  big="$(printf '%s\n' "$big" | grep -v '^$' | sort -u)"
+  [ -z "$big" ] || die "a file to be pushed is 95 MB or more, and GitHub refuses a push that holds one of 100 MB:
+$(printf '%s\n' "$big" | sed 's/^/    /')
+  Take it out, then run this again. One that can be fetched again does not belong in a repository: move it out
+  of the clone (to \$HOME/work, say). One already in a commit: git -C <its clone> reset --soft HEAD~1 (the commit
+  is undone, its files kept), git -C <its clone> reset -q -- <the file>, then commit the rest again. One that
+  must be kept whole (the change ledger, one day) cannot go to GitHub as it is: stop, and tell Cory."
+}
+
+# ------------------------------------------------------------------ files that will not be saved (16 Nov 2026)
+# family-tree-private's .gitignore leaves images and tarballs out of _work/, and the archive's leaves out
+# archive/inbox/: on purpose (downloads that can be fetched again; captures waiting to be filed), but a file
+# left there is never pushed and nothing said so. A NOTE, never a stop.
+note_unsaved() {
+  local list n
+  list="$( { git -C "$PRIV" ls-files --others --ignored --exclude-standard --directory -- _work 2>/dev/null | sed 's#^#family-tree-private/#'
+             [ -z "$ARCH" ] || git -C "$ARCH" ls-files --others --ignored --exclude-standard --directory -- archive/inbox 2>/dev/null | sed 's#^#family-tree-sources/#'; } )"
+  [ -n "$list" ] || return 0
+  n=$(printf '%s\n' "$list" | wc -l | tr -d ' ')
+  printf 'NOTE: %s file(s) or folder(s) here are ignored by git: they are NOT pushed, and vanish with this machine:\n%s\n' "$n" "$(printf '%s\n' "$list" | head -n 12 | sed 's/^/    /')"
+  [ "$n" -le 12 ] || printf '    … and %s more (git -C <the clone> status --ignored lists them all)\n' $((n - 12))
+  printf '%s\n' "  One that can be fetched again needs nothing. One that must be kept belongs in the source archive, filed with
+  its tools and committed there: a record image or other hand copy in archive/hand/ (archive/MANUAL.md), a
+  capture left in archive/inbox/ into archive/store/ with  node archive/file.mjs <file> --url \"<the address>\"."
+}
+
 # ------------------------------------------------------------------ the notes checkpoint (FT_PUBLISH=notes)
 if [ "$PUBLISH" = notes ]; then
+  note_unsaved
+  no_big_files _work
   push_archive
   [ -d "$PRIV/_work" ] || { echo "notes: family-tree-private has no _work folder: nothing to save"; exit 0; }
   git -C "$PRIV" rev-parse -q --verify '@{upstream}' >/dev/null || die "family-tree-private's branch does not follow GitHub"
@@ -134,11 +195,13 @@ inside=$(git -C "$FT" ls-files --others --ignored --exclude-standard | while IFS
   t=${f%%/*}; [ "$t" != "$f" ] && [ ! -L "$FT/$t" ] && [ ! -L "$FT/$f" ] && case "$REBUILT" in *" $f "*) false ;; *) true ;; esac \
     && [ -n "$(git -C "$FT" ls-files -- "$t" | head -1)" ] && echo "$f"; done)
 [ -z "$inside" ] || printf 'note: ignored files inside public folders (lost with the machine unless moved):\n%s\n' "$(printf '%s\n' "$inside" | sed 's/^/  /')"
+note_unsaved
 if [ -n "$ARCH" ] && [ -n "$(git -C "$ARCH" status --porcelain)" ]; then
   die "the source archive (family-tree-sources) has uncommitted changes: $(git -C "$ARCH" status --porcelain | head -3 | cut -c4- | tr '\n' ' ')
   A copy that is cited must be committed there (it would vanish with the machine): commit it
   (git -C \"$ARCH\" add <files> && git -C \"$ARCH\" commit -m \"add hand copies of new sources\"), or put it back."
 fi
+no_big_files
 
 # ------------------------------------------------------------------ 2. the site is committed
 [ -z "$(git -C "$FT" status --porcelain --untracked-files=no)" ] \

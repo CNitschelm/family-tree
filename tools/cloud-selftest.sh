@@ -81,7 +81,9 @@ mkdir -p "$T/seed-site" && git -C "$SEED" archive HEAD | tar -x -C "$T/seed-site
 ( cd "$T/seed-site" && git init -q -b main && git add -A -f && gnohook commit -qm "Add the site" \
   && echo "<!-- 2 -->" >> README.md && gnohook commit -qam "Update the readme" )
 quiet git clone --bare "$T/seed-site" "$GHS"
-mkdir -p "$T/seed-src/archive" && ( cd "$T/seed-src" && git init -q -b main && echo "# index" > archive/INDEX.md && git add -A && gnohook commit -qm init )
+# (the archive ignores its inbox, as the real one does: captures wait there to be filed)
+mkdir -p "$T/seed-src/archive/inbox" && ( cd "$T/seed-src" && git init -q -b main && echo "# index" > archive/INDEX.md \
+  && : > archive/inbox/.gitkeep && printf 'archive/inbox/*\n!archive/inbox/.gitkeep\n' > .gitignore && git add -A && gnohook commit -qm init )
 quiet git clone --bare "$T/seed-src" "$GHA"
 # the private repo as refresh.py builds it: its own files, the entries, .private-paths, MANIFEST.sha256
 P0="$T/seed-priv"; mkdir -p "$P0"/ledger/history "$P0"/notes "$P0"/working/i18-plan "$P0"/sources "$P0"/evidence "$P0"/_work/go1 "$P0"/checks
@@ -91,7 +93,7 @@ P0="$T/seed-priv"; mkdir -p "$P0"/ledger/history "$P0"/notes "$P0"/working/i18-p
   && echo '# log' > CHANGE-LOG-COMMITS.md && echo '{}' > history.json && echo '[]' > checks/priority-cards.json \
   && echo '# notes' > _work/go1/NOTES.md && echo e > evidence/crop.txt && echo s > sources/urls.tsv \
   && echo '# private readme' > README.md && echo 'print("refresh")' > refresh.py && printf '* -text\n' > .gitattributes \
-  && printf '.password\n/data.json\n' > .gitignore \
+  && printf '.password\n/data.json\n/_work/**/*.png\n/_work/**/*.tgz\n' > .gitignore \
   && printf '%s\n' CHANGE-LOG-COMMITS.md OPEN-ITEMS.md _work checks/priority-cards.json evidence history.json ledger notes research.json sources working > .private-paths \
   && find . -type f ! -path './.git/*' ! -name README.md ! -name refresh.py ! -name .gitattributes ! -name .gitignore ! -name .private-paths ! -name MANIFEST.sha256 \
        | sed 's#^\./##' | sort | xargs sha256sum > MANIFEST.sha256 \
@@ -400,6 +402,44 @@ says "git said:" "…with git's own words"
 git -C "$PA" remote set-url --delete --push origin "file://$T/gh/no-such-repo.git"
 check "…and goes through once it can be reached" fin A "Update working state"
 gp show main:OPEN-ITEMS.md | grep -q "a line" && ok "…with the state" || no "state not pushed after the retry"
+quiet git -C "$PB" pull -q --ff-only
+
+echo "6c. files a finish will not push (16 Nov 2026)"
+# git ignores images under _work/ and everything in the archive's inbox: never pushed, and now said
+head -c 64 /dev/urandom > "$PA/_work/go1/scan.png"; head -c 64 /dev/urandom > "$AA/archive/inbox/capture.jpg"
+echo "with a scan" >> "$PA/_work/go1/NOTES.md"
+check "the notes checkpoint still goes through with ignored files in _work/ and the archive's inbox" in_cloud A env FT_PUBLISH=notes bash "$TOOLS/cloud-finish.sh" "Save research notes"
+says "NOT pushed, and vanish with this machine" "…and says they are not pushed"
+says "family-tree-private/_work/go1/scan.png" "…naming the image in _work/"
+says "family-tree-sources/archive/inbox/capture.jpg" "…and the capture in the inbox"
+says "archive/hand/" "…and where a kept one belongs"
+! gp show main:_work/go1/scan.png >/dev/null 2>&1 && gp show main:_work/go1/NOTES.md | grep -q "with a scan" && ok "…the notes went up, the image did not" || no "ignored image and the checkpoint"
+echo "again" >> "$PA/OPEN-ITEMS.md"
+check "a full finish goes through with them too" fin A "Update working state"
+says "family-tree-sources/archive/inbox/capture.jpg" "…with the same note"
+rm -f "$PA/_work/go1/scan.png" "$AA/archive/inbox/capture.jpg"
+check "with none left, a finish says nothing of the kind" fin A "Update working state"
+refuse "…(no note)" grep -q "ignored by git" "$T/last.out"
+# GitHub refuses a file of 100 MB: the finish stops at 95, before anything is committed or pushed
+truncate -s 95M "$PA/_work/go1/download.bin"; echo "kept" >> "$PA/_work/go1/NOTES.md"; pm0="$(gp rev-parse main)"
+refuse "the notes checkpoint stops on a new file of 95 MB" in_cloud A env FT_PUBLISH=notes bash "$TOOLS/cloud-finish.sh" "Save research notes"
+says "family-tree-private/_work/go1/download.bin  (95 MB, not committed yet)" "…naming it"
+says "Nothing was pushed" "…having pushed nothing"
+refuse "…and so does a full finish" fin A "Update working state"
+says "95 MB or more" "…with the reason"
+test "$(gp rev-parse main)" = "$pm0" && git -C "$PA" diff --quiet --cached && ok "…nothing was committed or pushed" || no "a big file got past the finish"
+mv "$PA/_work/go1/download.bin" "$PA/_work/go1/download.png"
+check "an ignored file of that size does not stop it (it is never pushed)" in_cloud A env FT_PUBLISH=notes bash "$TOOLS/cloud-finish.sh" "Save research notes"
+says "family-tree-private/_work/go1/download.png" "…it is in the note instead"
+rm -f "$PA/_work/go1/download.png"
+truncate -s 96M "$AA/archive/big.pdf" && git -C "$AA" add archive/big.pdf && gnohook -C "$AA" commit -qm "add hand copies of new sources"
+am0="$(git --git-dir="$GHA" rev-parse main)"; echo "after" >> "$PA/_work/go1/NOTES.md"
+refuse "a finish stops on a file of 95 MB in the archive's unpushed commits" fin A "Update working state"
+says "family-tree-sources/archive/big.pdf  (96 MB, in a commit GitHub does not have yet)" "…naming it"
+test "$(git --git-dir="$GHA" rev-parse main)" = "$am0" && ok "…the archive was not pushed" || no "the archive went up with a big file"
+refuse "…and the notes checkpoint stops on it too" in_cloud A env FT_PUBLISH=notes bash "$TOOLS/cloud-finish.sh" "Save research notes"
+git -C "$AA" reset -q --hard HEAD~1
+check "with the file gone, the finish goes through" fin A "Update working state"
 quiet git -C "$PB" pull -q --ff-only
 
 echo "7. the queue and the airlock"
