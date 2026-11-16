@@ -144,8 +144,12 @@ finish: **FINISH STOPPED: "<n> lines have no figure: <ids>"**. Rate each by hand
 skipped with a NOTE: never let a tool make a new owner key.
 
 The source archive is the clone of `CNitschelm/family-tree-sources` next to this folder; the working
-state is the clone of `CNitschelm/family-tree-private` next to it (CLAUDE.md, "Three clones, one folder"). A
-source that is not in it cannot be evidence: capture it first (a hand copy in `archive/hand/`, see
+state is the clone of `CNitschelm/family-tree-private` next to it (CLAUDE.md, "Three clones, one folder").
+Both are private and must be attached to the session, with push access. When one is not, setup stops
+(SETUP STOPPED: could not clone …) with git's own words and what to do: in an interactive session, ask for
+the repository with the platform's add-repository tool (Cory approves it), or have him start a session with
+all three selected; a routine gets it on its own page, where he adds it. A
+source that is not in the archive cannot be evidence: capture it first (a hand copy in `archive/hand/`, see
 that repo's `archive/MANUAL.md`), then cite it. A fact read from an image of a record needs the image
 itself there, not only our typed reading of it (below, "An image on file"). The archive's list of cited
 addresses, `sources/urls.tsv`, keeps itself current: the full finish rebuilds it with
@@ -366,15 +370,20 @@ out built from each other's stale copies.
   large services every family history uses are named in the public file.
 - **Commit messages: one neutral line**, ≤ 72 characters, no capitalised word after the first, no
   body, no trailers, no word that is a person's name. The `commit-msg` hook enforces it, and refuses an
-  `index.html` the gate has not passed. `mcp__GitHub__push_files` bypasses hooks: never use it for
-  `index.html`. With the private lists linked, an everyday word that is also a name on a list is refused:
+  `index.html` the gate has not passed: `.gate-stamp` must hold the staged payload's iv and, on its second
+  line, a PASS over `origin/main` or over the queue's head (`queue/site-queue`, when this clone has it). A
+  gate run with any other `--base` does not count, so run `node checks/gate.js` with no `--base`.
+  `mcp__GitHub__push_files` bypasses hooks: never use it for `index.html`. With the private lists linked, an everyday word that is also a name on a list is refused:
   use another word.
 - **Commit addresses: one of two.** The author and the committer of every commit use
   `noreply@anthropic.com` (the cloud sessions' own) or a GitHub address ending in
   `@users.noreply.github.com`: an address in a commit is as public and as permanent as its message. The
   hook refuses any other (16 Nov 2026), `cloud-finish.sh` checks each commit it is about to queue, §13
   checks the unpushed commits and the last 40 pushed ones, and the airlock refuses a queue that holds one.
-  Before the first commit in a clone, `git config user.email` must print one of the two.
+  Before the first commit in a clone, `git config user.email` must print one of the two. (An address
+  under `.invalid` passes only in a throwaway repository with no remote on the network: the suites use
+  one. Where node is not on PATH the hook's shell fallback holds the same rules, reads no private list,
+  and passes nothing under `.invalid`.)
 - **After a refusal.** The hook says what to do; in short:
   - *the message*: write a neutral line without the word and commit again. Nobody is taken off a list to
     let a message through.
