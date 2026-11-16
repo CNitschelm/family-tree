@@ -427,7 +427,11 @@ files that do not describe the site's state: family-tree-private's `_work/` (a l
 and the source archive's own commits. Nothing else: no `research.json` and no ledger (`changes.jsonl`, the
 register, `LOCK`, the line figures), which must match the site and go only with a full finish; no site
 commit; no lock. It refuses to push other private commits. It is also the way to keep the notes when a
-finish stopped, and it works in any session that has set up once. When another session wrote to the same
+finish stopped, and it works in any session that has set up once. While the site clone holds site work
+that is not queued (a commit neither published nor queued, or a changed site file not committed) it
+leaves `OPEN-ITEMS.md` and `CHANGE-LOG-COMMITS.md` out and says so in a NOTE: those two record a site
+commit as queued, so they go up with the full finish that queues it. If that site work is given up, take
+its lines out of both files. When another session wrote to the same
 file it stops and says how to go on: for a notes file, the steps to put the two together by hand; for a
 state file this session has changed and not committed, not to rebase by hand, and how to set the file aside.
 

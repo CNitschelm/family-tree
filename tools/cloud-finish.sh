@@ -18,7 +18,10 @@
 # ledger/pending/ (change files not applied yet), and the source archive's own commits. Nothing else: no
 # research.json, no ledger (changes.jsonl, the register, LOCK, the link-confidence files), which must match
 # the site and go only with a full finish; no site commit, no lock. It is the checkpoint during long work,
-# and the way to keep the notes when a finish stopped. It refuses to push other private commits.
+# and the way to keep the notes when a finish stopped. It refuses to push other private commits. While the
+# site clone holds site work that is not queued (a commit neither published nor queued, or a changed site
+# file not committed), OPEN-ITEMS.md and CHANGE-LOG-COMMITS.md are left out, with a NOTE: they are the two
+# files that record a site commit as queued, and they go up with the finish that queues it.
 #
 #  1. stops if setup has not finished in this session, if a rebase or merge is unfinished, if a private
 #     file sits outside family-tree-private (it would vanish with the machine), if a link was replaced by
@@ -204,10 +207,43 @@ note_unsaved() {
 # match the site, so they go only with a full finish.
 NOTES_PATHS="_work notes OPEN-ITEMS.md CHANGE-LOG-COMMITS.md ledger/pending"
 NOTES_RE='^(_work/|notes/|ledger/pending/|OPEN-ITEMS\.md$|CHANGE-LOG-COMMITS\.md$)'
+# The two files that record the site's commits (the LIVE SITE line of OPEN-ITEMS.md, the changelog's entries)
+# are written before the finish that queues the commit. A run whose finish stopped over the site saves its
+# notes with this checkpoint and gives the site work up, to be redone: the checkpoint then pushed lines about
+# a commit that no remote holds, while research.json stayed behind, and the next run found the work recorded
+# as done (found in review, 16 Nov 2026). So while the site clone holds site work that is not queued, those
+# two files wait for the full finish. Read from the refs as they were last fetched: the checkpoint asks
+# GitHub nothing about the site.
+RECORD_FILES="OPEN-ITEMS.md CHANGE-LOG-COMMITS.md"
+site_open() { # prints why the site clone holds work that is not queued; returns 1 when it holds none
+  local n=0 dirty
+  git -C "$FT" rev-parse -q --verify HEAD >/dev/null 2>&1 || return 1
+  if git -C "$FT" rev-parse -q --verify origin/main >/dev/null 2>&1; then
+    n=$(git -C "$FT" rev-list --count HEAD --not origin/main \
+          $(git -C "$FT" rev-parse -q --verify refs/remotes/queue/site-queue 2>/dev/null) 2>/dev/null || echo 0)
+  fi
+  dirty="$(git -C "$FT" status --porcelain --untracked-files=no 2>/dev/null | head -n 1)"
+  [ "$n" -gt 0 ] || [ -n "$dirty" ] || return 1
+  if [ "$n" -gt 0 ] && [ -n "$dirty" ]; then echo "$n site commit(s) that are neither published nor queued, and site files changed and not committed"
+  elif [ "$n" -gt 0 ]; then echo "$n site commit(s) that are neither published nor queued"
+  else echo "site files that are changed and not committed"; fi
+}
 if [ "$PUBLISH" = notes ]; then
   note_unsaved
+  held_back=""
+  if open_why="$(site_open)"; then
+    for p in $RECORD_FILES; do
+      [ -n "$(git -C "$PRIV" status --porcelain -- "$p" 2>/dev/null)" ] && held_back="$held_back $p"
+    done
+    [ -z "$held_back" ] || echo "NOTE:$held_back left out of this checkpoint: the site clone holds $open_why,
+  and those files may already speak of that work as queued. They go up with the full finish that queues it
+  (bash tools/cloud-finish.sh \"<one neutral line>\" \"<who>\"), together with research.json and the ledger. If
+  the site work is given up instead, take its lines out of those files; the next checkpoint or finish in a
+  session whose site clone holds no such work saves them. Everything else of the checkpoint is saved now."
+  fi
   np=()
   for p in $NOTES_PATHS; do
+    case " $held_back " in *" $p "*) continue ;; esac
     { [ -e "$PRIV/$p" ] || [ -n "$(git -C "$PRIV" ls-files -- "$p" | head -n 1)" ]; } && np+=("$p")
   done
   [ "${#np[@]}" -eq 0 ] || no_big_files "${np[@]}"

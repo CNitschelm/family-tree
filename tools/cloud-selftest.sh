@@ -29,7 +29,8 @@
 # Since 16 Nov 2026 also: a failed push that says why (a file too large, no push access, a server not reached,
 # each told from the rest, with git's own words), a finish that stops on a file of 95 MB before anything is
 # committed or pushed, the note for files git ignores under _work/ and the archive's inbox, the wider notes
-# checkpoint (notes/, the open items, the changelog and pending change files, never the state), the archive's
+# checkpoint (notes/, the open items, the changelog and pending change files, never the state; the open items
+# and the changelog wait while the site clone holds site work that is not queued), the archive's
 # source list rebuilt at the full finish (a note when it cannot be), the gate's stamp (line 2: a pass over
 # origin/main or the queue's head), a lock release that fails after queuing (exit 4, said last), setup's stop
 # when a private repository is not attached, and the queue that has waited (a warning at setup and in
@@ -349,6 +350,24 @@ if ! gp show main:research.json | grep -q 2026-10-19 && ! gp show main:ledger/ch
   ok "…and nothing that must match the site: research.json, the ledger and the line figures stay uncommitted here"; else no "notes took state files"; fi
 check "a second checkpoint with nothing new is fine" in_cloud A env FT_PUBLISH=notes bash "$TOOLS/cloud-finish.sh" "Save research notes"
 says "nothing new" "…and says so"
+# The open items and the changelog record a site commit as queued, and are written before the finish that
+# queues it. A run whose finish stopped over the site saves its notes with the checkpoint and gives the site
+# work up: the checkpoint must not push lines about a commit no remote holds (found in review, 16 Nov 2026).
+mc A held1; echo "queued held1" >> "$PA/OPEN-ITEMS.md"; echo "the story of held1" >> "$PA/CHANGE-LOG-COMMITS.md"; echo "more notes" >> "$PA/_work/go1/NOTES.md"
+check "a checkpoint while a site commit is neither published nor queued still saves the notes" in_cloud A env FT_PUBLISH=notes bash "$TOOLS/cloud-finish.sh" "Save research notes"
+says "NOTE: OPEN-ITEMS.md CHANGE-LOG-COMMITS.md left out of this checkpoint: the site clone holds 1 site commit(s) that are neither published nor queued" "…and says that the open items and the changelog are left out, and why"
+says "They go up with the full finish that queues it" "…and when they go up"
+gp show main:_work/go1/NOTES.md | grep -q "more notes" && ! gp show main:OPEN-ITEMS.md | grep -q "queued held1" && ! gp show main:CHANGE-LOG-COMMITS.md | grep -q "story of held1" \
+  && grep -q "queued held1" "$PA/OPEN-ITEMS.md" && grep -q "story of held1" "$PA/CHANGE-LOG-COMMITS.md" \
+  && ok "…GitHub has the running notes and not the two lines about a commit that is not queued; they wait here, uncommitted" || no "the checkpoint pushed lines about a site commit that is not queued"
+git -C "$A" reset -q --hard HEAD~1; echo "<!-- changed -->" >> "$A/index.html"; echo "still more" >> "$PA/_work/go1/NOTES.md"
+check "…the same while a site file is changed and not committed" in_cloud A env FT_PUBLISH=notes bash "$TOOLS/cloud-finish.sh" "Save research notes"
+says "the site clone holds site files that are changed and not committed" "…and says so"
+gp show main:_work/go1/NOTES.md | grep -q "still more" && ! gp show main:OPEN-ITEMS.md | grep -q "queued held1" && ok "…the two files still wait" || no "the checkpoint pushed the record files over an uncommitted site file"
+git -C "$A" checkout -q -- index.html
+check "once the site clone holds no such work, the next checkpoint saves them" in_cloud A env FT_PUBLISH=notes bash "$TOOLS/cloud-finish.sh" "Save research notes"
+lacks "left out of this checkpoint" "…(with no note)"
+gp show main:OPEN-ITEMS.md | grep -q "queued held1" && gp show main:CHANGE-LOG-COMMITS.md | grep -q "story of held1" && ok "…GitHub has both" || no "the record files were not saved once the site clone was clean"
 gnohook -C "$PA" commit -qm "Update working state" -- research.json
 refuse "the checkpoint does not push other unpushed private commits" in_cloud A env FT_PUBLISH=notes bash "$TOOLS/cloud-finish.sh" "Save research notes"
 says "not notes" "…and says why"
