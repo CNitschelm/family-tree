@@ -398,9 +398,12 @@ fatal: unable to access 'https://example.invalid/owner/repo.git/': The requested
 check "…a hook that declined it" kind_is refused ' ! [remote rejected] HEAD -> main (pre-receive hook declined)'
 check "…and a server that was not reached" kind_is unreachable "fatal: unable to access 'https://example.invalid/': Could not resolve host: example.invalid"
 # "GitHub" refuses pushes to a repo's main with the words in $T/refuse-<repo> while that file is there
+# (and, while $T/refuse-release is there, the push that releases the writer lock)
 for g in "$GHA" "$GHP"; do n="$(basename "$g" .git)"; cat > "$g/hooks/update" <<EOF
 #!/bin/sh
 [ "\$1" = refs/heads/main ] && [ -e "$T/refuse-$n" ] && { cat "$T/refuse-$n" >&2; exit 1; }
+[ "\$1" = refs/heads/main ] && [ -e "$T/refuse-release" ] && [ "\$(git log -1 --format=%s "\$3")" = "Release the writer lock" ] \\
+  && { echo "Permission to owner/$n.git denied to someone." >&2; exit 1; }
 exit 0
 EOF
 chmod +x "$g/hooks/update"; done
@@ -431,6 +434,25 @@ says "git said:" "…with git's own words"
 git -C "$PA" remote set-url --delete --push origin "file://$T/gh/no-such-repo.git"
 check "…and goes through once it can be reached" fin A "Update working state"
 gp show main:OPEN-ITEMS.md | grep -q "a line" && ok "…with the state" || no "state not pushed after the retry"
+quiet git -C "$PB" pull -q --ff-only
+
+echo "6b2. a lock that could not be released (16 Nov 2026)"
+quiet lock A take "session-a" "left"; mc A left1; echo "left" >> "$PA/OPEN-ITEMS.md"; touch "$T/refuse-release"
+fin A "Update working state" "session-a" > "$T/last.out" 2>&1; rc=$?
+[ "$rc" = 4 ] && ok "a finish whose lock release fails after queuing exits 4" || { no "exit 4 (got $rc)"; tail -8 "$T/last.out"; }
+grep -v '^$' "$T/last.out" | tail -n 4 | grep -q 'THE WRITER LOCK IS STILL HELD by "session-a"' && ok "…and says so in its last lines" || no "the lock message is not last"
+says 'Release it now, from this machine:  bash tools/cloud-lock.sh release "session-a"' "…with the exact command"
+says "may not push to family-tree-private" "…after the reason the release failed"
+test "$(gp rev-parse site-queue)" = "$(git -C "$A" rev-parse HEAD)" && gp show main:OPEN-ITEMS.md | grep -qx "left" && ok "…everything else went up" || no "state or queue after a failed release"
+gp show main:ledger/LOCK | grep -q session-a && ok "…and GitHub still shows the lock held" || no "the lock after a failed release"
+rm -f "$T/refuse-release"
+check "the printed command releases it" lock A release "session-a"
+gp show main:ledger/LOCK | grep -qx free && ok "…GitHub shows it free" || no "the lock was not released by the printed command"
+quiet lock A take "session-a" "left again"; echo "state only" >> "$PA/OPEN-ITEMS.md"; touch "$T/refuse-release"
+fin A "Update working state" "session-a" > "$T/last.out" 2>&1; rc=$?
+[ "$rc" = 4 ] && grep -q "nothing new to publish" "$T/last.out" && ok "a finish with nothing to publish exits 4 as well when its release fails" || no "exit 4 on a state-only finish (got $rc)"
+rm -f "$T/refuse-release"; quiet lock A release "session-a"
+gp show main:ledger/LOCK | grep -qx free || no "the lock stayed held after the state-only case"
 quiet git -C "$PB" pull -q --ff-only
 
 echo "6c. files a finish will not push (16 Nov 2026)"
@@ -617,6 +639,12 @@ quiet lock H take "h" "direct"
 check "direct publishing (interactive, empty queue, the lock held) pushes public main" in_cloud H env FT_PUBLISH=direct FT_SKIP_LIVE=1 bash "$TOOLS/cloud-finish.sh" "Update working state" "h"
 test "$(git --git-dir="$GHS" rev-parse main)" = "$(git -C "$T/H/family-tree" rev-parse HEAD)" && ok "…public main is that commit" || no "direct push"
 gp show main:ledger/LOCK | grep -qx free && ok "…and the lock is released" || no "direct did not release"
+echo "<!-- direct, again -->" >> "$T/H/family-tree/README.md" && gnohook -C "$T/H/family-tree" commit -qam "Update readme directly"
+quiet lock H take "h" "direct"; touch "$T/refuse-release"
+in_cloud H env FT_PUBLISH=direct FT_SKIP_LIVE=1 bash "$TOOLS/cloud-finish.sh" "Update working state" "h" > "$T/last.out" 2>&1; rc=$?
+[ "$rc" = 4 ] && grep -q 'THE WRITER LOCK IS STILL HELD by "h"' "$T/last.out" && test "$(git --git-dir="$GHS" rev-parse main)" = "$(git -C "$T/H/family-tree" rev-parse HEAD)" \
+  && ok "a direct finish whose lock release fails exits 4 too, the site pushed" || no "direct and a failed release (got $rc)"
+rm -f "$T/refuse-release"; quiet lock H release "h"
 # the live check after a direct push: a page whose code changed and whose payload did not keeps its iv, so only
 # the page's own bytes tell the new page from the old one (a local "site" serves whichever page is put in it)
 mkdir -p "$T/www"; git --git-dir="$GHS" show main:index.html > "$T/www/index.html"
@@ -697,6 +725,7 @@ quiet lock X take "x" "work"; mc X x1
 touch "$T/queue-closed"
 fin X "Update working state" "x" > "$T/last.out" 2>&1; rc=$?
 [ "$rc" = 2 ] && grep -q "STATE SPLIT" "$T/last.out" && ok "a finish whose queue push fails stops with exit 2 (STATE SPLIT), the state pushed" || { no "exit 2 (got $rc)"; tail -5 "$T/last.out"; }
+says 'The writer lock stays held by "x" meanwhile' "…and says the writer lock stays held, with the command for afterwards"
 grep -q "before this machine is gone.$" "$T/last.out" && ! grep -q "gone. 2$" "$T/last.out" && ok "…its message ends cleanly" || no "exit 2 message"
 refuse "setup on that same machine now stops: the commit .public-head names is not queued" cloud X
 says "STATE SPLIT" "…and says so"

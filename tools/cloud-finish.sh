@@ -45,8 +45,16 @@
 #  5. queues the own site commits (or, direct, pushes them)
 #  6. releases the writer lock if <who> holds it, and pushes that; then (direct) waits for the live site to
 #     serve this commit's page: its payload iv and its SHA-256, cache-busted (FT_LIVE_TRIES, FT_LIVE_WAIT: tests)
-# A stop up to 4 pushes nothing but, possibly, the archive's commits (exit 1; a state commit 4 could not
-# push is undone, its changes kept). A failure at 5 is a STATE SPLIT (exit 2): OPERATING.md, 'State split'.
+# Exit codes:
+#   0  done
+#   1  FINISH STOPPED, up to 4: nothing was pushed but, possibly, the archive's commits (a state commit 4 could
+#      not push is undone, its changes kept)
+#   2  STATE SPLIT, a failure at 5: the state is pushed and the site is not (OPERATING.md, 'State split'); the
+#      writer lock stays held
+#   3  direct only: pushed, but the live site did not serve this commit's page in time (the verify-deploy run)
+#   4  everything went up, but the writer lock could not be released in 6 and is still held: the last lines
+#      say so, with the command (bash tools/cloud-lock.sh release "<who>"). Until it is released, or 12 hours
+#      have passed, no other session can write. (When 3 applies as well, the code is 3 and both are said.)
 
 set -uo pipefail
 [ -f "$HOME/.ft-env" ] && . "$HOME/.ft-env"
@@ -60,7 +68,7 @@ PUBLISH="${FT_PUBLISH:-queue}"
 QUEUE_MAX=30                                # the airlock's MAX_COMMITS (family-tree-airlock, rules.py)
 msg="${1:?usage: cloud-finish.sh \"<one-line message>\" [\"<who>\"]   (FT_PUBLISH=notes: the notes checkpoint; FT_PUBLISH=direct: straight to public main)}"; who="${2:-}"
 ARCH_PUSHED=0
-die() { # $1 = message, $2 = exit code (1: nothing pushed; 2: STATE SPLIT)
+die() { # $1 = message, $2 = exit code (1: nothing pushed; 2: STATE SPLIT); 3 and 4 are at the end of the script
   local tail=""
   if [ "${2:-1}" = 1 ]; then
     if [ "$ARCH_PUSHED" = 1 ]; then tail="
@@ -382,7 +390,7 @@ sync_urls() {
   elif ! FT_ROOT="$FT" node "$HERE/doctor.js" --data-current 2>/dev/null; then why="data.json does not come from the index.html on disk (node tools/doctor.js says what to do)"
   elif [ ! -L "$FT/sources" ] || [ ! -d "$FT/sources" ]; then why="sources/ is not a link into family-tree-private (checks/manifest.js writes there)"
   elif ! out="$(cd "$FT" && FT_DATA="$FT/data.json" node checks/manifest.js 2>&1)"; then
-    why="node checks/manifest.js failed ($(printf '%s\n' "$out" | grep -v '^$' | tail -n 1 | cut -c1-160))"
+    why="node checks/manifest.js failed ($(printf '%s\n' "$out" | grep -m 1 -E 'Error|error' | cut -c1-160))"
   elif [ ! -s "$FT/sources/urls.tsv" ]; then why="checks/manifest.js wrote no sources/urls.tsv"
   elif ! git -C "$ARCH" fetch -q origin main 2>/dev/null; then why="GitHub could not be reached (the source archive)"
   elif [ "$(git -C "$ARCH" rev-list --count HEAD..origin/main 2>/dev/null || echo 1)" -gt 0 ] \
@@ -423,24 +431,49 @@ if [ "$(git -C "$PRIV" rev-list --count '@{upstream}..HEAD' 2>/dev/null || echo 
   (git -C \"$PRIV\" log HEAD..origin/main) before going on. $NOTES_HINT" ;;
     *) why="$(ft_push_report)"; [ "$made" = 1 ] && git -C "$PRIV" reset -q --soft HEAD~1
        die "family-tree-private could not be pushed; this session's state is uncommitted again.
-  $why
-  $NOTES_HINT" ;;
+  $why" ;;
   esac
 else
   echo "state: nothing new"
 fi
 
 # ------------------------------------------------------------------ 6. the writer lock (run after 5: released last)
+# A release that fails after everything went up used to be one WARNING line in the middle of the output, and
+# the finish still ended with exit 0: the lock then kept every other session out for up to 12 hours (it was
+# held 32 hours once, 12-14 Nov 2026). Now it is the last thing the finish says, and it exits 4.
+LOCK_LEFT=0
 unlock() {
+  local gh
   [ "$holds" = 1 ] || return 0
-  bash "$HERE/cloud-lock.sh" release "$who" || echo "WARNING: the writer lock was not released: run  bash tools/cloud-lock.sh release \"$who\""
+  bash "$HERE/cloud-lock.sh" release "$who" && return 0
+  # not released: is it still this session's, as GitHub has it? (Someone may have taken it over meanwhile.)
+  if git -C "$PRIV" fetch -q origin main 2>/dev/null; then
+    gh="$(ft_lock_on_github "$PRIV")"
+    case "$gh" in
+      free) echo "lock: GitHub shows the writer lock free after all"; return 0 ;;
+      "$who|"*) ;;
+      *) echo "lock: GitHub shows the writer lock held by \"${gh%%|*}\" now (taken over): not this session's to release"; return 0 ;;
+    esac
+  fi
+  LOCK_LEFT=1
+}
+lock_left() { # the finish's last lines when the lock is still held; $1 = what the exit code would be otherwise
+  [ "$LOCK_LEFT" = 1 ] || return 0
+  printf '\n%s\n\n' "FINISHED, BUT THE WRITER LOCK IS STILL HELD by \"$who\": the release failed (its reason is above).
+  Everything else went up. Until the lock is released, or 12 hours have passed, no other session can write.
+  Release it now, from this machine:  bash tools/cloud-lock.sh release \"$who\"
+  If that is refused again, do what it says, and say in this session's report that the lock is still held." >&2
+  [ "${1:-0}" = 0 ] && exit 4
+  return 0
 }
 
 # ------------------------------------------------------------------ 5. the site
-if [ "$own" -eq 0 ]; then echo "site: nothing new to publish"; unlock; exit 0; fi
+held=""; [ "$holds" = 1 ] && held="
+  The writer lock stays held by \"$who\" meanwhile: once the site is up, release it (bash tools/cloud-lock.sh release \"$who\")."
+if [ "$own" -eq 0 ]; then echo "site: nothing new to publish"; unlock; lock_left; exit 0; fi
 if [ "$PUBLISH" = queue ]; then
   retry git -C "$FT" push -q "$PRIV_URL" HEAD:refs/heads/site-queue \
-    || die "STATE SPLIT: the state is pushed but the site is NOT queued ($(short "$H") is on this machine only).
+    || die "STATE SPLIT: the state is pushed but the site is NOT queued ($(short "$H") is on this machine only).$held
   Try once more:  git -C \"$FT\" push \"$PRIV_URL\" HEAD:refs/heads/site-queue
   If it still fails, follow OPERATING.md, 'State split', before this machine is gone." 2
   git -C "$FT" update-ref refs/remotes/queue/site-queue "$H"
@@ -453,15 +486,16 @@ if [ "$PUBLISH" = queue ]; then
   echo "NOTE: the platform may now say there are $((pending + own)) unpushed commit(s) on branch 'main' and ask to push them:
   do not. They are queued, and the airlock publishes them. Never run git push in the site clone."
   unlock
+  lock_left
   exit 0
 fi
 retry git -C "$FT" push -q origin HEAD:main \
-  || die "STATE SPLIT: the state is pushed but the site is NOT ($(short "$H") is on this machine only).
+  || die "STATE SPLIT: the state is pushed but the site is NOT ($(short "$H") is on this machine only).$held
   Try once more:  git -C \"$FT\" push origin HEAD:main
   If it still fails, follow OPERATING.md, 'State split', before this machine is gone." 2
 echo "site: pushed $own commit(s) directly, main at $(short "$H")"
 unlock
-[ "${FT_SKIP_LIVE:-0}" = 1 ] && { echo "live: check skipped (FT_SKIP_LIVE=1)"; exit 0; }
+[ "${FT_SKIP_LIVE:-0}" = 1 ] && { echo "live: check skipped (FT_SKIP_LIVE=1)"; lock_left; exit 0; }
 # the payload's iv AND the page's own bytes (as verify-deploy.yml does): a commit that changes the page's code and
 # not its data keeps the iv, so the iv alone matched the old page at once. Cache-busted, so no cached copy answers.
 enc() { grep -o 'const ENC = {v:[0-9]*, iter:[0-9]*, salt:"[^"]*", iv:"[^"]*"' "$1" | head -n 1 | sed 's/.*iv:"//; s/"$//'; }
@@ -474,10 +508,11 @@ for i in $(seq 1 "$tries"); do
     got=$(enc "$live"); [ "$(sha256sum < "$live" | cut -d' ' -f1)" = "$wantsha" ] && same="yes"
   fi
   if [ "$got" = "$want" ] && [ "$same" = yes ]; then
-    echo "live: the site serves this commit's page (iv $want, sha256 $(printf %.12s "$wantsha"))"; rm -f "$mine" "$live"; exit 0
+    echo "live: the site serves this commit's page (iv $want, sha256 $(printf %.12s "$wantsha"))"; rm -f "$mine" "$live"; lock_left; exit 0
   fi
   [ "$i" -lt "$tries" ] && sleep "${FT_LIVE_WAIT:-20}"
 done
 rm -f "$mine" "$live"
 echo "live: NOT confirmed after $tries look(s) (serving iv ${got:-nothing}, expected $want; the page's bytes are this commit's: $same). Check the verify-deploy run; do not re-encrypt."
+lock_left 3
 exit 3
