@@ -32,7 +32,8 @@
 #     has no figure ("<n> lines have no figure: <ids>"); without .owner-key, a NOTE and nothing else
 #  3. finds this session's own site commits (those on top of the newest published or queued commit)
 #     and stops BEFORE pushing anything when they cannot go out: other site work came in under them, a
-#     commit a queue rebuild dropped, a message the airlock refuses or that names someone, a payload the
+#     commit a queue rebuild dropped, a message the airlock refuses or that names someone, a commit whose
+#     author or committer has an address that may not be published, a payload the
 #     gate did not pass (.gate-stamp: line 1 the payload's iv, line 2 "… PASS … over origin/main", or over the
 #     queue's head), no writer lock; for the queue also a QUEUE CONFLICT, more than the airlock's 30
 #     commits, a merge, a file it does not publish; for direct also unpublished commits in the queue
@@ -364,9 +365,12 @@ if [ "$own" -gt 0 ]; then
       die "commit $(short "$c"): $p. Commit messages are public and the airlock refuses this one. To redo this
   session's own commits as one: git -C \"$FT\" reset --soft $(short "$N"), then commit again with one neutral line."
     fi
+    # the guard is given the commit too, so it reads THAT commit's author and committer (16 Nov 2026): with the
+    # message alone it checked the address of whoever runs this script, and a commit made elsewhere, or with
+    # --author, went into the queue for the airlock to refuse, which blocks every session.
     git -C "$FT" log -1 --format=%s "$c" > "$gm"
-    out="$(cd "$FT" && node "$guard" "$gm" 2>&1)" || { rm -f "$gm"; die "commit $(short "$c"): the commit guard refuses its message:
-$(printf '%s\n' "$out" | grep -v '^$' | head -4 | sed 's/^/  /')
+    out="$(cd "$FT" && node "$guard" "$gm" "$c" 2>&1)" || { rm -f "$gm"; die "commit $(short "$c"): the commit guard refuses it (its message, or the address of its author or committer):
+$(printf '%s\n' "$out" | grep -v '^$' | head -6 | sed 's/^/  /')
   To redo this session's own commits as one: git -C \"$FT\" reset --soft $(short "$N"), then commit again with one
   neutral line (if the guard could not build its name index, run node tools/crypt.js decrypt first)."; }
     git -C "$FT" diff --quiet "$c^" "$c" -- index.html || page=1

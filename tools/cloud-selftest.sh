@@ -15,7 +15,8 @@
 # queue pushes its state and leaves .public-head alone), the notes checkpoint, the source archive (no
 # uncommitted copies, its commits pushed first), finish's stops (not set up, a rebase unfinished, a stray
 # private file, a replaced link at the top level and inside a public folder, uncommitted site changes,
-# files the airlock does not publish, a message with a body, a payload the gate did not pass, more commits
+# files the airlock does not publish, a message with a body, an author or committer whose address may not be
+# published, a payload the gate did not pass, more commits
 # than the airlock takes, no writer lock or someone else's, a commit a queue rebuild dropped, other site
 # work under this session's commits, a private push that meets the same lines: undone), the airlock's
 # verdicts (refused blocks setup and the lock, a finish already under way still queues with a warning,
@@ -275,6 +276,18 @@ says "not one line" "…and says why, having pushed nothing"
 git -C "$A" reset -q --hard HEAD~1
 gnohook -C "$A" commit -q --allow-empty -m "update data for Somebody"
 refuse "…and so is one with a capitalised word after the first" fin A "Update working state" "session-a"
+git -C "$A" reset -q --hard HEAD~1
+# the guard reads each queued commit's own author and committer, not the address of whoever runs the finish
+q0="$(gp rev-parse site-queue)"
+GIT_AUTHOR_EMAIL=someone@host.example gnohook -C "$A" commit -q --allow-empty -m "Update site media y"
+refuse "a commit whose author has an address that may not be published is refused" fin A "Update working state" "session-a"
+says "the author of this commit does not use an address that may be published" "…and says so, naming the author"
+says "git config user.email" "…with the way to put it right"
+git -C "$A" reset -q --hard HEAD~1
+GIT_COMMITTER_EMAIL=someone@host.example gnohook -C "$A" commit -q --allow-empty -m "Update site media y"
+refuse "…and so is one whose committer has" fin A "Update working state" "session-a"
+says "the committer of this commit does not use an address that may be published" "…naming the committer"
+test "$(gp rev-parse site-queue)" = "$q0" && ok "…nothing was queued by either" || no "a commit with an address that may not be published was queued"
 git -C "$A" reset -q --hard HEAD~1
 pc A AAAAAAAAAAAAAAA2; gstamp "$A" AAAAAAAAAAAAAAA9
 refuse "a payload the gate did not pass is refused" fin A "Update working state" "session-a"
