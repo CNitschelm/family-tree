@@ -41,6 +41,9 @@
  * kind: fact | grade | source | wording | translation | structure | owner
  * evidence item: { src, quote } | { src, absent: ["word", …] } | { src, read: "image"|"pdf"|"original", transcription }
  *                and always "opened": the date the source was actually opened.
+ *                A source read from an image (a register page, a film image, a newspaper page) needs the image
+ *                on file in the archive, not only our typed reading (R-0755). Where it cannot be had now, the
+ *                item says "no_image": "<why, and what will fetch it>" and the ledger marks the edit image_missing.
  * optional per edit: "register": "R-0042", "effect": "consistent"|"reopen", "reverts": "why this comes back",
  *                    "fr": "exempt: <why the French differs>", "note": "…"
  */
@@ -57,6 +60,9 @@ if (!file) { console.error('usage: node tools/change.js <changes.json> [--dry] [
 const errors = [], warnings = [];
 const err = (i, m) => errors.push(`edit ${i + 1}: ${m}`);
 const warn = (i, m) => warnings.push(`edit ${i + 1}: ${m}`);
+// what an edit's ledger record keeps besides the edit itself: the images it rests on that are not on file
+const kept = [];
+const keep = i => (kept[i] = kept[i] || { noImage: [] });
 
 let cs;
 try { cs = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { console.error(`cannot read ${file}: ${e.message}`); process.exit(2); }
@@ -143,7 +149,27 @@ function checkEvidence(i, e, needed) {
         err(i, `${tag}: you say ${x.src} lacks "${w}" — our copy of it contains "${w}". A negative claim has to survive opening the source.`);
     }
     if (x.read && !x.transcription && !x.quote) err(i, `${tag}: "read": "${x.read}" needs "transcription" — what the page says, in its words`);
+    checkImage(i, x, tag);
   });
+}
+// ---- an image on file for a fact read from an image (Cory, 16 Nov 2026, R-0755)
+// Until then a typed reading counted as our copy of a register page: 123 cited record images were held
+// only as words we typed ourselves, or as the empty page a viewer saves. So evidence that says it was
+// read from an image, and any evidence from an address that is an image, needs the image in the archive.
+// "no_image" is the way through when the image cannot be had today; the ledger then says so on the edit.
+const MIN_NO_IMAGE = 20;
+function checkImage(i, x, tag) {
+  if (x.no_image !== undefined && (typeof x.no_image !== 'string' || x.no_image.trim().length < MIN_NO_IMAGE))
+    return err(i, `${tag}: "no_image" must say why the image cannot be filed now and what will fetch it, in at least ${MIN_NO_IMAGE} characters ("the site needs a sign-in; item yc12 on the At your computer list fetches it")`);
+  const fromImage = ['image', 'pdf', 'original'].includes(x.read) || L.imageSource(x.src);
+  if (!fromImage) return;
+  if (L.recordImage(x.src).held) { if (x.no_image) warn(i, `${tag}: "no_image" is given, but an image of ${x.src} is on file — take "no_image" out next time`); return; }
+  if (x.no_image) return void keep(i).noImage.push({ src: x.src, why: x.no_image.trim() });
+  const fam = /^family:/.test(x.src);
+  err(i, `${tag}: ${x.src} was read from an image, and the archive holds no image of it (our typed reading, or a viewer's empty page, is not a copy of the record).\n` +
+    (fam ? `    Put the photograph or scan in family-tree-sources archive/family/${x.src.slice(7)}/ with a row in that folder's README, then run this again.\n`
+         : `    Save the image in family-tree-sources as archive/hand/${L.sourceId(x.src)}.jpg (or .png, .pdf), or beside its dated copy under the copy's name with a row in archive/hand/README.md (archive/MANUAL.md, notes/source_archive.md), then run this again.\n`) +
+    `    If it cannot be had now (a sign-in, a site that refuses downloads), add "no_image": "<why, and what will fetch it>" to this evidence item instead.`);
 }
 
 // ---- the register: settled questions answer back
@@ -289,7 +315,7 @@ const retired = L.loadChanges().flatMap(c => c.retired || []);
       const at = e.at === undefined ? arr.length : +e.at;
       arr.splice(at, 0, e.item);
       checkRegister(i, e, card, fam, '', JSON.stringify(e.item));
-      applied.push({ ...e, op, card: cid, field: `${head}[${at}]`, before: null, after: e.item });
+      applied.push({ ...e, op, card: cid, field: `${head}[${at}]`, before: null, after: e.item, _i: i });
     } else {
       const arr = head === 'union' ? card.node.unions : ['bio', 'bio_fr', 'hl', 'hl_fr', 'sources', 'docs', 'timeline'].includes(head) ? (card.node.profile || {})[head] : card.node[head];
       if (!arr || !arr.length) return err(i, `${head} is empty`);
@@ -303,7 +329,7 @@ const retired = L.loadChanges().flatMap(c => c.retired || []);
       if (e.kind !== 'structure' || !e.dup_of) checkEvidence(i, e, e.kind !== 'owner');
       checkRegister(i, e, card, fam, JSON.stringify(item), '');
       arr.splice(at, 1);
-      applied.push({ ...e, op, card: cid, field: `${head}[${at}]`, before: item, after: null });
+      applied.push({ ...e, op, card: cid, field: `${head}[${at}]`, before: item, after: null, _i: i });
     }
     return;
   }
@@ -364,8 +390,14 @@ const retired = L.loadChanges().flatMap(c => c.retired || []);
   checkReversal(i, e, card, e.field, fam, before, after, pinKey);
   try { L.setField(card.node, e.field, after === undefined ? null : after); } catch (x) { return err(i, x.message); }
   applied.push({ card: cid, field: e.field, op, kind: e.kind, before, after, evidence: e.evidence, register: e.register,
-    effect: e.effect, reverts: e.reverts, fr: e.fr, note: e.note });
+    effect: e.effect, reverts: e.reverts, fr: e.fr, note: e.note, _i: i });
 });
+// each record says which of its evidence rests on an image that is not on file yet, and why
+for (const a of applied) {
+  const k = kept[a._i];
+  delete a._i;
+  if (k && k.noImage.length) { a.image_missing = true; a.no_image = k.noImage; }
+}
 
 // ---- English and French must carry the same years, field pair by field pair
 const touchedPairs = new Map();
@@ -400,7 +432,10 @@ const rec = {
   before_hash: beforeHash, after_hash: afterHash, edits: applied,
   retired: applied.flatMap(a => a.retired || []),
 };
-if (dry) { console.log(`[dry] ${applied.length} edit(s) would apply cleanly; data.json not written`); process.exit(0); }
+const noImage = applied.filter(a => a.image_missing).length;
+const reminder = () => { if (noImage) console.log(`  REMINDER: ${noImage} edit(s) rest on an image that is not on file (image_missing in the ledger). File each image in the archive as soon as it can be had; the gate counts them until then.`); };
+if (dry) { console.log(`[dry] ${applied.length} edit(s) would apply cleanly; data.json not written`); reminder(); process.exit(0); }
 L.saveData(working);
 L.appendChange(rec);
 console.log(`applied ${applied.length} edit(s) — ${rec.id} recorded in ledger/changes.jsonl`);
+reminder();

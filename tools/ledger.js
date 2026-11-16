@@ -312,6 +312,124 @@ function quoteIn(src, quote) {
   return { ok, why: ok ? 'found' : 'not in our copy', files: a.files };
 }
 
+// ------------------------------------------------------------------ record images (R-0755)
+// A fact read from an image of a record needs that image on file, not only our typed reading of it.
+// On 16 Nov 2026 the audit found 123 cited register and newspaper images held as a hand text alone,
+// or as the empty page a JavaScript viewer saves: if the site went dark, nobody could re-read them.
+// An image (a picture, or a PDF) of a source can sit in five places, all learned from the archive:
+//   archive/store/<host>/<id>/      any picture in the source's own folder. state.json lists some;
+//                                   pages saved by hand from a browser are often not listed there
+//   archive/hand/<id>.jpg|.pdf|…    beside the keyed hand copy
+//   archive/hand/<date>-<site>-<item>-<n>.md   a dated record copy, its image under the same name
+//                                   (…-<n>.jpg, …-<n>a.jpg, …-<n>-viewer.jpg). The copy's header gives
+//                                   the addresses it was read at; the keyed <id>.txt made from it names it
+//   archive/hand/README.md          one row per filed image: the file, and the address it came from
+//   archive/family/<folder>/        a family paper's photographs and scans
+// A saved .html is never an image, whatever a browser draws from it: a viewer's page holds no record.
+const IMAGE_FILE = /\.(jpe?g|png|webp|tiff?|gif|pdf)$/i;
+// One spelling of an address, so "http://www.x/y/" in a header matches "https://x/y" on a card.
+const urlKey = u => String(u || '').trim().replace(/^https?:\/\/(www\.)?/i, '').replace(/\/+$/, '');
+function urlsIn(text) {
+  return (String(text || '').match(/https?:\/\/[^\s<>"'`|]+/g) || []).map(u => {
+    // a sentence's own punctuation after the address is not part of it: "(full image: https://…/x.jpg)."
+    for (let before; before !== u;) {
+      before = u;
+      u = u.replace(/[.,;:!?\]]+$/, '');
+      if (u.endsWith(')') && u.split('(').length < u.split(')').length) u = u.slice(0, -1);
+    }
+    return u;
+  });
+}
+// The comment lines at the head of a hand copy: where it was read, when, by whom, from what.
+const headerOf = text => { const out = []; for (const l of String(text).split('\n')) { if (l.startsWith('#')) out.push(l); else if (l.trim()) break; } return out; };
+let _img = null;
+function imageIndex() {
+  if (_img) return _img;
+  const handDir = path.join(ARCHIVE, 'archive', 'hand'), storeDir = path.join(ARCHIVE, 'archive', 'store');
+  const ls = d => { try { return fs.readdirSync(d); } catch (_) { return []; } };
+  const names = ls(handDir), pics = names.filter(f => IMAGE_FILE.test(f));
+  // the pictures filed under a dated copy's name; "…-1" must not take "…-10.jpg"
+  const beside = stem => pics.filter(f => f.startsWith(stem) && /^(-?[a-z][a-z0-9-]*)?\.[a-z]+$/i.test(f.slice(stem.length)));
+  const byUrl = new Map();
+  const add = (u, files) => { const k = urlKey(u); if (!k || !files.length) return; if (!byUrl.has(k)) byUrl.set(k, new Set()); files.forEach(f => byUrl.get(k).add(path.join(handDir, f))); };
+  for (const f of names) {
+    if (!/^\d{4}-\d\d-\d\d-.+\.md$/.test(f)) continue;
+    const imgs = beside(f.slice(0, -3));
+    if (!imgs.length) continue;
+    let head = []; try { head = headerOf(fs.readFileSync(path.join(handDir, f), 'utf8')); } catch (_) {}
+    for (const l of head) if (/^#\s*(url|image[\w ()]*|index)\s*:/i.test(l)) urlsIn(l).forEach(u => add(u, imgs));
+  }
+  let readme = ''; try { readme = fs.readFileSync(path.join(handDir, 'README.md'), 'utf8'); } catch (_) {}
+  for (const row of readme.split('\n')) {
+    const m = /^\|\s*`([^`]+)`\s*\|([^|]*)\|/.exec(row);
+    if (m && IMAGE_FILE.test(m[1]) && names.includes(m[1])) urlsIn(m[2]).forEach(u => add(u, [m[1]]));
+  }
+  // every folder of the store, by source id (the host's folder name is the archiver's business)
+  const store = new Map();
+  for (const host of ls(storeDir)) {
+    const hd = path.join(storeDir, host);
+    let st; try { st = fs.statSync(hd); } catch (_) { continue; }
+    if (!st.isDirectory()) continue;
+    for (const id of ls(hd)) { if (!store.has(id)) store.set(id, []); store.get(id).push(path.join(hd, id)); }
+  }
+  return (_img = { handDir, names, pics, beside, byUrl, store });
+}
+// Does the archive hold an image of this source, and where? { held, files, where }
+function recordImage(src) {
+  const out = { held: false, files: [], where: [] };
+  if (!src || !fs.existsSync(ARCHIVE)) return out;
+  const put = (where, files) => { files = files.filter(f => IMAGE_FILE.test(f) && !out.files.includes(f) && fs.existsSync(f)); if (files.length) { out.files.push(...files); out.where.push(where); } };
+  if (/^family:/.test(src)) {
+    const dir = path.join(ARCHIVE, 'archive', 'family', src.slice(7));
+    let st = null; try { st = fs.statSync(dir); } catch (_) {}
+    if (st) put('archive/family', st.isDirectory() ? fs.readdirSync(dir).map(f => path.join(dir, f)) : [dir]);
+  } else {
+    const I = imageIndex(), id = sourceId(src);
+    const s = archiveState()[id];
+    const listed = !s ? [] : [s.file, ...(s.files || []), ...((s.pages || []).map(p => p.file)), s.lastGood && s.lastGood.file].filter(Boolean);
+    put('archive/store', listed.map(f => path.join(ARCHIVE, 'archive', 'store', f)));
+    for (const dir of I.store.get(id) || []) { let fl = []; try { fl = fs.readdirSync(dir); } catch (_) {} put('archive/store', fl.map(f => path.join(dir, f))); }
+    put('archive/hand', I.pics.filter(f => f.startsWith(id + '.')).map(f => path.join(I.handDir, f)));
+    // the keyed hand copy says which dated copy it was made from, and sometimes names the picture itself
+    let head = ''; try { head = headerOf(fs.readFileSync(path.join(I.handDir, id + '.txt'), 'utf8')).join('\n'); } catch (_) {}
+    const namedCopies = head.match(/\d{4}-\d\d-\d\d-[\w.-]+?\.md\b/g) || [];
+    put('a dated copy in archive/hand', namedCopies.flatMap(m => I.beside(m.slice(0, -3))).map(f => path.join(I.handDir, f)));
+    put('archive/hand', (head.match(/[\w.-]+\.(?:jpe?g|png|webp|tiff?|gif|pdf)\b/gi) || []).filter(f => I.names.includes(f)).map(f => path.join(I.handDir, f)));
+    put('a dated copy in archive/hand', [...(I.byUrl.get(urlKey(src)) || [])]);
+  }
+  out.held = out.files.length > 0;
+  return out;
+}
+// Is this address a picture of a record, by what it is? A register page in an archive's viewer, a
+// film image, a newspaper page: what a browser shows there is an image, and any text we hold of it
+// is somebody's reading. A hand copy that says it was read from an image counts the same way.
+const IMAGE_SOURCE = [
+  /^https?:\/\/[^/]+\/ark:\/\d+\/[^/]+\/(dao\/|[0-9a-f]{8}-[0-9a-f]{4}-)/i,     // one page of a register in an archive's viewer
+  /^https?:\/\/(www\.)?familysearch\.org\/ark:\/61903\/3:/i,                  // a film image
+  /^https?:\/\/idnc\.library\.[^/]+\//i,                                     // newspaper pages: three collections
+  /^https?:\/\/(www\.|chroniclingamerica\.|tile\.)?loc\.gov\//i,
+  /^https?:\/\/([a-z0-9-]+\.)?newspapers\.com\//i,
+];
+function imageSource(src) {
+  if (!src || /^family:/.test(src) || src === 'owner') return false;
+  if (IMAGE_SOURCE.some(re => re.test(src))) return true;
+  let head = [];
+  try { head = headerOf(fs.readFileSync(path.join(ARCHIVE, 'archive', 'hand', sourceId(src) + '.txt'), 'utf8')); } catch (_) { return false; }
+  // "# image: <where the picture is>" or "Read by hand from the archive's own image". A line that
+  // names a text file or an OCR layer describes words somebody else's machine read, not a picture,
+  // and "# image: none" says the site shows the record as text.
+  return head.some(l => !/\.txt\b|OCR text/i.test(l) &&
+    (/^#\s*images?(\(s\))?( address)?\s*:\s*(?!\s|none\b)/i.test(l) || /\bread (by hand )?from (the|an)\b[^.;]*\bimages?\b/i.test(l)));
+}
+// What kind of copy we hold, in the words tools/card.js prints.
+function copyKind(src) {
+  const a = archived(src);
+  if (!a.held) return 'not held';
+  if (recordImage(src).held) return 'image';
+  if (imageSource(src)) return 'typed reading only';
+  return a.text ? 'page text' : 'no words and no image';
+}
+
 // ------------------------------------------------------------------ register
 // ledger/register.jsonl: one settled question per line. See OPERATING.md, "The register".
 function loadRegister() {
@@ -488,7 +606,7 @@ module.exports = {
   ROOT, LEDGER, ARCHIVE, DATA, serialize, hashData, loadData, saveData, cards, label, findCard, nextId,
   parsePath, resolve, getField, setField, twin, isFrench, leaves, family,
   years, numbers, multiset, properNouns, normText,
-  sourceId, archived, quoteIn, archiveState,
+  sourceId, archived, quoteIn, archiveState, recordImage, imageSource, copyKind, IMAGE_FILE,
   loadRegister, locksFor, loadChanges, appendChange, chain,
   lockState, assertLock, LOCK,
   git, readEnc, fingerprint, decryptEnc, payloadAt, history, mapIds, leafFamily,

@@ -224,6 +224,81 @@ console.log('== the gazetteer path');
   ok(refused && root.unions[0].c[0].gaz === undefined, 'a card that is not the root cannot be given a gazetteer');
 }
 
+console.log('== an image on file for a fact read from an image');
+{
+  // Six invented register pages, each held as our typed reading, and one image filed in each place the
+  // archive keeps them. The addresses have the shape of a page in an archive's viewer.
+  const page = n => `https://example.invalid/ark:/12345/reg${n}/0a1b2c3d-1111-2222-3333-44445555666${n}`;
+  const hand = path.join(ARCH, 'archive', 'hand');
+  const reading = (u, head = '') => fs.writeFileSync(path.join(hand, sid(u) + '.txt'),
+    `# url: ${u}\n# captured: 2026-09-02\n${head}\nEntry 12. Wendelin Quillfeather, clerk at the mill.\n`);
+  const jpg = f => fs.writeFileSync(f, 'not really a jpeg');
+  const [P_NONE, P_HAND, P_NAMED, P_HEADER, P_ROW, P_STORE] = [1, 2, 3, 4, 5, 6].map(page);
+  reading(P_NONE);
+  reading(P_HAND); jpg(path.join(hand, sid(P_HAND) + '.jpg'));
+  reading(P_NAMED, '# Keyed copy; the text is 2026-09-02-example-yc1-1.md word for word.\n');
+  fs.writeFileSync(path.join(hand, '2026-09-02-example-yc1-1.md'), '# url: no address of its own\n\nEntry 12.\n');
+  jpg(path.join(hand, '2026-09-02-example-yc1-1.jpg'));
+  jpg(path.join(hand, '2026-09-02-example-yc1-10.jpg'));      // another copy's picture: "…-1" must not take it
+  reading(P_HEADER);
+  fs.writeFileSync(path.join(hand, '2026-09-02-example-yc1-2.md'), `# url: ${P_HEADER} (the page in the viewer).\n# captured: 2026-09-02\n\nEntry 12.\n`);
+  jpg(path.join(hand, '2026-09-02-example-yc1-2a.jpg'));
+  reading(P_ROW);
+  jpg(path.join(hand, '2026-09-02-example-yc1-30.jpg'));
+  fs.writeFileSync(path.join(hand, 'README.md'), '| image | from | bytes | sha256 | copy | how | filed |\n|---|---|---|---|---|---|---|\n' +
+    `| \`2026-09-02-example-yc1-30.jpg\` | ${P_ROW} (register 5, view 30) | 17 | x | \`2026-09-02-example-yc1-pages.md\` | saved from the viewer | 2 Sep 2026 |\n`);
+  reading(P_STORE);
+  // two copies that are words, not readings of a picture: a record the site shows as text, and a book's OCR layer
+  const TEXT_REC = 'https://example.invalid/record/text-only', OCR_BOOK = 'https://example.invalid/details/a-county-history';
+  reading(TEXT_REC, '# image: none: the site shows this record as text only\n');
+  reading(OCR_BOOK, '# image: https://example.invalid/stream/a-county-history_djvu.txt (OCR text layer)\n');
+  // and one whose address says nothing, but whose hand copy says it was read from the archive's image
+  const BY_HEADER = 'https://example.invalid/servlet/document?id=26273';
+  reading(BY_HEADER, '# Read by hand from the archive\'s own image, full-size JPEG.\n# image: https://example.invalid/images/26273.jpg (view 12 of 309)\n');
+  fs.mkdirSync(path.join(ARCH, 'archive', 'store', 'example.invalid', sid(P_STORE)), { recursive: true });
+  jpg(path.join(ARCH, 'archive', 'store', 'example.invalid', sid(P_STORE), 'register-6-view-12.jpg'));   // saved by hand: not in state.json
+  for (const [dir, files] of [['2026-09-03-letter-with-scan', ['README.md', 'page-1.jpg']], ['2026-09-03-letter-typed-only', ['README.md']]]) {
+    fs.mkdirSync(path.join(ARCH, 'archive', 'family', dir), { recursive: true });
+    for (const f of files) fs.writeFileSync(path.join(ARCH, 'archive', 'family', dir, f), f.endsWith('.md') ? 'Wendelin was a clerk at the mill.\n' : 'not really a jpeg');
+  }
+  const fact = ev => ({ why: 'test', edits: [{ card: 'c002', field: 'note', find: 'Clerk', replace: 'Mill clerk', kind: 'fact', evidence: [{ opened: today, ...ev }] }] });
+  const quote = 'clerk at the mill';
+
+  r = change(fact({ src: P_NONE, quote }), ['--dry']);
+  ok(r.code === 1 && /holds no image/.test(r.out) && /archive\/hand\/[0-9a-f]{12}\.jpg/.test(r.out) && /"no_image"/.test(r.out),
+    'a quote from our typed reading of a register page is refused while no image of the page is on file, and the refusal says where to file it');
+  r = change(fact({ src: URL_A, read: 'image', transcription: 'He came to Valeton in 1908.' }), ['--dry']);
+  ok(r.code === 1 && /holds no image/.test(r.out), 'so is "read": "image" from a source held as text only');
+  r = change(fact({ src: URL_D, read: 'image', transcription: quote }), ['--dry']);
+  ok(r.code === 1 && /holds no image/.test(r.out), 'a viewer\'s saved .html is not an image of the record, though the archive lists it as held');
+  r = change(fact({ src: 'family:2026-09-03-letter-typed-only', read: 'image', transcription: quote }), ['--dry']);
+  ok(r.code === 1 && /archive\/family\/2026-09-03-letter-typed-only\//.test(r.out), 'a family paper read from a photograph needs the photograph in its folder');
+
+  const places = [[URL_B, 'the source\'s store folder, listed in state.json'], [P_STORE, 'the store folder, saved by hand and not listed'],
+    [P_HAND, 'archive/hand/<id>.jpg'], [P_NAMED, 'a dated copy the keyed copy names'], [P_HEADER, 'a dated copy whose header gives the address'],
+    [P_ROW, 'a row of archive/hand/README.md'], ['family:2026-09-03-letter-with-scan', 'a family paper\'s folder']];
+  for (const [src, where] of places) {
+    r = change(fact({ src, read: 'image', transcription: quote }), ['--dry']);
+    ok(r.code === 0 && L.recordImage(src).held, `accepted with the image in ${where}`);
+  }
+  ok(!L.recordImage(P_NONE).held && !L.recordImage(URL_D).held && !L.recordImage(URL_A).held, 'the resolver finds no image where there is none');
+  ok(L.recordImage(P_NAMED).files.map(f => path.basename(f)).join() === '2026-09-02-example-yc1-1.jpg', 'the copy "…-1" does not take the picture "…-10.jpg" for its own');
+  ok(L.imageSource(P_NONE) && !L.imageSource(URL_A) && L.copyKind(P_NONE) === 'typed reading only' && L.copyKind(P_HAND) === 'image' && L.copyKind(URL_A) === 'page text',
+    'card.js can say which kind of copy is held: an image, page text, or a typed reading only');
+  ok(!L.imageSource(TEXT_REC) && !L.imageSource(OCR_BOOK) && L.imageSource('https://example.invalid/other/7') === false,
+    'a hand copy that says "image: none", or that names an OCR text, is not taken for a reading of an image');
+  r = change(fact({ src: BY_HEADER, quote }), ['--dry']);
+  ok(L.imageSource(BY_HEADER) && r.code === 1 && /holds no image/.test(r.out), 'a hand copy that says it was read from an image makes its source one, whatever the address looks like');
+
+  r = change(fact({ src: P_NONE, quote, no_image: 'sign-in needed' }), ['--dry']);
+  ok(r.code === 1 && /at least 20 characters/.test(r.out), 'a "no_image" too short to say why and what will fetch it is refused');
+  const why = 'the archive refuses downloads from this machine; a chat at the main computer will save it';
+  r = change(fact({ src: P_NONE, quote, no_image: why }));
+  const last = fs.readFileSync(path.join(T, 'ledger', 'changes.jsonl'), 'utf8').trim().split('\n').map(l => JSON.parse(l)).pop();
+  ok(r.code === 0 && /REMINDER: 1 edit/.test(r.out) && last.edits[0].image_missing === true && last.edits[0].no_image[0].src === P_NONE && last.edits[0].no_image[0].why === why,
+    'with "no_image" the edit applies, the ledger marks it image_missing with the reason, and change.js prints a reminder');
+}
+
 fs.rmSync(T, { recursive: true, force: true });
 console.log(`\n${pass} passed, ${failN} failed`);
 process.exit(failN ? 1 : 0);

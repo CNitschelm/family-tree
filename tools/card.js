@@ -42,7 +42,8 @@ W('\n-- sources and what the archive holds --');
 const urls = [...new Set([...(n.src || []).map(s => s.u), ...(pr.sources || []).map(s => s.url)].filter(Boolean))];
 for (const u of urls) {
   const a = L.archived(u);
-  const how = a.held ? `${a.kind}${a.text ? ', text' : ', no text layer — read the image/PDF'}` : `NOT HELD (${a.why})`;
+  // which kind of copy: an image of the record, the page's own text, or only our typed reading of an image (R-0755)
+  const how = a.held ? `${a.kind}${a.text ? ', text' : ', no text layer — read the image/PDF'}; held as: ${L.copyKind(u)}` : `NOT HELD (${a.why})`;
   W(`  ${a.held ? '✓' : '✗'} ${u}\n      ${how}${a.files && a.files.length ? '\n      ' + a.files.map(f => f.replace(L.ARCHIVE, '<archive>')).join('\n      ') : ''}`);
 }
 const noUrl = (n.src || []).filter(s => !s.u);

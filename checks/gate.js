@@ -12,7 +12,8 @@
  *      in ledger/changes.jsonl — nothing edited by hand, nothing carried in from a stale
  *      copy, nothing lost (this is how a UI commit once undid a week of findings unseen);
  *   3. every edit's evidence still holds against the archive: its quote is in our copy of
- *      the source, and a "no record says X" is still true of that copy;
+ *      the source, and a "no record says X" is still true of that copy (it also counts the edits
+ *      marked image_missing: read from an image that is not on file yet; that never fails the gate);
  *   4. every register entry an edit cites exists, and nothing reuses a retired card id;
  *   5. tests/run.js and tests/research.js pass, and the prose linter finds no new HIGH on any card;
  *   6. research.json is valid, media/research.bin and research-cards.bin are exactly what it makes, and
@@ -108,6 +109,15 @@ for (const e of edits) {
   }
 }
 console.log(`  ok  ${checked} evidence item(s) re-checked`);
+// A fact read from an image needs the image on file (R-0755). change.js lets an edit through without it
+// only when the edit says why ("no_image"), and marks it image_missing. They are counted here, on every
+// run, so a missing image stays in view until it is filed. Edits made before the rule are not re-judged.
+const noImage = edits.filter(e => e.image_missing);
+if (noImage.length) {
+  console.log(`  !!  ${noImage.length} edit(s) rest on an image that is not on file yet (image_missing). File each in the archive when it can be had:`);
+  for (const e of noImage) for (const m of (e.no_image || []))
+    console.log(`        ${e.cs} ${e.card} ${e.field || e.list || e.op}: ${m.src} (${m.why})`);
+} else console.log('  ok  no edit in this trail is marked image_missing');
 
 // ---------------------------------------------------------------- 4. register citations, ids
 section('4. register and card ids');
@@ -199,4 +209,4 @@ section('7. the public numbers (stats.json)');
 
 finish();
 fs.writeFileSync(STAMP, `${enc.iv}\n${new Date().toISOString()} PASS ${trail.length} change set(s) ${edits.length} edit(s) over ${base}\n`);
-console.log(`\nGATE: PASS — ${trail.length} change set(s), ${edits.length} edit(s). .gate-stamp written for iv ${enc.iv}; commit in GitHub Desktop.`);
+console.log(`\nGATE: PASS — ${trail.length} change set(s), ${edits.length} edit(s), ${noImage.length} with an image still to file (image_missing). .gate-stamp written for iv ${enc.iv}; commit in GitHub Desktop.`);
