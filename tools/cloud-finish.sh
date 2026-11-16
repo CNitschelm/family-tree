@@ -257,7 +257,7 @@ ft_ready || die "cloud-setup.sh has not finished in this session. Run it; if it 
 
 # ------------------------------------------------------------------ 1. nothing private outside the private repo
 SESSION_LOCAL=" data.json .data-stamp .gate-stamp .research-stamp .password .owner-key index.html.new _to_delete node_modules "
-REBUILT=" checks/claim-index.json checks/diff.json checks/findings.json checks/pin-audit.json "
+REBUILT=" checks/claim-index.json checks/diff.json checks/findings.json "
 orphans=""
 while IFS= read -r top; do
   [ -z "$top" ] && continue
