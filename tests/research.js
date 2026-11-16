@@ -12,7 +12,9 @@
  *                        family's copy and nothing more, byte for byte the same when nothing they show changed;
  *                        where our copy of each read is (`_copy`, 16 Nov 2026, register R-0759): private, checked
  *                        against the source archive, and asked for before a source is found, none or done;
- *                        show <investigation> prints each source's newest log entries only
+ *                        show <investigation> prints each source's newest log entries only; every command
+ *                        that writes needs the writer lock, held by FT_WHO, and never in a read-only session;
+ *                        a save through a link goes to the link's target and leaves the link in place
  *   githooks/commit-msg  §0c: the two research files are committed only as research.js built them, and never
  *                        committed as deleted
  *   tools/crypt.js       a file that a page browsers may still hold uses (the live one, origin/main, or the
@@ -35,7 +37,7 @@ const section = t => console.log('\n== ' + t);
 
 /* a throwaway repo with the real tools in it */
 fs.mkdirSync(path.join(T, 'tools')); fs.mkdirSync(path.join(T, 'githooks')); fs.mkdirSync(path.join(T, 'ledger'));
-for (const f of ['tools/research.js', 'tools/payload.js', 'tools/crypt.js', 'tools/check-commit-msg.js'])
+for (const f of ['tools/research.js', 'tools/payload.js', 'tools/crypt.js', 'tools/check-commit-msg.js', 'tools/ledger.js'])
   fs.copyFileSync(path.join(SRC, f), path.join(T, f));
 /* the hook as sh reads it: a checkout with Windows line endings must not fail the test for that alone */
 fs.writeFileSync(path.join(T, 'githooks', 'commit-msg'), fs.readFileSync(path.join(SRC, 'githooks', 'commit-msg'), 'utf8').replace(/\r\n/g, '\n'));
@@ -45,8 +47,12 @@ fs.mkdirSync(path.join(ARCH, 'archive', 'hand'), { recursive: true });
 fs.writeFileSync(path.join(ARCH, 'archive', 'hand', 'booklet-pages.md'), 'Pages 1 to 4 read. No miller is named.\n');
 fs.writeFileSync(path.join(ARCH, 'archive', 'hand', 'booklet-p3.jpg'), 'an invented image');
 fs.writeFileSync(path.join(T, 'outside.txt'), 'not in the archive');
-const env = { ...process.env, FT_ROOT: T, FT_RESEARCH: path.join(T, 'research.json'), FT_ARCHIVE: ARCH };
-delete env.FT_PASSWORD;
+/* the writer lock, held by this test: research.js writes only under it. FT_LEDGER too, for the same reason as FT_ARCHIVE */
+const WHO = 'research-test';
+const lock = (who, hoursAgo) => fs.writeFileSync(path.join(T, 'ledger', 'LOCK'), who ? JSON.stringify({ who, what: 'a test', since: new Date(Date.now() - (hoursAgo || 0) * 3600e3).toISOString() }) + '\n' : 'free\n');
+lock(WHO);
+const env = { ...process.env, FT_ROOT: T, FT_RESEARCH: path.join(T, 'research.json'), FT_ARCHIVE: ARCH, FT_LEDGER: path.join(T, 'ledger'), FT_WHO: WHO };
+delete env.FT_PASSWORD; delete env.FT_READONLY;
 const RJ = require(path.join(T, 'tools', 'research.js'));
 const P = require(path.join(T, 'tools', 'payload.js'));
 const git = (...a) => execFileSync('git', a, { cwd: T, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
@@ -335,6 +341,77 @@ section('show <investigation> prints the newest log entries; long entries and ca
   r = run('validate');
   ok(r.status === 0 && r.stdout.split('\n').filter(l => /decision card or item/.test(l)).length === 1 && /NOTE\s+2 log entries the family reads name a decision card or item/.test(r.stdout),
     'validate counts the family-visible log entries that name one, as whole words, in one line');
+}
+
+// ------------------------------------------------------------------ one writer (16 Nov 2026)
+section('every command that writes needs the writer lock');
+{
+  const runAs = (e, ...a) => spawnSync(process.execPath, [path.join(T, 'tools', 'research.js'), ...a], { cwd: T, env: Object.assign({}, env, e), encoding: 'utf8' });
+  const run = (...a) => runAs({}, ...a);
+  const said = r => (r.stdout + r.stderr).replace(/\s+/g, ' ');
+  const file = path.join(T, 'research.json');
+  fs.writeFileSync(file, JSON.stringify(research(), null, 1));
+  const text = () => fs.readFileSync(file, 'utf8'), start = text();
+  const LOG = ['log', 's1', 'The neighbour went.', 'La voisine y est allée.'];
+  const refused = (r, re) => r.status !== 0 && /REFUSED/.test(r.stderr) && /Nothing was written/.test(said(r)) && re.test(said(r)) && text() === start;
+  const TAKE = /bash tools\/cloud-lock\.sh take "[^"]+" "<what>"/;
+  lock(null);
+  let r = run(...LOG);
+  ok(refused(r, /nobody holds the writer lock/) && TAKE.test(said(r)) && said(r).includes('take "' + WHO + '"'), 'with the lock free a write is refused, nothing is written, and the message gives the command to take it');
+  fs.rmSync(path.join(T, 'ledger', 'LOCK'));
+  ok(refused(run(...LOG), /nobody holds the writer lock/), 'the same with no lock file at all');
+  lock('another-session');
+  r = run(...LOG);
+  ok(refused(r, /held by "another-session"/) && /Wait until it is free/.test(said(r)) && TAKE.test(said(r)), 'held by another session: refused, with who holds it and what to do');
+  lock(WHO);
+  r = runAs({ FT_WHO: '' }, ...LOG);
+  ok(refused(r, /FT_WHO is not set/) && /\. ~\/\.ft-env/.test(said(r)), 'held, but this shell does not say who it is (no FT_WHO): refused, with how to say it');
+  lock(WHO, 13);
+  r = run(...LOG);
+  ok(refused(r, /over 12 hours ago/) && TAKE.test(said(r)), 'a lock over 12 hours old no longer counts, the holder\'s own included: refused, with the command to take it again');
+  lock(WHO);
+  r = runAs({ FT_READONLY: '1' }, ...LOG);
+  ok(refused(r, /read-only \(FT_READONLY=1\)/), 'a read-only session writes nothing, lock or no lock');
+  lock(null);
+  const WRITES = [['set', 's2', 'next=Read it.', 'next_fr=La lire.'], LOG, ['answer', 'i1', '1', 'Yes.', 'Oui.'], ['state', 'i1', '1', 'lead'], ['inv', 'i1', 'imp=3'],
+    ['add-source', 'i1', '1', '{"t":"A list","t_fr":"Une liste","st":"todo"}'], ['add-question', 'i1', '{"q":"Why?","q_fr":"Pourquoi ?","state":"open","src":[{"t":"A list","t_fr":"Une liste","st":"todo"}]}'],
+    ['add-inv', '{}'], ['decide', 'https://claude.ai/artifact/TestDecisionsPage1'], ['copy', 's2', 'archive/hand/booklet-pages.md'], ['build'], ['link', '--write']];
+  const through = WRITES.filter(w => !refused(run(...w), /nobody holds the writer lock/)).map(w => w[0]);
+  ok(!through.length, 'every command that writes is refused without it: ' + WRITES.map(w => w[0]).join(', ') + (through.length ? ' — NOT refused: ' + through.join(', ') : ''));
+  const READS = [['status'], ['show', 'i1'], ['validate'], ['check'], ['link']];
+  const stopped = READS.filter(w => /writer lock|REFUSED/.test(said(run(...w)))).map(w => w[0]);
+  ok(!stopped.length && run('status').status === 0 && run('show', 's1').status === 0 && run('validate').status === 0, 'the commands that only read need no lock: ' + READS.map(w => w[0]).join(', ') + (stopped.length ? ' — stopped: ' + stopped.join(', ') : ''));
+  ok(RJ.writerProblem({ FT_WHO: WHO }) !== '' && RJ.writerProblem({ FT_WHO: WHO, FT_READONLY: '1' }) !== '', 'the reason is the same for a caller that asks (writerProblem)');
+  lock(WHO);
+  r = run(...LOG);
+  ok(r.status === 0 && text() !== start, 'with the lock held by FT_WHO the write goes through' + (r.status ? ' (' + said(r).slice(0, 200) + ')' : ''));
+}
+
+// ------------------------------------------------------------------ a save never replaces a link
+section('a save through a link goes to the link\'s target');
+{
+  /* the site folder's research.json is a link into the private repo; a save by rename onto it would leave a
+     plain copy in its place, and the private repo, which is what is pushed, would keep the old data */
+  const priv = path.join(T, 'private'), real = path.join(priv, 'research.json'), linkAt = path.join(T, 'linked', 'research.json');
+  fs.mkdirSync(priv); fs.mkdirSync(path.dirname(linkAt));
+  fs.writeFileSync(real, JSON.stringify(research(), null, 1));
+  let made = true; try { fs.symlinkSync(path.join('..', 'private', 'research.json'), linkAt); } catch (_) { made = false; }
+  if (!made) ok(true, '(this machine cannot make links: skipped)');
+  else {
+    const r = spawnSync(process.execPath, [path.join(T, 'tools', 'research.js'), 'log', 's1', 'The neighbour went.', 'La voisine y est allée.'], { cwd: T, env: Object.assign({}, env, { FT_RESEARCH: linkAt }), encoding: 'utf8' });
+    ok(r.status === 0 && fs.lstatSync(linkAt).isSymbolicLink(), 'after a write the link is still a link' + (r.status ? ' (' + (r.stdout + r.stderr).trim().split('\n')[0] + ')' : ''));
+    ok(!fs.lstatSync(real).isSymbolicLink() && (RJ.find(JSON.parse(fs.readFileSync(real, 'utf8')), 's1').s.log || []).length === 1, 'and the new entry is in the file it points to');
+    ok(/is a link, so the save went to the file it points to/.test(r.stdout), 'the command says where the save went');
+    ok(!fs.existsSync(linkAt + '.new') && !fs.existsSync(real + '.new') && fs.readdirSync(path.dirname(linkAt)).length === 1, 'nothing is left beside either');
+    /* a link to a link, and a link whose target is gone */
+    const link2 = path.join(T, 'linked', 'again.json'); fs.symlinkSync('research.json', link2);
+    const R = JSON.parse(fs.readFileSync(real, 'utf8')); R.investigations[0].next = 'Read the ledger twice.';
+    ok(RJ.save(R, link2) === fs.realpathSync(real) && fs.lstatSync(link2).isSymbolicLink() && fs.lstatSync(linkAt).isSymbolicLink() && /twice/.test(fs.readFileSync(real, 'utf8')), 'a link to a link is followed to the end, and both links stay');
+    const dead = path.join(T, 'linked', 'dead.json'); fs.symlinkSync(path.join('..', 'private', 'gone.json'), dead);
+    let err = null; try { RJ.save(R, dead); } catch (e) { err = e; }
+    ok(err && err.refused && /cloud-setup\.sh/.test(err.message) && fs.lstatSync(dead).isSymbolicLink() && !fs.existsSync(path.join(priv, 'gone.json')), 'a link whose target is gone is refused, with the fix, and is left as it is');
+    ok(RJ.save(R, real) === real, 'a plain file is saved where it is');
+  }
 }
 
 // ------------------------------------------------------------------ link

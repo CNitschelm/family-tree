@@ -56,6 +56,13 @@
  * a "Your decisions" link, only on a device opened once with #owner; the decisions page itself is guarded by his
  * claude.ai login, so the buttons only save him a search.
  *
+ * One writer (16 Nov 2026): every command that writes (set, log, answer, state, inv, add-…, decide, copy,
+ * link --write, build) refuses unless the writer lock (ledger/LOCK, tools/lock.js) is held, under 12 hours
+ * old, by the name in FT_WHO, which `bash tools/cloud-lock.sh take "<who>" "<what>"` sets; and it refuses in a
+ * read-only session (FT_READONLY=1). Two sessions writing research.json at once lose one side's entries.
+ * research.json is saved by rename, and a rename onto a link replaces the link with a copy that is lost with
+ * the machine: when the path is a link (the site folder's research.json is one), the save goes to its target.
+ *
  * Every command that changes research.json stamps the date on what it touched (`updated` on the
  * investigation and on the file, and the date of a log line; pass --date for the day it happened, if not
  * today), and records the real time of the edit as `_touched` on each item it changed (the gate's proof
@@ -117,7 +124,17 @@ function load(file = FILE) {
   try { txt = fs.readFileSync(file, "utf8"); } catch (e) { throw new Error("no research file at " + file + " (" + (e.code || e.message) + ")"); }
   return JSON.parse(txt);
 }
-function save(R, file = FILE) {
+/* Saves by rename, so never onto a link: a rename would put a plain file where the link was, and the private
+   repo, where the link points, would keep the old data and lose the new with the machine. The save goes to
+   the link's target instead (load reads through the link, so that is the file that was read). Returns the
+   path it wrote. */
+function save(R, given = FILE) {
+  let file = given, st = null;
+  try { st = fs.lstatSync(given); } catch (_) {}
+  if (st && st.isSymbolicLink()) {
+    try { file = fs.realpathSync(given); }
+    catch (_) { throw refusal(given + " is a link to a file that is not there, so nothing was saved. Run bash tools/cloud-setup.sh (it puts the private files and their links back), then run this command again."); }
+  }
   const out = JSON.stringify(R, null, 1) + "\n";
   fs.writeFileSync(file + ".new", out);
   if (fs.readFileSync(file + ".new", "utf8") !== out) throw new Error("staging write did not land");
@@ -127,6 +144,31 @@ function save(R, file = FILE) {
     if (fs.readFileSync(file, "utf8") !== out) throw new Error("in-place write was truncated; the full file is at " + file + ".new");
     try { fs.rmSync(file + ".new", { force: true }); } catch (_) {}
   }
+  return file;
+}
+/* a refusal is printed as REFUSED, with what to do next: unattended runs follow these messages */
+const refusal = msg => Object.assign(new Error(msg), { refused: true });
+
+/* ---------- one writer (OPERATING.md, "One writer") ---------- */
+const WRITES = new Set(["set", "log", "answer", "state", "inv", "add-source", "add-question", "add-inv", "decide", "copy", "build"]);
+const TAKE = who => 'bash tools/cloud-lock.sh take "' + (who || "<who>") + '" "<what>"';
+/* why this shell may not write now, or "": the lock is read by tools/ledger.js, as lock.js and change.js read it */
+function writerProblem(env = process.env) {
+  if (env.FT_READONLY === "1") return "this session was set up read-only (FT_READONLY=1): it writes nothing and pushes nothing. Record this from a session that may write: start one with bash tools/cloud-setup.sh (without FT_READONLY), take the lock there (" + TAKE() + ") and run the command again.";
+  let l;
+  try { l = require("./ledger.js").lockState(); }
+  catch (e) { return "the writer lock cannot be read (tools/ledger.js does not load: " + e.message.split("\n")[0] + "). Put the file back (git checkout -- tools/ledger.js) and run this again."; }
+  const who = env.FT_WHO || "";
+  if (!l) return "nobody holds the writer lock. Take it first:  " + TAKE(who) + "  Then run this command again, in a new shell or after  . ~/.ft-env  (the lock's holder is read from FT_WHO).";
+  const held = 'the writer lock is held by "' + l.who + '" since ' + l.since + (l.what ? " (" + l.what + ")" : "");
+  if (l.stale) return held + ", over 12 hours ago, so it no longer counts" + (l.who === who ? " and another session may take it" : "") + ". Take it again:  " + TAKE(who || undefined) + "  (if that is refused because the site has uncommitted changes, commit media/research.bin and media/research-cards.bin first). Then run this command again.";
+  if (!who) return held + ", and this shell does not say who it is (FT_WHO is not set). If this session took the lock, run  . ~/.ft-env  (or open a new shell) and run this command again. If not, wait until it is free (bash tools/cloud-lock.sh status), then:  " + TAKE();
+  if (l.who !== who) return held + ": another session is writing, and this one is \"" + who + "\". Wait until it is free (bash tools/cloud-lock.sh status), then take it:  " + TAKE(who) + "  and run this command again.";
+  return "";
+}
+function assertWriter(cmd) {
+  const why = writerProblem();
+  if (why) throw refusal("research.js " + cmd + " writes research.json and the research files in media/, and " + why + " Nothing was written.");
 }
 const today = () => new Date().toISOString().slice(0, 10);
 const isDate = d => /^\d{4}-\d{2}-\d{2}$/.test(d) && !isNaN(Date.parse(d + "T00:00:00Z")) && new Date(d + "T00:00:00Z").toISOString().slice(0, 10) === d;
@@ -162,16 +204,16 @@ function copyShape(v) {
 function archivePath(given, root = ARCHIVE) {
   let base;
   try { base = fs.realpathSync(root); } catch (_) {
-    throw new Error("there is no source archive at " + root + ", so a copy cannot be checked. Set FT_ARCHIVE to the family-tree-sources clone (bash tools/cloud-setup.sh does it), then run this again.");
+    throw refusal("there is no source archive at " + root + ", so a copy cannot be checked. Set FT_ARCHIVE to the family-tree-sources clone (bash tools/cloud-setup.sh does it), then run this again.");
   }
   const abs = path.isAbsolute(given) ? given : path.join(base, given);
   let real;
   try { real = fs.realpathSync(abs); } catch (_) {
-    throw new Error(JSON.stringify(given) + " is not in the source archive (" + base + "). File the copy there first, then give its path from the archive's root, such as archive/hand/<file>.");
+    throw refusal(JSON.stringify(given) + " is not in the source archive (" + base + "). File the copy there first, then give its path from the archive's root, such as archive/hand/<file>.");
   }
   const rel = path.relative(base, real).split(path.sep).join("/");
-  if (!rel || rel.startsWith("../") || rel === ".." || path.isAbsolute(rel)) throw new Error(JSON.stringify(given) + " is outside the source archive (" + base + "). A copy is a file or folder inside it: file it there, then give that path.");
-  if (!relOk(rel)) throw new Error(JSON.stringify(given) + " cannot be recorded as an archive path (" + rel + "): rename the file without odd characters, then run this again.");
+  if (!rel || rel.startsWith("../") || rel === ".." || path.isAbsolute(rel)) throw refusal(JSON.stringify(given) + " is outside the source archive (" + base + "). A copy is a file or folder inside it: file it there, then give that path.");
+  if (!relOk(rel)) throw refusal(JSON.stringify(given) + " cannot be recorded as an archive path (" + rel + "): rename the file without odd characters, then run this again.");
   return rel;
 }
 /* the sources that say they were consulted (found, none, done) and record no copy */
@@ -194,7 +236,7 @@ const COPY_NONE = id => "node tools/research.js copy " + id + ' "none: <why>"';
 /* a source may be set to found, none or done only with its copy on record */
 function needCopy(s, how) {
   if (!CLOSED.has(s.st) || s._copy !== undefined) return;
-  throw new Error("source " + s.id + " would be " + JSON.stringify(s.st) + " (consulted) with no record of where our copy of what was read is (register R-0759). " + how);
+  throw refusal("source " + s.id + " would be " + JSON.stringify(s.st) + " (consulted) with no record of where our copy of what was read is (register R-0759). " + how);
 }
 
 /* ---------- what the tree's cards need ---------- */
@@ -582,6 +624,7 @@ function main(argv) {
   if (li >= 0 && !/^(all|\d{1,4})$/.test(logArg || "")) throw new Error("--log takes all, or how many of each source's newest log entries to show (--log 10)");
   const keepLog = logArg === undefined ? SHOW_LOG : logArg === "all" ? Infinity : +logArg;
   const cmd = args.shift();
+  if (WRITES.has(cmd) || (cmd === "link" && writeLink)) assertWriter(cmd + (cmd === "link" ? " --write" : ""));
   const R = load();
   const touch = iv => { if (!iv.updated || iv.updated < day) iv.updated = day; if (!R.updated || R.updated < day) R.updated = day; };
   /* the real time of this edit, on each item it changed (never back-dated: the gate checks claims against it) */
@@ -591,8 +634,9 @@ function main(argv) {
     const v = validate(R);
     v.warnings.forEach(w => console.log("  note  " + w));
     if (v.errors.length) { console.error("REFUSED — research.json would not validate; nothing was written:\n" + v.errors.map(e => "  - " + e).join("\n")); process.exit(1); }
-    save(R);
+    const at = save(R);
     console.log(msg);
+    if (at !== FILE) console.log("note: " + FILE + " is a link, so the save went to the file it points to, " + at + " (the link is untouched)");
     const pw = password();
     if (!pw) { console.log("note: no password here, so media/research*.bin were NOT rebuilt — run node tools/research.js build where .password is"); return; }
     build(R, pw);
@@ -653,7 +697,7 @@ function main(argv) {
       const was = o.st;
       const allowed = ["st", "who", "who_fr", "since", "next", "next_fr", "why", "why_fr", "where", "where_fr", "how", "how_fr", "by", "visit", "t", "t_fr", "dec", "pri", "pos", "access", "access_fr"];
       for (const [k, v] of Object.entries(kv)) {
-        if (k === "_copy" || k === "copy") throw new Error("set does not record a copy (it has to be checked against the source archive). Use:  " + COPY_HOW(id) + '  or  ' + COPY_NONE(id));
+        if (k === "_copy" || k === "copy") throw refusal("set does not record a copy (it has to be checked against the source archive). Use:  " + COPY_HOW(id) + '  or  ' + COPY_NONE(id));
         if (!allowed.includes(k)) throw new Error("set: " + k + " is not something set changes (" + allowed.join(", ") + ")");
         if (v === "") delete o[k];
         else if (k === "pos") { if (!/^\d{1,2}$/.test(v)) throw new Error("set: pos is a place on the visit list, 1 to 99"); o[k] = +v; }
@@ -738,10 +782,10 @@ function main(argv) {
       if (!args.length) throw new Error(usage);
       const o = f.s, has = Array.isArray(o._copy) && o._copy.length > 0;
       if (args.some(a => NO_COPY.test(a))) {
-        if (args.length > 1) throw new Error('give archive paths, or the one string "none: <why>", not both. ' + usage);
+        if (args.length > 1) throw refusal('give archive paths, or the one string "none: <why>", not both. ' + usage);
         const why = NO_COPY.exec(args[0])[1].trim();
-        if (why.length < NO_COPY_WHY) throw new Error('"none: <why>" needs a reason of ' + NO_COPY_WHY + " characters or more (what was read, and why nothing could be kept). " + usage);
-        if (has && !replace) throw new Error(id + " already records " + o._copy.length + " cop" + (o._copy.length === 1 ? "y" : "ies") + " (" + o._copy.join(", ") + "), so it cannot also say none. If those paths are wrong, run this again with --replace.");
+        if (why.length < NO_COPY_WHY) throw refusal('"none: <why>" needs a reason of ' + NO_COPY_WHY + " characters or more (what was read, and why nothing could be kept). " + usage);
+        if (has && !replace) throw refusal(id + " already records " + o._copy.length + " cop" + (o._copy.length === 1 ? "y" : "ies") + " (" + o._copy.join(", ") + "), so it cannot also say none. If those paths are wrong, run this again with --replace.");
         o._copy = "none: " + why;
       } else {
         const list = has && !replace ? o._copy.slice() : [];
@@ -771,7 +815,7 @@ function main(argv) {
 
 if (require.main === module) {
   try { main(process.argv.slice(2)); }
-  catch (e) { console.error("FAILED: " + e.message); process.exit(1); }
+  catch (e) { console.error((e.refused ? "REFUSED: " : "FAILED: ") + e.message); process.exit(1); }
 }
-module.exports = { password, FILE, OUT, STAMP, STATUSES, QSTATES, TIERS, tierOf, invTier, load, validate, publicCopy, cardIndex, sealed, build, check,
+module.exports = { password, FILE, OUT, STAMP, STATUSES, QSTATES, TIERS, tierOf, invTier, load, save, writerProblem, validate, publicCopy, cardIndex, sealed, build, check,
   claimsFor, lastTouched, blobId, link, status, find, isDate, ARCHIVE, copyShape, archivePath, withoutCopy, missingCopies };
