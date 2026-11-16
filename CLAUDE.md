@@ -236,6 +236,8 @@ commits — GitHub keeps serving them by SHA indefinitely. There is no clean way
   unpushed ones — so a bad message became invisible the moment it shipped, which is exactly
   how three of them got out. Three commits are listed there as **accepted and closed**; they
   are public, a force-push would not unpublish them, and this is settled. Do not re-raise it.
+  A new one on main keeps §13, `tests/run.js` and so the gate red until Cory decides (its id goes into
+  `ACCEPTED`) or it is 40 commits back: until then no payload can be committed. Stop and report it.
 
 ## Run this first, every session
 Sessions run in the cloud, in the environment "Family tree" (since October 2026); the PC's folder is kept

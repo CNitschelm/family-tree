@@ -407,6 +407,10 @@ out built from each other's stale copies.
     (`git commit --amend -m "<one neutral line>"`); this session's older unqueued ones are redone as one
     (`git reset --soft <the queue's head, or origin/main>`, then one new commit); one that is already
     queued or on main is nobody's to rewrite: stop, queue nothing more, and report the line to Cory.
+    While one of the last 40 commits on main carries a name or an address that may not be published,
+    §13 stays red, and with it `tests/run.js` and the gate: no session or routine can commit a payload.
+    Payload commits wait for Cory's decision (the commit's id goes into `ACCEPTED` in `tests/run.js`, from
+    a session with him) or until the commit is 40 back.
   - *§14*: a routine stops, commits nothing that holds the change which brought the name in, and reports
     the line to Cory. In a session with him: take the name out (a card is named by its id), or, when the
     word is not a person in that file, mark the line `ft-allow-names` and say why. Never add to `ALLOW`.
