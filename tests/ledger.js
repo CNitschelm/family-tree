@@ -339,6 +339,9 @@ console.log('== an image on file for a fact read from an image');
   r = change(fact({ src: URL_A, read: 'scan', transcription: quote }), DRY);
   ok(r.code === 1 && /holds no image/.test(r.out) && /"read": "scan" is not a word this tool knows/.test(r.out) && /"image", "pdf", "original"/.test(r.out) && /"text", "index entry"/.test(r.out),
     'a "read" the tool does not know ("scan") is taken as read from an image: refused with no image on file, and the allowed words are named');
+  ok(/If what you read was words on a page, not a picture of the record, say "read": "text"/.test(r.out), 'the refusal says what to write if words on a page were meant');
+  r = change(fact({ src: URL_A, read: 'image', transcription: quote }), DRY);
+  ok(r.code === 1 && !/If what you read was words on a page/.test(r.out), 'and does not say it where the item itself says "image"');
   r = change(fact({ src: URL_B, read: 'photo', quote }), DRY);
   ok(r.code === 0 && /"read": "photo" is not a word this tool knows/.test(r.out), 'with the image on file it goes through, with the same warning');
   r = change(fact({ src: URL_D, read: 'text', quote }), DRY);

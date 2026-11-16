@@ -214,7 +214,7 @@ function checkEvidence(i, e, needed, newCard) {
     }
     if (x.read && !x.transcription && !x.quote) err(i, `${tag}: "read": "${x.read}" needs "transcription" — what the page says, in its words`);
     if (x.read && !IMAGE_READS.includes(x.read) && !TEXT_READS.includes(x.read))
-      warn(i, `${tag}: "read": ${JSON.stringify(x.read)} is not a word this tool knows, so it was taken as read from an image. Next time say ${IMAGE_READS.map(w => `"${w}"`).join(', ')} (a picture of the record) or ${TEXT_READS.map(w => `"${w}"`).join(', ')} (words on a page).`);
+      warn(i, `${tag}: "read": ${JSON.stringify(x.read)} is not a word this tool knows, so it was taken as read from an image. Say ${IMAGE_READS.map(w => `"${w}"`).join(', ')} (a picture of the record) or ${TEXT_READS.map(w => `"${w}"`).join(', ')} (words on a page).`);
     // "read": "text" with a transcription is our own account of a page whose words we hold: nothing checks
     // it, where a quote would be checked (94 such items before 16 Nov 2026, none word for word). Kept in view.
     if (TEXT_READS.includes(x.read) && x.transcription && !x.quote && a.text && !L.normText(a.text).includes(L.normText(x.transcription)))
@@ -291,6 +291,9 @@ function checkImage(i, x, tag, a) {
   const pictured = (x.read && !TEXT_READS.includes(x.read)) || L.imageSource(x.src);
   const blank = !pictured && x.read && !a.text;
   if (!pictured && !blank) return;
+  // only an unknown word made it a picture: the writer may have meant words on a page, and must not be
+  // sent to file an image, or to write "no_image", for a record that is text
+  const guessed = pictured && !IMAGE_READS.includes(x.read) && !L.imageSource(x.src);
   if (L.recordImage(x.src).held) { if (x.no_image) warn(i, `${tag}: "no_image" is given, but an image of ${x.src} is on file — take "no_image" out next time`); return; }
   if (x.no_image) return void keep(i).noImage.push({ src: x.src, why: x.no_image.trim() });
   const fam = /^family:/.test(x.src), id = fam ? '' : L.sourceId(x.src);
@@ -302,6 +305,7 @@ function checkImage(i, x, tag, a) {
            `      save it as archive/hand/${id}.jpg (or .png, .pdf; beside its dated copy, under that copy's name) with its row in archive/hand/README.md, then: node checks/verify.js\n` +
            `      or, for an address a card already cites: node archive/file.mjs <the image file> --url "${x.src}"   then: node checks/verify.js --record\n` +
            (blank ? `    If the page shows the record as words, not as a picture, save those words as the hand copy archive/hand/${id}.txt instead and give them as "quote".\n` : '')) +
+    (guessed ? `    If what you read was words on a page, not a picture of the record, say "read": "text" and give those words as "quote": then no image is asked for.\n` : '') +
     `    If the image cannot be had now (a sign-in, a site that refuses downloads), add "no_image": "<why, and what will fetch it>" to this evidence item instead.`);
 }
 
