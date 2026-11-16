@@ -17,28 +17,60 @@ const L = require('./lib.js');
 
 // How likely is this host to still be serving the same bytes in ten years?
 // Personal sites vanish. National institutions mostly do not. Everything else is in between.
+//
+// Only the large services every family history uses are named here. The rest of the list (a
+// relative's own site, an employer, a school, a local paper) says where particular people lived,
+// studied and worked, and this file is public, so those hosts are in checks/source-hosts.json,
+// which is private: it lives in family-tree-private and tools/cloud-setup.sh links it in, as it
+// does checks/priority-cards.json (16 Nov 2026, register R-0761). Its shape:
+//   { "risk": { "high": ["host.example", …], "medium": […], "low": […] },
+//     "kind": { "scan": […], "gated": […] } }
+// Each entry is a piece of a URL, matched as written, in any letter case.
 const RISK = [
   // one person's hosting bill away from gone — and the genealogy leans hardest on these
-  [/astrosurf\.com|free\.fr|geneanet\.org|geni\.com|wikitree\.com|newsalem-nd\.com|upliftmicrohome\.com|substack\.com|corynitschelm\.com/i, 'high'],
+  [/astrosurf\.com|free\.fr|geneanet\.org|geni\.com|wikitree\.com|corynitschelm\.com/i, 'high'],
   // institutional, but reorganised often; deep links rot even when the institution survives
-  [/alsace\.eu|valdemarne\.fr|vet-alfort\.fr|illinoisgenweb\.org|digifind-it\.com|idnc\.library|library\.ndsu\.edu|uoregon\.edu|dartmouthalumnimagazine|alsace-histoire\.org|munster\.alsace|kultur-frankfurt\.de|matthewisakowitzfoundation|nbcboston\.com/i, 'medium'],
+  [/alsace\.eu/i, 'medium'],
   // large, funded, mandated to persist — still worth a copy, lower priority
-  [/nobelprize\.org|archive\.org|loc\.gov|archives\.gov|familysearch\.org|findagrave\.com|digitalarchives\.wa\.gov|deutsche-biographie\.de|data\.bnf\.fr|matchid\.io|schweitzer\.org|mit\.edu|unh\.edu|linkedin\.com|github\.com|francesoir\.fr|ndstudies\.gov/i, 'low'],
+  [/nobelprize\.org|archive\.org|loc\.gov|archives\.gov|familysearch\.org|findagrave\.com|deutsche-biographie\.de|data\.bnf\.fr|matchid\.io|schweitzer\.org|github\.com/i, 'low'],
 ];
 
 // What kind of thing is behind the URL — it decides how it has to be captured.
 const KIND = [
-  [/ark:\/|archives6[78]\.alsace\.eu|archives\.valdemarne/i, 'scan'],       // register images behind a viewer
-  [/familysearch\.org\/ark|digitalarchives\.wa\.gov/i, 'gated'],           // needs a signed-in session
+  [/ark:\/|archives6[78]\.alsace\.eu/i, 'scan'],                           // register images behind a viewer
+  [/familysearch\.org\/ark/i, 'gated'],                                    // needs a signed-in session
   [/geneanet\.org|findagrave\.com|geni\.com|wikitree/i, 'public-tree'],   // public to a visitor; robots.txt decides, not us
   [/web\.archive\.org/i, 'already-archived'],
   [/\.(jpe?g|png|gif|webp|pdf)(\?|$)/i, 'file'],
 ];
 
+// The private part of both lists. Without it the script still runs, and says so: a host only that
+// file knows is then rated "medium" and captured as a "page", which is the answer for any unknown host.
+const HOSTS_FILE = path.join(__dirname, 'source-hosts.json');
+let PRIVATE = null;
+try { PRIVATE = JSON.parse(fs.readFileSync(HOSTS_FILE, 'utf8')); }
+catch (e) {
+  if (e.code !== 'ENOENT') {
+    console.error('checks/source-hosts.json cannot be read (' + e.message + '). Fix the file in family-tree-private (see the shape at the top of checks/manifest.js), then run this again. Nothing was written.');
+    process.exit(1);
+  }
+}
+const NO_HOSTS_NOTE = 'NOTE: checks/source-hosts.json is not here, so the hosts only that private file lists are rated "medium" and "page". ' +
+  'Do not copy this run\'s sources/urls.tsv into the archive repo: run bash tools/cloud-setup.sh (it links the file from family-tree-private), then run this again.';
+if (!PRIVATE) console.log(NO_HOSTS_NOTE + '\n');
+const listed = (group, level) => {
+  const a = PRIVATE && PRIVATE[group] && PRIVATE[group][level];
+  return Array.isArray(a) ? a.filter(x => typeof x === 'string' && x).map(x => x.toLowerCase()) : [];
+};
+// one answer per level, in the order of the lists above: the first level that knows the URL wins
+const pick = (table, group, url, fallback) => {
+  const low = url.toLowerCase();
+  const hit = table.find(([re, level]) => re.test(url) || listed(group, level).some(h => low.includes(h)));
+  return hit ? hit[1] : fallback;
+};
+
 function classify(url) {
-  const risk = (RISK.find(([re]) => re.test(url)) || [null, 'medium'])[1];
-  const kind = (KIND.find(([re]) => re.test(url)) || [null, 'page'])[1];
-  return { risk, kind };
+  return { risk: pick(RISK, 'risk', url, 'medium'), kind: pick(KIND, 'kind', url, 'page') };
 }
 
 const { people } = L.load();
@@ -108,3 +140,4 @@ console.log(`  by capture kind:       page ${by('kind', 'page')}   gated ${by('k
 console.log('');
 console.log('The ten the site would miss most if they went dark tonight:');
 entries.slice(0, 10).forEach(e => console.log(`  ${String(e.dependents).padStart(3)} cards  ${e.risk.padEnd(6)} ${e.kind.padEnd(9)} ${e.url.slice(0, 88)}`));
+if (!PRIVATE) console.log('\n' + NO_HOSTS_NOTE);
