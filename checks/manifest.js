@@ -46,17 +46,37 @@ const KIND = [
 
 // The private part of both lists. Without it the script still runs, and says so: a host only that
 // file knows is then rated "medium" and captured as a "page", which is the answer for any unknown host.
+// A file that is there and cannot be used is another matter: it would rate hosts wrongly without a
+// word, so the run stops, whether the file is not JSON or is JSON of another shape.
 const HOSTS_FILE = path.join(__dirname, 'source-hosts.json');
+const SHAPE = { risk: RISK.map(r => r[1]), kind: KIND.map(k => k[1]) };
+const shapeFault = p => {
+  if (!p || typeof p !== 'object' || Array.isArray(p)) return 'it is not an object';
+  for (const group of Object.keys(SHAPE)) {
+    const g = p[group];
+    if (!g || typeof g !== 'object' || Array.isArray(g)) return '"' + group + '" is missing or is not an object';
+    for (const level of Object.keys(g)) {
+      if (!SHAPE[group].includes(level)) return '"' + group + '" has the level "' + level + '"; the levels are ' + SHAPE[group].join(', ');
+      if (!Array.isArray(g[level]) || !g[level].every(x => typeof x === 'string' && x)) return '"' + group + '.' + level + '" is not a list of host names';
+    }
+  }
+  return null;
+};
 let PRIVATE = null;
-try { PRIVATE = JSON.parse(fs.readFileSync(HOSTS_FILE, 'utf8')); }
-catch (e) {
+try {
+  PRIVATE = JSON.parse(fs.readFileSync(HOSTS_FILE, 'utf8'));
+  const fault = shapeFault(PRIVATE);
+  if (fault) throw new Error(fault);
+} catch (e) {
   if (e.code !== 'ENOENT') {
-    console.error('checks/source-hosts.json cannot be read (' + e.message + '). Fix the file in family-tree-private (see the shape at the top of checks/manifest.js), then run this again. Nothing was written.');
+    console.error('checks/source-hosts.json cannot be used (' + e.message + '). Fix the file in family-tree-private (its shape is at the top of checks/manifest.js), then run this again. Nothing was written.');
     process.exit(1);
   }
+  PRIVATE = null;
 }
 const NO_HOSTS_NOTE = 'NOTE: checks/source-hosts.json is not here, so the hosts only that private file lists are rated "medium" and "page". ' +
-  'Do not copy this run\'s sources/urls.tsv into the archive repo: run bash tools/cloud-setup.sh (it links the file from family-tree-private), then run this again.';
+  'Do not copy this run\'s sources/urls.tsv into the archive repo: run bash tools/cloud-setup.sh (it links the file from family-tree-private), then run this again. ' +
+  'If the file is still not here after that, it is not in family-tree-private yet (or its name is not in .private-paths): stop, change nothing, and report that.';
 if (!PRIVATE) console.log(NO_HOSTS_NOTE + '\n');
 const listed = (group, level) => {
   const a = PRIVATE && PRIVATE[group] && PRIVATE[group][level];
