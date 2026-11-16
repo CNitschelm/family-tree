@@ -254,7 +254,9 @@ Each kind keeps to its own fields (16 Nov 2026, register R-0760). **A new pin, m
 highlight or document is a fact, whatever the edit is called**: under `source` it is refused; under
 `wording`, `translation` or `structure` it is refused without evidence, and with evidence it is checked
 as a fact and applied with a warning that is kept; under `owner` it cites his entry about the card. A
-source added under another kind is checked as a source, with a kept warning.
+source added under `wording`, `translation` or `structure` is checked as a source, with a kept warning;
+under `fact` or `grade` it needs evidence, as any fact does, and gets no warning; under `owner` it cites
+his entry about the card.
 
 And for every kind:
 - **Writing needs the writer lock in hand.** `change.js` writes only while `ledger/LOCK` names this
