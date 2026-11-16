@@ -195,7 +195,23 @@ if [ -n "$q" ]; then
   out of reach?). Run setup again in a few minutes; never work on a queue whose verdict is unknown."; fi
     else
       [ "$(git symbolic-ref -q --short HEAD)" = main ] && git merge -q --ff-only "$q" || die "could not start main from the queue"
-      say "queue: main starts from $(git rev-list --count origin/main..HEAD) queued commit(s) the airlock has not published yet"
+      nq="$(git rev-list --count origin/main..HEAD)"
+      say "queue: main starts from $nq queued commit(s) the airlock has not published yet"
+      # a stale queue and a quiet airlock (16 Nov 2026): the airlock records nothing while idle, so one that has
+      # stopped looks like one with nothing to do. A warning; the session goes on.
+      if w="$(ft_queue_wait "$FT" "$PRIV")"; then
+        read -r wh wn whow <<< "$w"
+        if ft_queue_late "$wh"; then
+          if [ "$whow" = queued ]; then wsince="the oldest was queued $wh hours ago"
+          else wsince="the oldest was committed $wh hours ago (when it was queued is not in this clone's history)"; fi
+          say "WARNING: the queue's $wn commit(s) are still not published, and $wsince."
+          say "  The airlock runs every two hours, so it has missed a run or has stopped. Its last recorded check:"
+          say "  $(ft_last_check "$PRIV_URL_NOW"). Read the verdict in family-tree-private's branch airlock-status"
+          say "  (git -C \"$PRIV\" fetch -q origin airlock-status && git -C \"$PRIV\" show FETCH_HEAD:status.json); the runs"
+          say "  are in family-tree-airlock's Actions. This session may go on (new work queues on top); say in its report"
+          say "  that the airlock is late, so Cory looks at it."
+        fi
+      fi
     fi
   elif [ "$RO" = 1 ]; then
     say "queue: QUEUE CONFLICT (site-queue is not on top of public main); read-only session: main stays at public main"

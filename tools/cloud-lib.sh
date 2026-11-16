@@ -1,10 +1,10 @@
 # cloud-lib.sh — functions shared by cloud-setup.sh, cloud-lock.sh and cloud-finish.sh. Sourced, never run.
 
-# ft_verdict <family-tree-private url>: the airlock's latest verdict (family-tree-private's branch airlock-status).
-# Prints "<result> <queue head> <rule>" (the rule's spaces as _) and returns 0; returns 1 when there is no
-# verdict yet; 2 when it cannot be read (GitHub out of reach, a broken file): callers stop, never pass.
-ft_verdict() {
-  local url="$1" t st="" lr=0 out
+# ft_status_json <family-tree-private url>: the airlock's latest status.json, as it is (family-tree-private's
+# branch airlock-status). Returns 0 and prints it; 1 when there is no verdict yet; 2 when it cannot be read
+# (GitHub out of reach, an empty file).
+ft_status_json() {
+  local url="$1" t st="" lr=0
   git ls-remote --exit-code "$url" refs/heads/airlock-status >/dev/null 2>&1 || lr=$?
   [ "$lr" = 2 ] && return 1
   [ "$lr" = 0 ] || return 2
@@ -14,6 +14,16 @@ ft_verdict() {
   fi
   rm -rf "$t"
   [ -n "$st" ] || return 2
+  printf '%s\n' "$st"
+}
+
+# ft_verdict <family-tree-private url>: the airlock's latest verdict (family-tree-private's branch airlock-status).
+# Prints "<result> <queue head> <rule>" (the rule's spaces as _) and returns 0; returns 1 when there is no
+# verdict yet; 2 when it cannot be read (GitHub out of reach, a broken file): callers stop, never pass.
+ft_verdict() {
+  local st src=0 out
+  st="$(ft_status_json "$1")" || src=$?
+  [ "$src" = 0 ] || return "$src"
   out="$(printf '%s' "$st" | python3 -I -c 'import json,sys
 try: d=json.load(sys.stdin)
 except Exception: d=None
@@ -21,6 +31,22 @@ if not isinstance(d, dict): print("? - -")
 else: print(d.get("result") or "-", d.get("queue_head") or "-", (d.get("rule") or "-").replace(" ", "_"))')"
   [ "${out%% *}" = "?" ] && return 2
   echo "$out"
+}
+
+# ft_last_check <family-tree-private url>: when the airlock last recorded a check, and its result, for a
+# message: "<time> (<result>)". It records one only when the queue held something, so a quiet airlock and a
+# stopped one look alike here. Prints "none recorded yet" or "could not be read" otherwise; always returns 0.
+ft_last_check() {
+  local st src=0
+  st="$(ft_status_json "$1")" || src=$?
+  [ "$src" = 1 ] && { echo "none recorded yet"; return 0; }
+  [ "$src" = 0 ] || { echo "could not be read"; return 0; }
+  printf '%s' "$st" | python3 -I -c 'import json,re,sys
+try: d=json.load(sys.stdin)
+except Exception: d=None
+if not isinstance(d, dict): print("could not be read")
+else: print("%s (%s)" % (re.sub(r"[^0-9TZ:+.-]", "", str(d.get("at") or "")) or "at an unrecorded time", re.sub(r"[^a-z_-]", "", str(d.get("result") or "")) or "no result"))' 2>/dev/null \
+    || echo "could not be read"
 }
 
 # ft_refused <site clone> <family-tree-private url> <queue sha>. Returns
@@ -165,12 +191,12 @@ ft_push_kind() {
 ft_push_failed() {
   local name; name="$(basename "$3")"
   FT_PUSH_KIND="$1"
-  FT_PUSH_SAID="$(printf '%s\n' "$2" | sed -E 's#(https?://)[^/@[:space:]]*@#\1#g' | grep -v -e '^[[:space:]]*$' -e '^hint:' \
+  FT_PUSH_SAID="$(printf '%s\n' "$2" | sed -E 's#(https?://)[^/@[:space:]]*@#\1#g; s/[[:space:]]+$//' | grep -v -e '^$' -e '^hint:' \
     | tail -n 8 | cut -c1-300 | sed 's/^/    /')"
   [ -n "$FT_PUSH_SAID" ] || FT_PUSH_SAID="    (git printed nothing)"
   case "$1" in
     large) FT_PUSH_WHY="GitHub refused it: a file in these commits is over its size limit (100 MB). Running this again
-  changes nothing: take the file out of $name's unpushed commits (git -C \"$3\" log --stat origin/main..HEAD
+  changes nothing: take the file out of the unpushed commits of $name (git -C \"$3\" log --stat origin/main..HEAD
   shows them; git -C \"$3\" reset --soft origin/main undoes them and keeps the files), then run this again." ;;
     protected) FT_PUSH_WHY="GitHub refused it: main of $name is protected, or a repository rule refuses these commits.
   Running this again changes nothing, and only Cory can change the rule: stop, and tell him what git said." ;;
@@ -279,6 +305,43 @@ ft_newest() {
     git -C "$1" rev-parse origin/main
   fi
 }
+
+# ft_queue_wait <site clone> <private clone>: how long the queue's unpublished commits have waited, from the refs
+# as they were last fetched (it reads nothing from GitHub, so tools/doctor.js can ask too). Prints
+# "<hours, one decimal> <commits waiting> <queued|committed>" and returns 0; returns 1 when nothing waits, or
+# when the queue is out of line with public main (a QUEUE CONFLICT has its own stop).
+#   queued     the hours since the finish that put the OLDEST waiting commit into the queue: a finish writes
+#              the head it is about to queue into family-tree-private's .public-head seconds before it queues,
+#              so that file's history has the time;
+#   committed  that history does not reach back that far here (a shallow clone), so the hours since the oldest
+#              waiting commit was MADE: as long or longer, because a commit can sit on its machine before it
+#              is queued.
+# The airlock runs every two hours; ft_queue_late says when a wait means it has missed a run.
+ft_queue_wait() {
+  local ft="$1" priv="$2" q m n c0 t0 how=committed c ct v prev=""
+  q="$(git -C "$ft" rev-parse -q --verify refs/remotes/queue/site-queue 2>/dev/null)" || return 1
+  m="$(git -C "$ft" rev-parse -q --verify refs/remotes/origin/main 2>/dev/null)" || return 1
+  git -C "$ft" merge-base --is-ancestor "$m" "$q" 2>/dev/null || return 1
+  n="$(git -C "$ft" rev-list --count "$m..$q" 2>/dev/null)" || return 1
+  [ "$n" -gt 0 ] || return 1
+  c0="$(git -C "$ft" rev-list --reverse "$m..$q" | head -n 1)"
+  t0="$(git -C "$ft" log -1 --format=%ct "$c0" 2>/dev/null)" || return 1
+  # newest first: the state commits whose .public-head holds c0; the first one that does not proves the one
+  # after it is the finish that queued c0. Run out of history first, and nothing is proved.
+  while read -r c ct; do
+    v="$(git -C "$priv" show "$c:.public-head" 2>/dev/null | tr -d '\r\n')"
+    if [ -n "$v" ] && git -C "$ft" merge-base --is-ancestor "$c0" "$v" 2>/dev/null; then prev="$ct"
+    else
+      if [ -n "$prev" ]; then t0="$prev"; how=queued; fi
+      break
+    fi
+  done < <(git -C "$priv" log --format='%H %ct' origin/main -- .public-head 2>/dev/null)
+  python3 -I -c 'import sys,time; print("%.1f %s %s" % (max(0.0, time.time() - int(sys.argv[1])) / 3600, sys.argv[2], sys.argv[3]))' "$t0" "$n" "$how"
+}
+
+# ft_queue_late <hours>: true when a wait of that many hours says the airlock has missed a run: more than 4
+# (it runs every 2).
+ft_queue_late() { python3 -I -c 'import sys; sys.exit(0 if float(sys.argv[1]) > 4 else 1)' "${1:-0}" 2>/dev/null; }
 
 # ft_conflict <site clone>: true when the queue and public main are out of line (neither holds the other):
 # a QUEUE CONFLICT (refs fetched by the caller).

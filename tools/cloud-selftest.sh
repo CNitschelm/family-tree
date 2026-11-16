@@ -535,6 +535,36 @@ verdict() { # $1 = result: write family-tree-private's airlock-status for the cu
 publish
 check "after the airlock publishes, a new session finds nothing waiting" cloud C2
 says "nothing waiting" "…and says so"
+# a queue that has waited (16 Nov 2026): commits dated six hours ago, queued by a finish dated the same
+old="$(date -u -d '6 hours ago' +%Y-%m-%dT%H:%M:%SZ)"
+doc() { ( FT_ROOT="$T/$1/family-tree" FT_PRIVATE_DIR="$T/$1/family-tree-private" node "$TOOLS/doctor.js" > "$T/last.out" 2>&1 ); true; }
+quiet cloud A; quiet lock A take "session-a" "old"
+GIT_AUTHOR_DATE="$old" GIT_COMMITTER_DATE="$old" mc A old1; echo "old" >> "$PA/OPEN-ITEMS.md"
+GIT_AUTHOR_DATE="$old" GIT_COMMITTER_DATE="$old" fin A "Update working state" "session-a" > "$T/last.out" 2>&1 || no "the old-dated finish failed"
+check "setup goes on when the queue has waited for more than four hours" cloud Q1
+says "WARNING: the queue's 1 commit(s) are still not published" "…with a warning"
+says "the oldest was queued 6\\.[0-9] hours ago" "…and the age: the time since the finish that queued the oldest"
+says "airlock-status" "…and where the verdict is read"
+says "Its last recorded check" "…and the airlock's last recorded check"
+check "…in the session that queued it, too" cloud A
+says "the oldest was queued 6\\.[0-9] hours ago" "…with the same age"
+rm -rf "$T/shp" && quiet git clone --depth 1 "file://$GHP" "$T/shp"
+( . "$TOOLS/cloud-lib.sh"; ft_queue_wait "$A" "$T/shp" ) > "$T/last.out" 2>&1
+says "^6\\.[0-9] 1 committed$" "a private clone too shallow to show that finish gives the time since the commit was made, and says so"
+doc A
+says "\\[WARN\\] the queue's 1 commit(s) are still not published: the oldest was queued 6\\.[0-9] hours ago" "tools/doctor.js gives the same warning"
+says "airlock-status" "…and says where the verdict is read"
+publish
+# a commit made six hours ago and queued only now has not waited: no warning where the history shows that
+quiet cloud A; quiet lock A take "session-a" "late"
+GIT_AUTHOR_DATE="$old" GIT_COMMITTER_DATE="$old" mc A old2; echo "late" >> "$PA/OPEN-ITEMS.md"; quiet fin A "Update working state" "session-a"
+check "a commit made long ago and queued just now is no stale queue" cloud A
+refuse "…(no warning)" grep -q "still not published" "$T/last.out"
+doc A
+refuse "…(none from tools/doctor.js either)" grep -q "still not published" "$T/last.out"
+publish
+check "…and a queue with nothing waiting gets neither" cloud A
+refuse "…(no warning, no note)" grep -q "still not published\\|platform may" "$T/last.out"
 check "session D sets up from public main" cloud D
 check "session E sets up from the same main" cloud E
 quiet lock E take "E" "work"; mc E w-e

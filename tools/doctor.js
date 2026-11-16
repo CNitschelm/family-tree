@@ -122,6 +122,28 @@ if (ahead && +ahead > 0 && unqueued !== null && +unqueued === 0) {
     "In a cloud session: bash tools/cloud-finish.sh \"<one neutral line>\" \"<who>\" (it queues them for the airlock). " +
     "On the PC: push in GitHub Desktop. Then confirm the live site actually changed.");
 }
+/* A stale queue and a quiet airlock (16 Nov 2026): the airlock runs every two hours and records nothing while
+ * idle, so one that has stopped looks like one with nothing to do. tools/cloud-lib.sh's ft_queue_wait works the
+ * wait out from the refs as they were last fetched (the one implementation; cloud-setup.sh warns with it too).
+ * No bash, or no private clone beside this one: no finding, never a failure. */
+(() => {
+  const lib = path.join(__dirname, "cloud-lib.sh");
+  const priv = process.env.FT_PRIVATE_DIR || path.join(ROOT, "..", "family-tree-private");
+  if (!queue || !fs.existsSync(lib) || !fs.existsSync(priv)) return;
+  let out = "";
+  try {
+    out = execFileSync("bash", ["-c", '. "$1" && w="$(ft_queue_wait "$2" "$3")" && read -r h n how <<< "$w" && ft_queue_late "$h" && echo "$w"',
+      "doctor", lib, ROOT, priv], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  } catch (_) { return; }
+  const m = out.match(/^([0-9.]+) (\d+) (queued|committed)$/);
+  if (!m) return;
+  add("WARN", "the queue's " + m[2] + " commit(s) are still not published: the oldest was " + m[3] + " " + m[1] + " hours ago",
+    "The airlock runs every two hours, so it has missed a run or has stopped" +
+    (m[3] === "committed" ? " (when the commit was queued is not in this clone's history; if that was only lately, this is nothing)" : "") +
+    ". Nothing is lost while they wait, and this session may go on: new work queues on top.",
+    "read the airlock's verdict (git -C \"" + priv + "\" fetch -q origin airlock-status && git -C \"" + priv +
+    "\" show FETCH_HEAD:status.json) and the runs in family-tree-airlock's Actions; say in this session's report that the airlock is late, so Cory looks at it.");
+})();
 if (behind && +behind > 0) {
   add("WARN", behind + " commit(s) on the remote that are not here",
     "Someone or something else has pushed. Fetch before editing, or you will be working from an old base.",
