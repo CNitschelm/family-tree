@@ -65,8 +65,19 @@ const lock = (who, hoursAgo) => fs.writeFileSync(path.join(T, 'ledger', 'LOCK'),
 lock(WHO);
 const env = { ...process.env, FT_ROOT: T, FT_RESEARCH: path.join(T, 'research.json'), FT_ARCHIVE: ARCH, FT_LEDGER: path.join(T, 'ledger'), FT_WHO: WHO };
 delete env.FT_PASSWORD; delete env.FT_READONLY;
+/* The tools are loaded into this process as well (RJ and P below, and tools/ledger.js through them), and each
+ * reads these variables when it loads. A shell that exports them (a cloud shell's ~/.ft-env has FT_ARCHIVE and
+ * FT_RESEARCH; a caller may add FT_ROOT, FT_LEDGER, FT_WHO or FT_READONLY) would point this process at the real
+ * folders while the commands it starts work in the invented ones: with FT_ROOT exported, one test failed. So
+ * this process takes the test's own environment too (16 Nov 2026). */
+for (const k of ['FT_ROOT', 'FT_RESEARCH', 'FT_ARCHIVE', 'FT_LEDGER']) process.env[k] = env[k];
+delete process.env.FT_WHO; delete process.env.FT_READONLY;
 const RJ = require(path.join(T, 'tools', 'research.js'));
 const P = require(path.join(T, 'tools', 'payload.js'));
+/* --where (the suite asks itself, below): where the tools loaded here look, and no test */
+const WHERE = () => { const L = require(path.join(T, 'tools', 'ledger.js')), PG = require(path.join(T, 'tools', 'pages.js'));
+  return { file: RJ.FILE, ledger: L.LEDGER, lock: L.LOCK, root: L.ROOT, archive: L.ARCHIVE, pages: PG.ARCHIVE, who: process.env.FT_WHO || '', readonly: process.env.FT_READONLY || '' }; };
+if (process.argv.includes('--where')) { console.log(JSON.stringify(WHERE())); fs.rmSync(T, { recursive: true, force: true }); process.exit(0); }
 const git = (...a) => execFileSync('git', a, { cwd: T, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 git('init', '-q'); git('config', 'user.email', 't@example.invalid'); git('config', 'user.name', 't');
 git('config', 'core.autocrlf', 'false');
@@ -161,6 +172,21 @@ section('privacy rules, on every string the family can read');
   ok(denied('Ask Wendelin Brambleworth.') && denied('ask WENDELIN BRAMBLEWORTH') && denied('ask ottilie'), 'the do-not-publish list matches whatever the case');
   ok(!denied('Ottilies are not people') && !denied('Wendelin alone'), 'and only whole names');
   fs.rmSync(path.join(T, 'ledger', 'research-deny.txt'));
+}
+
+// ------------------------------------------------------------------ the suite's own environment
+section('the suite sets its own environment');
+{
+  /* this suite again, only as far as loading the tools, from a shell that exports every variable they read */
+  const away = path.join(T, 'not-the-test');
+  const r = spawnSync(process.execPath, [__filename, '--where'], { encoding: 'utf8', env: { ...process.env, FT_ROOT: away, FT_RESEARCH: path.join(away, 'research.json'),
+    FT_ARCHIVE: path.join(away, 'sources'), FT_LEDGER: path.join(away, 'ledger'), FT_WHO: 'someone-else', FT_READONLY: '1' } });
+  let w = null; try { w = JSON.parse(r.stdout); } catch (_) {}
+  const here = WHERE();
+  ok(r.status === 0 && w && ['file', 'ledger', 'lock', 'root', 'archive', 'pages'].every(k => typeof w[k] === 'string' && w[k] && !w[k].startsWith(away) && w[k].startsWith(os.tmpdir())) && w.who === '' && w.readonly === '',
+    'started from a shell that exports FT_ROOT, FT_RESEARCH, FT_ARCHIVE, FT_LEDGER, FT_WHO and FT_READONLY, the tools it loads still look only in its own temp folder');
+  ok(here.file === path.join(T, 'research.json') && here.ledger === path.join(T, 'ledger') && here.root === T && here.archive === ARCH && here.pages === ARCH,
+    'and in this run they look in this run\'s folder');
 }
 
 // ------------------------------------------------------------------ claims
