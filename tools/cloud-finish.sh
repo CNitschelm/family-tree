@@ -448,6 +448,10 @@ if [ "$PUBLISH" = queue ]; then
   echo "  publishes them within about two hours; its verdict is in family-tree-private's branch airlock-status."
   [ -z "$blocked" ] || echo "WARNING: the airlock has refused the queue under these commits (rule: $blocked): nothing in it is
   published until an interactive session clears it with Cory (OPERATING.md, 'A refused queue')."
+  # the platform's own end-of-turn check compares main with origin/main, which stays behind until the airlock
+  # has published: it then asks to push these commits (16 Nov 2026; cloud-setup.sh and tools/doctor.js say it too)
+  echo "NOTE: the platform may now say there are $((pending + own)) unpushed commit(s) on branch 'main' and ask to push them:
+  do not. They are queued, and the airlock publishes them. Never run git push in the site clone."
   unlock
   exit 0
 fi

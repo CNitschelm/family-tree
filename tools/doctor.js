@@ -107,6 +107,12 @@ if (exists("index.html.new")) {
 /* ---- 4. commits that exist only here ----
  * A cloud session's site commits go into the queue (family-tree-private's branch site-queue, which
  * tools/cloud-setup.sh fetches as refs/remotes/queue/site-queue); the airlock publishes them. */
+/* The platform's own end-of-turn check (outside this project) compares the branch with origin/<branch> and asks
+ * to push whatever is ahead. Local main is ahead of origin/main for as long as commits wait in the queue, which
+ * is the normal state; a push would publish them around the airlock (16 Nov 2026). */
+const PLATFORM = n => "NOTE: the platform may say there are " + n + " unpushed commit(s) on branch 'main' and ask to push them: do not. " +
+  "Never run git push in the site clone; site commits leave this machine only through tools/cloud-finish.sh, " +
+  "and the airlock publishes them.";
 const branch = git(["rev-parse", "--abbrev-ref", "HEAD"]);
 const ahead = git(["rev-list", "--count", "@{upstream}..HEAD"]);
 const behind = git(["rev-list", "--count", "HEAD..@{upstream}"]);
@@ -115,10 +121,10 @@ const unqueued = queue ? git(["rev-list", "--count", queue + "..HEAD"]) : ahead;
 if (ahead && +ahead > 0 && unqueued !== null && +unqueued === 0) {
   add("INFO", ahead + " commit(s) queued, not public yet",
     "They are in the queue (family-tree-private's branch site-queue). The airlock checks them and publishes " +
-    "them within about two hours; its verdict is in family-tree-private's branch airlock-status.", null);
+    "them within about two hours; its verdict is in family-tree-private's branch airlock-status.\n" + PLATFORM(ahead), null);
 } else if (ahead && +ahead > 0) {
   add("WARN", (unqueued || ahead) + " commit(s) neither pushed nor queued",
-    "They are on " + (branch || "this branch") + " locally only, so the live site cannot be showing them.",
+    "They are on " + (branch || "this branch") + " locally only, so the live site cannot be showing them.\n" + PLATFORM(ahead),
     "In a cloud session: bash tools/cloud-finish.sh \"<one neutral line>\" \"<who>\" (it queues them for the airlock). " +
     "On the PC: push in GitHub Desktop. Then confirm the live site actually changed.");
 }

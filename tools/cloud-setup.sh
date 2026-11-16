@@ -27,6 +27,9 @@
 # FT_SKIP_DECRYPT=1, FT_SKIP_TOOLS=1, and FT_ATTACH_DIR: the folder where the platform attaches a session's
 # repositories (default /home/user), which the search below also looks in. The selftest points it at an
 # empty folder, so that a test run inside a real session cannot find that session's clones.
+# Says, without stopping: when queued commits wait, that the platform's end-of-turn check may ask to push them
+# and must not be obeyed (a NOTE); when they have waited more than four hours, that the airlock is late (a
+# WARNING, with the age and where its verdict is read).
 # Stops (exit 1) instead of guessing. It never deletes, resets or pushes anything, and never prints
 # a secret. It writes only its links, ~/.ft-env (and one line in ~/.bashrc and ~/.profile), and,
 # when they are missing, data.json, .data-stamp and .owner-key.
@@ -197,6 +200,11 @@ if [ -n "$q" ]; then
       [ "$(git symbolic-ref -q --short HEAD)" = main ] && git merge -q --ff-only "$q" || die "could not start main from the queue"
       nq="$(git rev-list --count origin/main..HEAD)"
       say "queue: main starts from $nq queued commit(s) the airlock has not published yet"
+      # the platform's own end-of-turn check (outside this project) compares main with origin/main, and local
+      # main stays ahead of origin/main for as long as commits wait: it then asks to push them (16 Nov 2026)
+      say "NOTE: the platform may say there are $nq unpushed commit(s) on branch 'main' and ask to push them: do not."
+      say "  They are queued, and the airlock publishes them. Never run git push in the site clone; site commits"
+      say "  leave this machine only through tools/cloud-finish.sh."
       # a stale queue and a quiet airlock (16 Nov 2026): the airlock records nothing while idle, so one that has
       # stopped looks like one with nothing to do. A warning; the session goes on.
       if w="$(ft_queue_wait "$FT" "$PRIV")"; then

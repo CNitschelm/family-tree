@@ -541,6 +541,7 @@ doc() { ( FT_ROOT="$T/$1/family-tree" FT_PRIVATE_DIR="$T/$1/family-tree-private"
 quiet cloud A; quiet lock A take "session-a" "old"
 GIT_AUTHOR_DATE="$old" GIT_COMMITTER_DATE="$old" mc A old1; echo "old" >> "$PA/OPEN-ITEMS.md"
 GIT_AUTHOR_DATE="$old" GIT_COMMITTER_DATE="$old" fin A "Update working state" "session-a" > "$T/last.out" 2>&1 || no "the old-dated finish failed"
+says "NOTE: the platform may now say there are 1 unpushed commit(s) on branch 'main'" "a finish that queues says the platform may ask to push the commits, and not to"
 check "setup goes on when the queue has waited for more than four hours" cloud Q1
 says "WARNING: the queue's 1 commit(s) are still not published" "…with a warning"
 says "the oldest was queued 6\\.[0-9] hours ago" "…and the age: the time since the finish that queued the oldest"
@@ -554,6 +555,10 @@ says "^6\\.[0-9] 1 committed$" "a private clone too shallow to show that finish 
 doc A
 says "\\[WARN\\] the queue's 1 commit(s) are still not published: the oldest was queued 6\\.[0-9] hours ago" "tools/doctor.js gives the same warning"
 says "airlock-status" "…and says where the verdict is read"
+cloud A > "$T/last.out" 2>&1
+says "NOTE: the platform may say there are 1 unpushed commit(s) on branch 'main' and ask to push them: do not" "setup says the platform may ask to push the queued commits, and not to"
+doc A
+says "NOTE: the platform may say there are 1 unpushed commit(s) on branch 'main' and ask to push them: do not" "…and so does tools/doctor.js"
 publish
 # a commit made six hours ago and queued only now has not waited: no warning where the history shows that
 quiet cloud A; quiet lock A take "session-a" "late"
