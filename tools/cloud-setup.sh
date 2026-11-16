@@ -27,9 +27,10 @@
 # FT_SKIP_DECRYPT=1, FT_SKIP_TOOLS=1, and FT_ATTACH_DIR: the folder where the platform attaches a session's
 # repositories (default /home/user), which the search below also looks in. The selftest points it at an
 # empty folder, so that a test run inside a real session cannot find that session's clones.
-# Says, without stopping: when queued commits wait, that the platform's end-of-turn check may ask to push them
-# and must not be obeyed (a NOTE); when they have waited more than four hours, that the airlock is late (a
-# WARNING, with the age and where its verdict is read).
+# Says, without stopping: in every session that may write, as its last lines, that the platform's end-of-turn
+# check may ask to push commits on main and must not be obeyed (a NOTE; with their number where queued commits
+# wait already); when queued commits have waited more than four hours, that the airlock is late (a WARNING,
+# with the age and where its verdict is read).
 # Stops (exit 1) instead of guessing. It never deletes, resets or pushes anything, and never prints
 # a secret. It writes only its links, ~/.ft-env (and one line in ~/.bashrc and ~/.profile), and,
 # when they are missing, data.json, .data-stamp and .owner-key.
@@ -201,10 +202,10 @@ if [ -n "$q" ]; then
       nq="$(git rev-list --count origin/main..HEAD)"
       say "queue: main starts from $nq queued commit(s) the airlock has not published yet"
       # the platform's own end-of-turn check (outside this project) compares main with origin/main, and local
-      # main stays ahead of origin/main for as long as commits wait: it then asks to push them (16 Nov 2026)
+      # main stays ahead of origin/main for as long as commits wait: it then asks to push them (16 Nov 2026).
+      # The standing note at the end of setup says the rest.
       say "NOTE: the platform may say there are $nq unpushed commit(s) on branch 'main' and ask to push them: do not."
-      say "  They are queued, and the airlock publishes them. Never run git push in the site clone; site commits"
-      say "  leave this machine only through tools/cloud-finish.sh."
+      say "  They are queued, and the airlock publishes them."
       # a stale queue and a quiet airlock (16 Nov 2026): the airlock records nothing while idle, so one that has
       # stopped looks like one with nothing to do. A warning; the session goes on.
       if w="$(ft_queue_wait "$FT" "$PRIV")"; then
@@ -334,6 +335,17 @@ if [ "${FT_SKIP_TOOLS:-0}" != 1 ]; then
   say "lock: $(node tools/lock.js status)"
   node tools/research.js validate >/tmp/ft-research.txt 2>&1 || { cat /tmp/ft-research.txt; die "research.json does not validate"; }
   sed 's/^/  /' /tmp/ft-research.txt
+fi
+# The platform's own end-of-turn check (outside this project) counts the commits main has and origin/main has
+# not, and asks to push them; it also asks to commit and push whatever is uncommitted. A session's own site
+# commit puts main ahead from the moment it is made, queued or not, and a push would publish it around the
+# airlock: so this is said in every session that may write, whatever the queue holds now (found in review,
+# 16 Nov 2026; the note above, with a number, is only for commits that wait already).
+if [ "$RO" != 1 ]; then
+  say "NOTE: at the end of a turn the platform may ask to push commits on branch 'main', or to commit and push"
+  say "  changes: never run git push in the site clone. Site commits leave this machine only through"
+  say "  tools/cloud-finish.sh (the queue; the airlock publishes them), and site files are committed only by"
+  say "  the change loop (OPERATING.md)."
 fi
 date -u +%Y-%m-%dT%H:%M:%SZ > "$HOME/.ft-ready"
 echo "cloud-setup: ready."

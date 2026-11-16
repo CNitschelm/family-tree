@@ -144,6 +144,8 @@ work() { # $1 = session: the lock, one site commit and one private edit, then fi
 
 echo "1. setup"
 check "setup finds the clones by itself and runs on shallow clones that start on a session branch" cloud A
+tail -n 6 "$T/last.out" | grep -q "the platform may ask to push commits on branch 'main'" && grep -q "never run git push in the site clone" "$T/last.out" \
+  && ok "…and ends with the standing note: the platform may ask to push commits on main, and never to (the queue is empty here)" || no "setup's standing note about the platform"
 A="$T/A/family-tree"; PA="$T/A/family-tree-private"; AA="$T/A/family-tree-sources"
 check "the clones did start on a session branch (as the platform makes them)" git -C "$PA" show-ref --verify -q refs/heads/claude/session-test
 check "…and puts all three on main, following origin/main" sh -c "for r in family-tree family-tree-private family-tree-sources; do test \"\$(git -C '$T/A/'\$r rev-parse --abbrev-ref HEAD)\" = main && git -C '$T/A/'\$r rev-parse -q --verify '@{upstream}' >/dev/null || exit 1; done"
@@ -721,7 +723,8 @@ doc A
 lacks "still not published" "…(none from tools/doctor.js either)"
 publish
 check "…and a queue with nothing waiting gets neither" cloud A
-lacks "still not published\\|platform may" "…(no warning, no note)"
+lacks "still not published\\|unpushed commit(s)" "…(no warning, no number of commits to push)"
+says "the platform may ask to push commits on branch 'main'" "…only the standing note: a commit this session makes will put main ahead, and the platform will ask"
 check "session D sets up from public main" cloud D
 check "session E sets up from the same main" cloud E
 quiet lock E take "E" "work"; mc E w-e
@@ -750,6 +753,7 @@ quiet cloud G2   # the clones (this setup stops: PUBLISH BLOCKED)
 check "a read-only session is not stopped by a refused queue" sh -c "cd '$T/G2' && HOME='$T/G2/home' FT_READONLY=1 FT_SKIP_DECRYPT=1 FT_SKIP_TOOLS=1 bash '$TOOLS/cloud-setup.sh'"
 grep -q "read-only session: main stays at public main" "$T/last.out" && test "$(git -C "$T/G2/family-tree" rev-parse HEAD)" = "$(git --git-dir="$GHS" rev-parse main)" \
   && ok "…it says so and stays on public main" || no "read-only on a refused queue"
+lacks "platform may" "…(and gets no note about pushing: it commits nothing)"
 refuse "…and its finish refuses to push" fin G2 "Update working state"
 says "read-only" "…and says why"
 refuse "…and so does its lock" lock G2 take "g2" "test"
