@@ -35,7 +35,8 @@
 # when a private repository is not attached, and the queue that has waited (a warning at setup and in
 # tools/doctor.js, which is run from the copy under test with FT_ROOT) with the note about the platform's
 # "unpushed commits" message, and the airlock's heartbeat (a warning at setup and in tools/doctor.js when it
-# is more than eight hours old, whatever the queue holds; none at seven; a note when it cannot be read). From the review of that work: a fault on GitHub's own side is tried again, not
+# is more than eight hours old, whatever the queue holds; none at seven; a note when it cannot be read or is
+# dated ahead of now). From the review of that work: a fault on GitHub's own side is tried again, not
 # taken for a refusal; a folder of ignored files is named once; a source list whose commit cannot be pushed, or
 # that manifest.js calls incomplete (by its exit code), stops neither a finish nor a checkpoint and never reaches the
 # archive; the checkpoint's two kinds of clash each get their own way out; and every setup that may write ends
@@ -795,6 +796,13 @@ lacks "WARNING: the airlock" "…(no warning)"
 says "airlock: its last run left a sign of life 7\.[0-9] hours ago (idle)" "…only a line that says when it last ran"
 doc A
 lacks "sign of life" "…(and nothing from tools/doctor.js)"
+# a heartbeat dated in the future is no sign of life: it read as "0.0 hours ago" for as long as the date lay ahead
+heartbeat -72 idle
+check "a heartbeat dated three days ahead does not stop setup" cloud A
+says "NOTE: the airlock's sign of life could not be read" "…it is the note for one that cannot be read"
+lacks "sign of life 0\.0 hours ago" "…(it is not taken for a run that has just ended)"
+doc A
+lacks "sign of life" "…(and tools/doctor.js says nothing)"
 heartbeat 0 broken
 check "a heartbeat that cannot be read does not stop setup" cloud A
 says "NOTE: the airlock's sign of life could not be read" "…it is a note"

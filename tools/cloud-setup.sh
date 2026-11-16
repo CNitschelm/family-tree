@@ -257,7 +257,8 @@ if [ "$hbrc" = 0 ] && [ "$hbold" = 1 ]; then
 elif [ "$hbrc" = 0 ]; then
   say "airlock: its last run left a sign of life $hbh hours ago ($hbout)"
 elif [ "$hbrc" = 2 ]; then
-  say "NOTE: the airlock's sign of life could not be read (family-tree-private's branch airlock-heartbeat); not checked"
+  say "NOTE: the airlock's sign of life could not be read (family-tree-private's branch airlock-heartbeat: GitHub out of"
+  say "  reach, a broken file, or a time that lies ahead of now); whether the airlock is running was not checked"
 fi
 
 # ------------------------------------------------------------------ 2c. state and site belong together (checked before anything is written)

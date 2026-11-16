@@ -28,8 +28,10 @@ ft_status_json() { ft_airlock_file "$1" airlock-status status.json; }
 # family-tree-private's branch airlock-heartbeat: {"at": "<UTC time>", "outcome": "<one word>", ...}. The
 # words: idle, published, checked, refused, unchanged-refusal, unchanged-check, waiting, error.
 # Prints "<hours since then, one decimal> <at> <outcome>" and returns 0; returns 1 when there is no heartbeat
-# branch; 2 when it cannot be read (GitHub out of reach, a broken file). It is a sign of life only: callers
-# warn or note, they never stop for it.
+# branch; 2 when it cannot be read (GitHub out of reach, a broken file, or a time more than five minutes
+# ahead of this machine's clock: until the review of 16 Nov 2026 such a time read as "0.0 hours ago", so a
+# heartbeat dated next year would have said the airlock had just run for as long as it stayed dead). It is a
+# sign of life only: callers warn or note, they never stop for it.
 ft_heartbeat() {
   local hb src=0
   hb="$(ft_airlock_file "$1" airlock-heartbeat heartbeat.json)" || src=$?
@@ -40,7 +42,9 @@ try:
     at=str(d["at"])
     t=datetime.datetime.strptime(at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc)
 except Exception: sys.exit(2)
-age=max(0.0, (datetime.datetime.now(datetime.timezone.utc)-t).total_seconds()/3600)
+secs=(datetime.datetime.now(datetime.timezone.utc)-t).total_seconds()
+if secs < -300: sys.exit(2)
+age=max(0.0, secs/3600)
 print("%.1f %s %s" % (age, at, re.sub(r"[^a-z-]", "", str(d.get("outcome") or "")) or "unknown"))' 2>/dev/null || return 2
 }
 
