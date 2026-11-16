@@ -13,7 +13,8 @@
  * skimmed rather than in something that runs.
  *
  * SCOPE — read this before trusting a clean bill of health.
- * This checks LOCAL state only. It does NOT check:
+ * This checks LOCAL state only (with one exception: it reads the airlock's last sign of life from GitHub,
+ * because an old copy of that would raise a false alarm; out of reach, it says nothing). It does NOT check:
  *   - whether the live site matches this repo  -> the deploy-verify workflow does that
  *   - whether the data is CORRECT              -> tests/run.js and checks/run.js do that
  * A green doctor means "nothing is silently broken underneath you". It does not mean
@@ -151,6 +152,28 @@ if (ahead && +ahead > 0 && unqueued !== null && +unqueued === 0) {
     ". Nothing is lost while they wait, and this session may go on: new work queues on top.",
     "read the airlock's verdict (git -C \"" + priv + "\" fetch -q origin airlock-status && git -C \"" + priv +
     "\" show FETCH_HEAD:status.json) and the runs in family-tree-airlock's Actions; say in this session's report that the airlock is late, so Cory looks at it.");
+})();
+/* Is the airlock running at all (16 Nov 2026)? Every run of it leaves a heartbeat on family-tree-private's
+ * branch airlock-heartbeat, the quiet runs too; tools/cloud-lib.sh's ft_heartbeat reads it from GitHub as it is
+ * now (a copy fetched at setup would be hours old by itself in a long session) and ft_heartbeat_old says when
+ * its age means the airlock has stopped (cloud-setup.sh warns with the same two). Whatever the queue holds:
+ * work queued later would wait too. No bash, no private clone, GitHub out of reach, no heartbeat yet: no
+ * finding, never a failure. */
+(() => {
+  const lib = path.join(__dirname, "cloud-lib.sh");
+  const priv = process.env.FT_PRIVATE_DIR || path.join(ROOT, "..", "family-tree-private");
+  if (!fs.existsSync(lib) || !fs.existsSync(priv)) return;
+  let out = "";
+  try {
+    out = execFileSync("bash", ["-c", '. "$1" && url="$(git -C "$2" remote get-url origin)" && h="$(ft_heartbeat "$url")" && read -r hh at o <<< "$h" && ft_heartbeat_old "$hh" && echo "$h" && echo "$FT_AIRLOCK_START"',
+      "doctor", lib, priv], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 30000, env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } }).trim();
+  } catch (_) { return; }
+  const m = out.match(/^([0-9.]+) (\S+) (\S+)\n(.+)$/);
+  if (!m) return;
+  add("WARN", "the airlock's last sign of life is " + m[1] + " hours old (" + m[2] + ", \"" + m[3] + "\")",
+    "It is due every two hours and leaves one at every run, so it has stopped, or GitHub has skipped several runs in a row. " +
+    "Until it runs again nothing queued is checked or published. This session may go on: its site work queues and waits.",
+    m[4] + ".");
 })();
 if (behind && +behind > 0) {
   add("WARN", behind + " commit(s) on the remote that are not here",

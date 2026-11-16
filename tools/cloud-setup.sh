@@ -181,6 +181,11 @@ if [ "$RO" != 1 ]; then   # a clone (on a machine used before) holding commits t
   [ "$hrc" = 2 ] && die "the airlock's verdict on the queue could not be read (family-tree-private's branch airlock-status; GitHub
   out of reach?). Run setup again in a few minutes; never work on a queue whose verdict is unknown."
 fi
+# the airlock's last sign of life (16 Nov 2026): read once here, for the two warnings below. Never a stop.
+hbrc=0; hbh=""; hbat=""; hbout=""
+hb="$(ft_heartbeat "$PRIV_URL_NOW")" || hbrc=$?
+[ "$hbrc" = 0 ] && read -r hbh hbat hbout <<< "$hb"
+hbold=0; [ "$hbrc" = 0 ] && ft_heartbeat_old "$hbh" && hbold=1
 if [ -n "$q" ]; then
   if git merge-base --is-ancestor "$q" origin/main; then
     say "queue: nothing waiting (everything queued is published)"
@@ -214,7 +219,15 @@ if [ -n "$q" ]; then
           if [ "$whow" = queued ]; then wsince="the oldest was queued $wh hours ago"
           else wsince="the oldest was committed $wh hours ago (when it was queued is not in this clone's history)"; fi
           say "WARNING: the queue's $wn commit(s) are still not published, and $wsince."
-          say "  The airlock runs every two hours, so it has missed a run or has stopped. Its last recorded check:"
+          if [ "$hbrc" = 0 ] && [ "$hbold" = 0 ]; then
+            say "  The airlock is running: its last run was $hbh hours ago and left \"$hbout\" ($(ft_heartbeat_means "$hbout"))."
+            say "  So it ran and did not publish them. Its last recorded check:"
+          elif [ "$hbrc" = 0 ]; then
+            say "  The airlock seems to have stopped: its last sign of life is $hbh hours old (the warning below says what to do)."
+            say "  Its last recorded check:"
+          else
+            say "  The airlock runs every two hours, so it has missed a run or has stopped. Its last recorded check:"
+          fi
           say "  $(ft_last_check "$PRIV_URL_NOW"). Read the verdict in family-tree-private's branch airlock-status"
           say "  (git -C \"$PRIV\" fetch -q origin airlock-status && git -C \"$PRIV\" show FETCH_HEAD:status.json); the runs"
           say "  are in family-tree-airlock's Actions. This session may go on (new work queues on top); say in its report"
@@ -229,6 +242,22 @@ if [ -n "$q" ]; then
   commits waited). An interactive session rebuilds the queue on the new main (OPERATING.md, 'A refused queue');
   do no site work here."
   fi
+fi
+
+# ------------------------------------------------------------------ 2b2. is the airlock running? (16 Nov 2026)
+# Every run of the airlock leaves a heartbeat, the quiet runs too (cloud-lib.sh, ft_heartbeat), so an airlock
+# that has stopped no longer looks like one with nothing to do. An old heartbeat is a WARNING whatever the
+# queue holds, because work queued later in this session would wait as well; the session goes on. No heartbeat
+# branch at all: nothing is said.
+if [ "$hbrc" = 0 ] && [ "$hbold" = 1 ]; then
+  say "WARNING: the airlock's last sign of life is $hbh hours old ($hbat, \"$hbout\"). It is due every two hours and"
+  say "  leaves one at every run, so it has stopped, or GitHub has skipped several runs in a row. Until it runs"
+  say "  again nothing queued is checked or published. What to do: $FT_AIRLOCK_START."
+  say "  This session may go on: its site work queues and waits."
+elif [ "$hbrc" = 0 ]; then
+  say "airlock: its last run left a sign of life $hbh hours ago ($hbout)"
+elif [ "$hbrc" = 2 ]; then
+  say "NOTE: the airlock's sign of life could not be read (family-tree-private's branch airlock-heartbeat); not checked"
 fi
 
 # ------------------------------------------------------------------ 2c. state and site belong together (checked before anything is written)

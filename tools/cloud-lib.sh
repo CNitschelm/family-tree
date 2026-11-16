@@ -1,21 +1,70 @@
 # cloud-lib.sh — functions shared by cloud-setup.sh, cloud-lock.sh and cloud-finish.sh. Sourced, never run.
 
-# ft_status_json <family-tree-private url>: the airlock's latest status.json, as it is (family-tree-private's
-# branch airlock-status). Returns 0 and prints it; 1 when there is no verdict yet; 2 when it cannot be read
-# (GitHub out of reach, an empty file).
-ft_status_json() {
+# ft_airlock_file <family-tree-private url> <branch> <file>: one file the airlock keeps on a branch of its own
+# in family-tree-private, as GitHub has it now. Returns 0 and prints it; 1 when the branch is not there; 2 when
+# it cannot be read (GitHub out of reach, an empty file).
+ft_airlock_file() {
   local url="$1" t st="" lr=0
-  git ls-remote --exit-code "$url" refs/heads/airlock-status >/dev/null 2>&1 || lr=$?
+  git ls-remote --exit-code "$url" "refs/heads/$2" >/dev/null 2>&1 || lr=$?
   [ "$lr" = 2 ] && return 1
   [ "$lr" = 0 ] || return 2
   t="$(mktemp -d)"; git init -q "$t"
-  if git -C "$t" fetch -q --depth 1 "$url" refs/heads/airlock-status 2>/dev/null; then
-    st="$(git -C "$t" show FETCH_HEAD:status.json 2>/dev/null || true)"
+  if git -C "$t" fetch -q --depth 1 "$url" "refs/heads/$2" 2>/dev/null; then
+    st="$(git -C "$t" show "FETCH_HEAD:$3" 2>/dev/null || true)"
   fi
   rm -rf "$t"
   [ -n "$st" ] || return 2
   printf '%s\n' "$st"
 }
+
+# ft_status_json <family-tree-private url>: the airlock's latest status.json, as it is (family-tree-private's
+# branch airlock-status). Returns 0 and prints it; 1 when there is no verdict yet; 2 when it cannot be read
+# (GitHub out of reach, an empty file).
+ft_status_json() { ft_airlock_file "$1" airlock-status status.json; }
+
+# ft_heartbeat <family-tree-private url>: the airlock's last sign of life (16 Nov 2026). Its verdict
+# (airlock-status) changes only when a queue is checked, so an airlock that has stopped looked like one with
+# nothing to do. Since then every run, the quiet ones included, ends by writing heartbeat.json to
+# family-tree-private's branch airlock-heartbeat: {"at": "<UTC time>", "outcome": "<one word>", ...}. The
+# words: idle, published, checked, refused, unchanged-refusal, unchanged-check, waiting, error.
+# Prints "<hours since then, one decimal> <at> <outcome>" and returns 0; returns 1 when there is no heartbeat
+# branch; 2 when it cannot be read (GitHub out of reach, a broken file). It is a sign of life only: callers
+# warn or note, they never stop for it.
+ft_heartbeat() {
+  local hb src=0
+  hb="$(ft_airlock_file "$1" airlock-heartbeat heartbeat.json)" || src=$?
+  [ "$src" = 0 ] || return "$src"
+  printf '%s' "$hb" | python3 -I -c 'import datetime,json,re,sys
+try:
+    d=json.load(sys.stdin)
+    at=str(d["at"])
+    t=datetime.datetime.strptime(at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc)
+except Exception: sys.exit(2)
+age=max(0.0, (datetime.datetime.now(datetime.timezone.utc)-t).total_seconds()/3600)
+print("%.1f %s %s" % (age, at, re.sub(r"[^a-z-]", "", str(d.get("outcome") or "")) or "unknown"))' 2>/dev/null || return 2
+}
+
+# ft_heartbeat_old <hours>: true when a heartbeat that old says the airlock has stopped: more than 8 hours.
+# The airlock is due every two hours and leaves a heartbeat at every run, but GitHub starts scheduled runs
+# late, often by an hour, and skips some altogether, so one or two missing runs mean nothing. Past 8 hours
+# three runs in a row have left no sign and a fourth is late: that is worth a warning, and no stop.
+ft_heartbeat_old() { python3 -I -c 'import sys; sys.exit(0 if float(sys.argv[1]) > 8 else 1)' "${1:-0}" 2>/dev/null; }
+
+# ft_heartbeat_means <outcome>: a heartbeat's word, in a few words, for a message. Always returns 0.
+ft_heartbeat_means() {
+  case "$1" in
+    idle)              echo "nothing was waiting for it" ;;
+    published)         echo "it published the queue" ;;
+    checked|unchanged-check) echo "it is in check mode: it checks the queue and publishes nothing until Cory sets it live or runs it with mode publish" ;;
+    refused|unchanged-refusal) echo "it refused the queue" ;;
+    waiting)           echo "public main moved during its check, and it tries again at its next run" ;;
+    error)             echo "the run ended in trouble of its own, which its log in Actions shows" ;;
+    *)                 echo "a word this script does not know" ;;
+  esac
+}
+
+# What to do about an airlock that has stopped: one wording, for cloud-setup.sh and tools/doctor.js.
+FT_AIRLOCK_START="Cory starts it by hand from its Actions page (family-tree-airlock on GitHub: Actions, airlock, Run workflow, mode publish); no session can, none has that repository. Say in this session's report that the airlock has stopped, so he does"
 
 # ft_verdict <family-tree-private url>: the airlock's latest verdict (family-tree-private's branch airlock-status).
 # Prints "<result> <queue head> <rule>" (the rule's spaces as _) and returns 0; returns 1 when there is no

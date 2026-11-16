@@ -34,7 +34,8 @@
 # origin/main or the queue's head), a lock release that fails after queuing (exit 4, said last), setup's stop
 # when a private repository is not attached, and the queue that has waited (a warning at setup and in
 # tools/doctor.js, which is run from the copy under test with FT_ROOT) with the note about the platform's
-# "unpushed commits" message. From the review of that work: a fault on GitHub's own side is tried again, not
+# "unpushed commits" message, and the airlock's heartbeat (a warning at setup and in tools/doctor.js when it
+# is more than eight hours old, whatever the queue holds; none at seven; a note when it cannot be read). From the review of that work: a fault on GitHub's own side is tried again, not
 # taken for a refusal; a folder of ignored files is named once; a source list whose commit cannot be pushed, or
 # that manifest.js calls incomplete (by its exit code), stops neither a finish nor a checkpoint and never reaches the
 # archive; the checkpoint's two kinds of clash each get their own way out; and every setup that may write ends
@@ -745,7 +746,47 @@ cloud A > "$T/last.out" 2>&1
 says "NOTE: the platform may say there are 1 unpushed commit(s) on branch 'main' and ask to push them: do not" "setup says the platform may ask to push the queued commits, and not to"
 doc A
 says "NOTE: the platform may say there are 1 unpushed commit(s) on branch 'main' and ask to push them: do not" "…and so does tools/doctor.js"
+lacks "sign of life" "…(with no heartbeat branch yet, neither says a word about one)"
+# the airlock's heartbeat (16 Nov 2026): every run of it leaves one, so a stopped airlock no longer looks idle
+heartbeat() { # $1 = hours ago, $2 = outcome (or "broken"): family-tree-private's branch airlock-heartbeat, as the airlock writes it
+  rm -rf "$T/hb" && git init -q "$T/hb" && ( cd "$T/hb" && if [ "$2" = broken ]; then printf '{ broken\n' > heartbeat.json; else
+    printf '{\n "at": "%s",\n "run": "1",\n "mode": "publish",\n "outcome": "%s",\n "queue_head": "",\n "main": ""\n}\n' \
+      "$(date -u -d "$1 hours ago" +%Y-%m-%dT%H:%M:%SZ)" "$2" > heartbeat.json; fi
+    git add heartbeat.json && gnohook commit -qm "Record an airlock heartbeat" && git -c push.negotiate=false push -q -f "$GHP" HEAD:refs/heads/airlock-heartbeat )
+}
+heartbeat 1 unchanged-check
+check "a queue that has waited, under an airlock that ran an hour ago: setup goes on" cloud A
+says "WARNING: the queue's 1 commit(s) are still not published" "…with the queue's warning"
+says 'The airlock is running: its last run was 1\.[0-9] hours ago and left "unchanged-check"' "…which now says the airlock is running, and what its last run left"
+says "it is in check mode" "…and what that word means"
+lacks "WARNING: the airlock's last sign of life" "…(and no warning that it has stopped)"
+heartbeat 9 idle
+check "the same queue under an airlock whose last sign of life is nine hours old: setup still goes on" cloud A
+says "The airlock seems to have stopped: its last sign of life is 9\.[0-9] hours old" "…the queue's warning says it seems to have stopped"
+says "WARNING: the airlock's last sign of life is 9\.[0-9] hours old" "…and a warning of its own says so"
+says "Run workflow" "…with what to do: Cory starts it by hand from its Actions page"
+says "This session may go on" "…and that the session may go on"
+doc A
+says "\\[WARN\\] the airlock's last sign of life is 9\.[0-9] hours old" "tools/doctor.js gives the same warning"
+says "Run workflow" "…with the same way out"
 publish
+check "with nothing waiting, an old heartbeat is still a warning (an idle queue does not hide a stopped airlock)" cloud A
+says "WARNING: the airlock's last sign of life is 9\.[0-9] hours old" "…it says so"
+quiet cloud R1
+check "…in a read-only session too" sh -c "cd '$T/R1' && HOME='$T/R1/home' FT_READONLY=1 FT_SKIP_DECRYPT=1 FT_SKIP_TOOLS=1 bash '$TOOLS/cloud-setup.sh'"
+says "WARNING: the airlock's last sign of life" "…it says so there"
+heartbeat 7 idle
+check "a heartbeat seven hours old (two runs skipped, a third late) is no alarm" cloud A
+lacks "WARNING: the airlock" "…(no warning)"
+says "airlock: its last run left a sign of life 7\.[0-9] hours ago (idle)" "…only a line that says when it last ran"
+doc A
+lacks "sign of life" "…(and nothing from tools/doctor.js)"
+heartbeat 0 broken
+check "a heartbeat that cannot be read does not stop setup" cloud A
+says "NOTE: the airlock's sign of life could not be read" "…it is a note"
+doc A
+lacks "sign of life" "…(and tools/doctor.js says nothing)"
+heartbeat 0 idle
 # a commit made six hours ago and queued only now has not waited: no warning where the history shows that
 quiet cloud A; quiet lock A take "session-a" "late"
 GIT_AUTHOR_DATE="$old" GIT_COMMITTER_DATE="$old" mc A old2; echo "late" >> "$PA/OPEN-ITEMS.md"; quiet fin A "Update working state" "session-a"
