@@ -8,6 +8,13 @@
 //
 //   node checks/manifest.js          # write sources/MANIFEST.json and print the summary
 //
+// Exit codes (tools/cloud-finish.sh goes by these, never by the words printed):
+//   0  both lists were written and are complete
+//   1  the run failed: the private hosts file cannot be used, or data.json could not be read
+//   3  both lists were written but are NOT complete: the private hosts file is not here, so the hosts only
+//      it knows are rated like any unknown host. Such a sources/urls.tsv must never go into the archive
+//      repo (a push of it there starts the archive's capture run).
+//
 // The manifest is the input to the archiver. It is regenerated from data.json, never hand-edited:
 // add a source to a card and it appears here on the next run.
 const fs = require('fs');
@@ -62,6 +69,7 @@ const shapeFault = p => {
   }
   return null;
 };
+const INCOMPLETE = 3;   // the exit code for a list written without the private hosts file (see the top of this file)
 let PRIVATE = null;
 try {
   PRIVATE = JSON.parse(fs.readFileSync(HOSTS_FILE, 'utf8'));
@@ -160,4 +168,7 @@ console.log(`  by capture kind:       page ${by('kind', 'page')}   gated ${by('k
 console.log('');
 console.log('The ten the site would miss most if they went dark tonight:');
 entries.slice(0, 10).forEach(e => console.log(`  ${String(e.dependents).padStart(3)} cards  ${e.risk.padEnd(6)} ${e.kind.padEnd(9)} ${e.url.slice(0, 88)}`));
-if (!PRIVATE) console.log('\n' + NO_HOSTS_NOTE);
+if (!PRIVATE) {
+  console.log('\n' + NO_HOSTS_NOTE);
+  process.exitCode = INCOMPLETE;
+}

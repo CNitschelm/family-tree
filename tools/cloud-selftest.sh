@@ -36,9 +36,9 @@
 # tools/doctor.js, which is run from the copy under test with FT_ROOT) with the note about the platform's
 # "unpushed commits" message. From the review of that work: a fault on GitHub's own side is tried again, not
 # taken for a refusal; a folder of ignored files is named once; a source list whose commit cannot be pushed, or
-# that manifest.js calls incomplete, stops neither a finish nor a checkpoint and never reaches the archive; the
-# checkpoint's two kinds of clash each get their own way out; and every setup that may write ends with the
-# standing note about the platform's push reminder.
+# that manifest.js calls incomplete (by its exit code), stops neither a finish nor a checkpoint and never reaches the
+# archive; the checkpoint's two kinds of clash each get their own way out; and every setup that may write ends
+# with the standing note about the platform's push reminder.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SEED="${1:?usage: cloud-selftest.sh <site clone>}"
@@ -106,15 +106,18 @@ mkdir -p "$T/seed-src/archive/inbox" && ( cd "$T/seed-src" && git init -q -b mai
   && : > archive/inbox/.gitkeep && printf 'archive/inbox/*\n!archive/inbox/.gitkeep\n' > .gitignore && git add -A && gnohook commit -qm init )
 quiet git clone --bare "$T/seed-src" "$GHA"
 # the private repo as refresh.py builds it: its own files, the entries, .private-paths, MANIFEST.sha256
+# (checks/source-hosts.json is checks/manifest.js's private list of hosts: without it that script's list is
+# not complete, and the finish keeps such a list out of the archive; here it lists no host)
 P0="$T/seed-priv"; mkdir -p "$P0"/ledger/history "$P0"/notes "$P0"/working/i18-plan "$P0"/sources "$P0"/evidence "$P0"/_work/go1 "$P0"/checks
 ( cd "$P0" && printf '{"investigations":[],"updated":"2026-10-17"}\n' > research.json && printf 'free\n' > ledger/LOCK \
   && : > ledger/changes.jsonl && : > ledger/register.jsonl && printf 'gz' > ledger/history/abc.json.gz \
   && echo note > notes/memory.md && echo 'print(1)' > working/i18-plan/a.py && echo '# open' > OPEN-ITEMS.md \
   && echo '# log' > CHANGE-LOG-COMMITS.md && echo '{}' > history.json && echo '[]' > checks/priority-cards.json \
+  && echo '{"risk":{},"kind":{}}' > checks/source-hosts.json \
   && echo '# notes' > _work/go1/NOTES.md && echo e > evidence/crop.txt && echo s > sources/urls.tsv \
   && echo '# private readme' > README.md && echo 'print("refresh")' > refresh.py && printf '* -text\n' > .gitattributes \
   && printf '.password\n/data.json\n/_work/**/*.png\n/_work/**/*.tgz\n' > .gitignore \
-  && printf '%s\n' CHANGE-LOG-COMMITS.md OPEN-ITEMS.md _work checks/priority-cards.json evidence history.json ledger notes research.json sources working > .private-paths \
+  && printf '%s\n' CHANGE-LOG-COMMITS.md OPEN-ITEMS.md _work checks/priority-cards.json checks/source-hosts.json evidence history.json ledger notes research.json sources working > .private-paths \
   && find . -type f ! -path './.git/*' ! -name README.md ! -name refresh.py ! -name .gitattributes ! -name .gitignore ! -name .private-paths ! -name MANIFEST.sha256 \
        | sed 's#^\./##' | sort | xargs sha256sum > MANIFEST.sha256 \
   && git init -q -b main && git add -A && gnohook commit -qm "Add the private working files" )
@@ -612,20 +615,32 @@ echo "after the clash" >> "$PA/OPEN-ITEMS.md"
 check "the next full finish puts the list right again, on top of the other session's" fin A "Update working state"
 git --git-dir="$GHA" show main:sources/urls.tsv | grep -q "notice/4" && ! git --git-dir="$GHA" show main:sources/urls.tsv | grep -q "notice/5" \
   && ok "…GitHub's archive has the list the cards give" || no "the list after a clash"
-# a manifest.js that runs without its private list of hosts exits 0, writes a list and says the list is not
-# complete and must not be copied into the archive: the finish must believe it (a push of the list starts the
-# archive's capture run). A stand-in says the same words here.
+# a manifest.js that runs without its private list of hosts writes a list and says, by its exit code, that the
+# list is not complete: the finish must believe it and keep that list out of the archive (a push of the list
+# starts the archive's capture run). The real script first, in a copy of its own with no hosts file beside it;
+# then a stand-in in the site clone, which leaves with the real script's code and prints none of its words,
+# because the finish goes by the code alone.
+mkdir -p "$T/mf/checks" && cp "$A/checks/manifest.js" "$A/checks/lib.js" "$T/mf/checks/"
+mrc=0; ( cd "$T/mf" && FT_DATA="$A/data.json" node checks/manifest.js ) > "$T/last.out" 2>&1 || mrc=$?
+mcode="$(sed -n 's/^const INCOMPLETE = \([0-9][0-9]*\);.*/\1/p' "$A/checks/manifest.js")"
+[ "$mrc" = 3 ] && [ "$mcode" = 3 ] && grep -q "notice/4" "$T/mf/sources/urls.tsv" \
+  && ok "checks/manifest.js without its private hosts file writes its list and leaves with exit code 3" \
+  || no "manifest.js without its hosts file: exit $mrc, and the code it names is ${mcode:-none}"
+echo '{"risk":{},"kind":{}}' > "$T/mf/checks/source-hosts.json"
+check "…with the file, it leaves with 0" sh -c "cd '$T/mf' && FT_DATA='$A/data.json' node checks/manifest.js"
+echo '[]' > "$T/mf/checks/source-hosts.json"
+mrc=0; ( cd "$T/mf" && FT_DATA="$A/data.json" node checks/manifest.js ) > "$T/last.out" 2>&1 || mrc=$?
+[ "$mrc" = 1 ] && ok "…and with a file it cannot use, with 1" || no "manifest.js with a hosts file of the wrong shape: exit $mrc"
 cp "$A/checks/manifest.js" "$T/manifest.keep"; git -C "$A" update-index --assume-unchanged checks/manifest.js
-cat > "$A/checks/manifest.js" <<'EOF'
+cat > "$A/checks/manifest.js" <<EOF
 'use strict';
 // a stand-in for the selftest: a list written without the private hosts file
 const fs = require('fs'), path = require('path');
 const dir = path.join(__dirname, '..', 'sources');
 fs.writeFileSync(path.join(dir, 'MANIFEST.json'), '{"count": 1, "entries": "not complete"}');
-fs.writeFileSync(path.join(dir, 'urls.tsv'), '# not complete\nmedium\t1\tpage\thttps://example.invalid/not-complete\n');
-console.log('NOTE: checks/source-hosts.json is not here, so the hosts only that private file lists are rated alike. ' +
-  "Do not copy this run's sources/urls.tsv into the archive repo: run bash tools/cloud-setup.sh, then run this again.");
+fs.writeFileSync(path.join(dir, 'urls.tsv'), '# not complete\\nmedium\\t1\\tpage\\thttps://example.invalid/not-complete\\n');
 console.log('MANIFEST: 1 distinct URLs, 1 hosts');
+process.exitCode = ${mcode:-0};
 EOF
 echo "not complete" >> "$PA/OPEN-ITEMS.md"; am1="$(git --git-dir="$GHA" rev-parse main)"
 check "a manifest that says its list is not complete does not stop the finish" fin A "Update working state"

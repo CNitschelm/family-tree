@@ -627,6 +627,49 @@ section("Line figures (linkconf sync)");
     "cloud-finish.sh runs the line figures' step after the site is committed and before its own commits are checked, and stops on a line with no figure");
 }
 
+/* ---------- the source list says, by its exit code, when it is not complete (16 Nov 2026) ----------
+ * checks/manifest.js rates each cited address with a private list of hosts (checks/source-hosts.json, linked in
+ * from family-tree-private). Without that file its sources/urls.tsv is not the whole one, and a push of such a
+ * list into the archive starts the archive's capture run. tools/cloud-finish.sh rebuilds the list at every full
+ * finish and used to tell an incomplete one only by the words manifest.js printed. The exit code is the sign
+ * now: 0 complete, 3 written but not complete, 1 failed. Run here on a copy of the script with made-up cards. */
+section("Source list (manifest)");
+{
+  const os = require("os"), cp = require("child_process");
+  const T = fs.mkdtempSync(path.join(os.tmpdir(), "ft-manifest-"));
+  try {
+    fs.mkdirSync(path.join(T, "checks"));
+    ["manifest.js", "lib.js"].forEach(f => fs.copyFileSync(path.join(ROOT, "checks", f), path.join(T, "checks", f)));
+    const src = (l, u) => ({ l, u });
+    fs.writeFileSync(path.join(T, "data.json"), JSON.stringify({ id: "t00", name: "First Card", years: "1670–1730",
+      src: [src("A register", "https://example.invalid/register/1")],
+      unions: [{ s: "Spouse Card", c: [{ id: "t01", name: "Second Card", years: "1699–1760", unions: [],
+        src: [src("A register", "https://example.invalid/register/1"), src("A page", "https://private-host.example/page/2")] }] }] }));
+    const hosts = path.join(T, "checks", "source-hosts.json"), list = path.join(T, "sources", "urls.tsv");
+    const run = () => {
+      fs.rmSync(path.join(T, "sources"), { recursive: true, force: true });
+      const r = cp.spawnSync("node", [path.join(T, "checks", "manifest.js")], { cwd: T, env: { ...process.env, FT_DATA: path.join(T, "data.json") }, encoding: "utf8" });
+      let tsv = ""; try { tsv = fs.readFileSync(list, "utf8"); } catch (_) {}
+      return { code: r.status, out: (r.stdout || "") + (r.stderr || ""), tsv };
+    };
+    const bare = run();
+    ok(bare.code === 3 && /medium\t1\tpage\thttps:\/\/private-host\.example\/page\/2/.test(bare.tsv) && /source-hosts\.json is not here/.test(bare.out),
+      "checks/manifest.js without its private hosts file writes the list, says it is not complete, and leaves with exit code 3");
+    fs.writeFileSync(hosts, JSON.stringify({ risk: { high: ["private-host.example"] }, kind: {} }));
+    const full = run();
+    ok(full.code === 0 && /high\t1\tpage\thttps:\/\/private-host\.example\/page\/2/.test(full.tsv) && !/not here/.test(full.out) && !/(First|Second|Spouse) Card/.test(full.tsv),
+      "with the file it rates that host as the file says, names no card in the list, and leaves with 0");
+    const wrong = ["[]", "{ not json", JSON.stringify({ risk: "x", kind: {} }), JSON.stringify({ risk: { urgent: ["a.example"] }, kind: {} })].map(t => { fs.writeFileSync(hosts, t); return run(); });
+    ok(wrong.every(r => r.code === 1 && r.tsv === "" && /cannot be used/.test(r.out)),
+      "a hosts file it cannot use stops it with exit code 1, and nothing is written");
+    const fin = fs.readFileSync(path.join(ROOT, "tools", "cloud-finish.sh"), "utf8");
+    const code = (fs.readFileSync(path.join(ROOT, "checks", "manifest.js"), "utf8").match(/^const INCOMPLETE = (\d+);/m) || [])[1];
+    ok(code === "3" && fin.includes('node checks/manifest.js 2>&1)"; mrc=$?; [ "$mrc" = ' + code + " ]; then") && !/grep[^\n]*source-hosts\\?\.json is not here/.test(fin),
+      "tools/cloud-finish.sh tells an incomplete list by that exit code, not by the words printed");
+  } catch (e) { ok(false, "source list test ran (" + String(e.message).split("\n")[0] + ")"); }
+  fs.rmSync(T, { recursive: true, force: true });
+}
+
 section("Decrypt DATA");
 let PW = (process.env.FT_PASSWORD || "").trim();
 if (!PW) { try { PW = fs.readFileSync(path.join(ROOT, ".password"), "utf8").trim(); } catch (_) {} }
