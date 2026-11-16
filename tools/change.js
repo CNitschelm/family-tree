@@ -297,13 +297,18 @@ function checkImage(i, x, tag, a) {
   if (L.recordImage(x.src).held) { if (x.no_image) warn(i, `${tag}: "no_image" is given, but an image of ${x.src} is on file — take "no_image" out next time`); return; }
   if (x.no_image) return void keep(i).noImage.push({ src: x.src, why: x.no_image.trim() });
   const fam = /^family:/.test(x.src), id = fam ? '' : L.sourceId(x.src);
+  // The two scripts named below are the archive's own (family-tree-sources: checks/verify.js, archive/file.mjs),
+  // so each command says where it runs: started in the site clone, as every other tool is, the first try ended
+  // in node's "Cannot find module" (found in review, 16 Nov 2026).
+  const inArchive = cmd => `(cd "${L.ARCHIVE}" && ${cmd})`;
   err(i, `${tag}: ` + (blank
       ? `our copy of ${x.src} has no words this tool can read (${a.files.map(f => path.basename(f)).join(', ') || 'no file'}; a viewer saves an empty page), and the archive holds no image of it, so what was read cannot be checked or read again.\n`
       : `${x.src} was read from an image, and the archive holds no image of it (our typed reading, or a viewer's empty page, is not a copy of the record).\n`) +
     (fam ? `    Put the photograph or scan in family-tree-sources archive/family/${x.src.slice(7)}/ with a row in that folder's README, then run this again.\n`
          : `    File the image in family-tree-sources (archive/MANUAL.md, "The image"; notes/source_archive.md), commit it there, then run this again. Either\n` +
-           `      save it as archive/hand/${id}.jpg (or .png, .pdf; beside its dated copy, under that copy's name) with its row in archive/hand/README.md, then: node checks/verify.js\n` +
-           `      or, for an address a card already cites: node archive/file.mjs <the image file> --url "${x.src}"   then: node checks/verify.js --record\n` +
+           `      save it as archive/hand/${id}.jpg (or .png, .pdf; beside its dated copy, under that copy's name) with its row in archive/hand/README.md, then: ${inArchive('node checks/verify.js')}\n` +
+           `      or, for an address a card already cites: ${inArchive(`node archive/file.mjs <the image file> --url "${x.src}"`)}   then: ${inArchive('node checks/verify.js --record')}\n` +
+           `      (Both scripts are the archive's own: they run in family-tree-sources, not in the site clone.)\n` +
            (blank ? `    If the page shows the record as words, not as a picture, save those words as the hand copy archive/hand/${id}.txt instead and give them as "quote".\n` : '')) +
     (guessed ? `    If what you read was words on a page, not a picture of the record, say "read": "text" and give those words as "quote": then no image is asked for.\n` : '') +
     `    If the image cannot be had now (a sign-in, a site that refuses downloads), add "no_image": "<why, and what will fetch it>" to this evidence item instead.`);

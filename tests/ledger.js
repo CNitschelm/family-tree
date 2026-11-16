@@ -311,8 +311,12 @@ console.log('== an image on file for a fact read from an image');
   r = change(fact({ src: P_NONE, quote }), ['--dry']);
   ok(r.code === 1 && /holds no image/.test(r.out) && /archive\/hand\/[0-9a-f]{12}\.jpg/.test(r.out) && /"no_image"/.test(r.out),
     'a quote from our typed reading of a register page is refused while no image of the page is on file, and the refusal says where to file it');
-  ok(/with its row in archive\/hand\/README\.md, then: node checks\/verify\.js/.test(r.out) && r.out.includes(`node archive/file.mjs <the image file> --url "${P_NONE}"`) && /archive\/MANUAL\.md/.test(r.out),
+  ok(/with its row in archive\/hand\/README\.md, then: \(cd "[^"]+" && node checks\/verify\.js\)/.test(r.out) && r.out.includes(`node archive/file.mjs <the image file> --url "${P_NONE}"`) && /archive\/MANUAL\.md/.test(r.out),
     'and with which tools: the README row and verify.js, or file.mjs with the address');
+  // the two scripts are the archive's own: started in the site clone, as every other tool is, they end in "Cannot find module"
+  ok(r.out.includes(`(cd "${ARCH}" && node checks/verify.js)`) && r.out.includes(`(cd "${ARCH}" && node archive/file.mjs <the image file> --url "${P_NONE}")`) &&
+     r.out.includes(`(cd "${ARCH}" && node checks/verify.js --record)`) && !/then: node checks\/verify\.js/.test(r.out) && /they run in family-tree-sources, not in the site clone/.test(r.out),
+    'and each command says where it runs: inside the source archive, by its path');
   r = change(fact({ src: URL_A, read: 'image', transcription: 'He came to Valeton in 1908.' }), ['--dry']);
   ok(r.code === 1 && /holds no image/.test(r.out), 'so is "read": "image" from a source held as text only');
   r = change(fact({ src: URL_D, read: 'image', transcription: quote }), ['--dry']);
