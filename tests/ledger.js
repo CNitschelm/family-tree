@@ -604,6 +604,18 @@ console.log('== the gate and the commit hook, on this repo');
   ok(/linter: high 0/.test(g.out) && fs.readdirSync(TMP).length === 0, 'the copies of the data it gave the linter are gone when it ends');
   const stamp = fs.readFileSync(stampFile, 'utf8');
   ok(new RegExp(`^${iv().replace(/[+/]/g, '\\$&')}\\n\\S+ PASS ${sets} change set\\(s\\) \\d+ edit\\(s\\) over origin/main\\n$`).test(stamp), 'the stamp keeps its two lines: the iv, then PASS and the base');
+  // tools/cloud-finish.sh reads the base out of that second line with a pattern of its own, and stops every
+  // payload finish when it finds none. Its pattern is run here on the line the gate really wrote, so the line
+  // cannot change its shape without this failing first. (No sed on this machine: nothing to run.)
+  const finishBase = line => {
+    const prog = (fs.readFileSync(path.join(SRC, 'tools', 'cloud-finish.sh'), 'utf8').match(/gbase=\$\(printf '%s\\n' "\$st2" \| sed -n -E '([^']+)'\)/) || [])[1];
+    if (!prog) return 'no pattern found in tools/cloud-finish.sh';
+    const r = spawnSync('sed', ['-n', '-E', prog], { input: line + '\n', encoding: 'utf8' });
+    return r.error ? null : r.stdout.trim();
+  };
+  const fb = finishBase(stamp.split('\n')[1]);
+  if (fb === null) console.log('  --  no sed here: the finish\'s reading of the stamp was not run');
+  else ok(fb === 'origin/main' && finishBase('FAIL') === '' && finishBase(stamp.split('\n')[0]) === '', 'tools/cloud-finish.sh reads the base out of the gate\'s own second line (' + fb + '), and none out of a line that is not a pass');
   stub('tests/ledger.js', "console.log('  FAIL a rule\\n6 passed, 1 failed'); process.exit(1);\n");
   g = gate();
   ok(g.code === 1 && /tests\/ledger\.js failed: 6 passed, 1 failed/.test(g.out) && fs.readFileSync(stampFile, 'utf8') === 'FAIL\n', 'and fails, stamp and all, when one of them fails');
@@ -644,6 +656,7 @@ console.log('== the gate and the commit hook, on this repo');
   ok(g.code === 0 && /0 change set\(s\)/.test(g.out) && /the commit hook will not take its stamp/.test(g.out) && c.code !== 0, 'a pass over HEAD explains nothing: the gate says its stamp will not do, and the hook refuses it');
   git('update-ref', 'refs/remotes/queue/site-queue', 'HEAD');
   g = gate('--base=queue/site-queue');
+  if (fb !== null) ok(finishBase(fs.readFileSync(stampFile, 'utf8').split('\n')[1]) === 'queue/site-queue', 'and the finish reads queue/site-queue out of a pass over the queue\'s head');
   c = commit();
   ok(g.code === 0 && c.code === 0, 'a pass over the queue\'s head is taken when the queue is fetched here');
   git('config', '--unset', 'core.hooksPath');
