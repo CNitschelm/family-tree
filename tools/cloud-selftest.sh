@@ -587,9 +587,37 @@ echo "after the clash" >> "$PA/OPEN-ITEMS.md"
 check "the next full finish puts the list right again, on top of the other session's" fin A "Update working state"
 git --git-dir="$GHA" show main:sources/urls.tsv | grep -q "notice/4" && ! git --git-dir="$GHA" show main:sources/urls.tsv | grep -q "notice/5" \
   && ok "…GitHub's archive has the list the cards give" || no "the list after a clash"
+# a manifest.js that runs without its private list of hosts exits 0, writes a list and says the list is not
+# complete and must not be copied into the archive: the finish must believe it (a push of the list starts the
+# archive's capture run). A stand-in says the same words here.
+cp "$A/checks/manifest.js" "$T/manifest.keep"; git -C "$A" update-index --assume-unchanged checks/manifest.js
+cat > "$A/checks/manifest.js" <<'EOF'
+'use strict';
+// a stand-in for the selftest: a list written without the private hosts file
+const fs = require('fs'), path = require('path');
+const dir = path.join(__dirname, '..', 'sources');
+fs.writeFileSync(path.join(dir, 'MANIFEST.json'), '{"count": 1, "entries": "not complete"}');
+fs.writeFileSync(path.join(dir, 'urls.tsv'), '# not complete\nmedium\t1\tpage\thttps://example.invalid/not-complete\n');
+console.log('NOTE: checks/source-hosts.json is not here, so the hosts only that private file lists are rated alike. ' +
+  "Do not copy this run's sources/urls.tsv into the archive repo: run bash tools/cloud-setup.sh, then run this again.");
+console.log('MANIFEST: 1 distinct URLs, 1 hosts');
+EOF
+echo "not complete" >> "$PA/OPEN-ITEMS.md"; am1="$(git --git-dir="$GHA" rev-parse main)"
+check "a manifest that says its list is not complete does not stop the finish" fin A "Update working state"
+says "NOTE: the archive's source list (sources/urls.tsv) was not brought up to date: checks/manifest.js says this run's list is not complete" "…it is a note that says so"
+says "bash tools/cloud-setup.sh" "…with what to do"
+lacks "By hand" "…(and not the advice to copy the list by hand)"
+test "$(git --git-dir="$GHA" rev-parse main)" = "$am1" && test -z "$(alist)" && test -z "$(git -C "$AA" status --porcelain)" \
+  && ok "…the list did not go into the archive" || no "an incomplete list reached the archive"
+grep -q "notice/4" "$PA/sources/urls.tsv" && ! grep -q "not-complete" "$PA/sources/urls.tsv" && grep -q '"count": 2' "$PA/sources/MANIFEST.json" \
+  && ! gp show main:sources/urls.tsv | grep -q "not-complete" && gp show main:OPEN-ITEMS.md | grep -qx "not complete" \
+  && ok "…the private lists are as they were before, and the state went up" || no "the private lists after an incomplete manifest"
+cp "$T/manifest.keep" "$A/checks/manifest.js"; git -C "$A" update-index --no-assume-unchanged checks/manifest.js
+test -z "$(git -C "$A" status --porcelain --untracked-files=no)" || no "the stand-in manifest.js was left in the site clone"
 printf '{ not json\n' > "$A/data.json"; echo "last" >> "$PA/OPEN-ITEMS.md"; am1="$(git --git-dir="$GHA" rev-parse main)"
 check "a manifest that fails does not stop the finish" fin A "Update working state"
 says "node checks/manifest.js failed" "…it is a note"
+grep -q "notice/4" "$PA/sources/urls.tsv" && ok "…and the private list is as it was" || no "the private list after a failed manifest"
 test "$(git --git-dir="$GHA" rev-parse main)" = "$am1" && test -z "$(git -C "$AA" status --porcelain)" && gp show main:OPEN-ITEMS.md | grep -qx "last" \
   && ok "…the archive is left clean and the state went up" || no "a failed manifest and the finish"
 cp "$T/data.keep" "$A/data.json"; rm -f "$A/.data-stamp"

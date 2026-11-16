@@ -38,7 +38,9 @@
 #     commits, a merge, a file it does not publish; for direct also unpublished commits in the queue
 # 4a. keeps the archive's source list current: when data.json is here and comes from the index.html on disk,
 #     node checks/manifest.js, and if its sources/urls.tsv differs from the archive's, a commit of it in the
-#     archive ("update the source list"), which goes up in 4; anything that goes wrong there is a NOTE
+#     archive ("update the source list"), which goes up in 4; anything that goes wrong there is a NOTE, never a
+#     stop: a run that fails or says its list is not complete leaves every list as it was, and a list commit
+#     that cannot be pushed is undone (here and in the notes checkpoint)
 #  4. pushes the source archive's own commits (the evidence a payload cites), then commits family-tree-
 #     private and pushes it, with the writer lock still held (so no other session starts from a queue without
 #     these commits); when there are own site commits, .public-head = the newest of them
@@ -412,18 +414,37 @@ fi
 # goes up with the archive's others in 4. Whatever goes wrong here is a NOTE, never a stop: the list is
 # rebuilt at the next full finish. (manifest.js writes into sources/, a link into family-tree-private: its
 # MANIFEST.json, which has the cards, stays there and goes with the state.)
+lists_keep() { # $1 = a folder: sources/urls.tsv and sources/MANIFEST.json as they are before manifest.js rewrites them
+  local f; for f in urls.tsv MANIFEST.json; do [ ! -e "$FT/sources/$f" ] || cp -p "$FT/sources/$f" "$1/$f" || return 1; done
+}
+lists_back() { # $1 = that folder: put both back as they were (one that was not there is taken away again)
+  local f; for f in urls.tsv MANIFEST.json; do
+    if [ -e "$1/$f" ]; then cp -p "$1/$f" "$FT/sources/$f"; else rm -f "$FT/sources/$f"; fi
+  done
+}
 sync_urls() {
-  local out why=""
+  local out why="" keep="" back=0 ok=0
+  local next="(By hand: node checks/manifest.js, copy sources/urls.tsv into family-tree-sources/sources/, commit it there.)"
   [ -n "$ARCH" ] || return 0
   if   [ ! -f "$FT/checks/manifest.js" ]; then why="checks/manifest.js is not here"
   elif ! git -C "$FT" merge-base --is-ancestor "$N" "$H"; then why="this clone is behind the newest site commit, so its data.json is not the newest"
   elif [ ! -e "$FT/data.json" ]; then why="there is no data.json here"
   elif ! FT_ROOT="$FT" node "$HERE/doctor.js" --data-current 2>/dev/null; then why="data.json does not come from the index.html on disk (node tools/doctor.js says what to do)"
   elif [ ! -L "$FT/sources" ] || [ ! -d "$FT/sources" ]; then why="sources/ is not a link into family-tree-private (checks/manifest.js writes there)"
+  elif ! keep="$(mktemp -d)" || ! lists_keep "$keep"; then why="the lists in sources/ could not be set aside before the rebuild"
   elif ! out="$(cd "$FT" && FT_DATA="$FT/data.json" node checks/manifest.js 2>&1)"; then
+    back=1
     why="$(printf '%s\n' "$out" | grep -m 1 -E 'Error|error' | cut -c1-160)"       # node's own line, when it gave one
     why="node checks/manifest.js failed (${why:-$(printf '%s\n' "$out" | grep -v '^$' | tail -n 1 | cut -c1-160)})"
-  elif [ ! -s "$FT/sources/urls.tsv" ]; then why="checks/manifest.js wrote no sources/urls.tsv"
+  elif printf '%s\n' "$out" | grep -qE 'source-hosts\.json is not here|[Dd]o not copy this run'; then
+    # manifest.js ran, exit 0, and said its list is not the whole one: without its private list of hosts it rates
+    # them all alike, and tells the reader not to copy the result into the archive. A push of sources/urls.tsv
+    # starts the archive's capture run, so such a list must never go there (found in review, 16 Nov 2026).
+    back=1
+    why="checks/manifest.js says this run's list is not complete (its private file checks/source-hosts.json is not here), and such a list must not go into the archive"
+    next="Before it: run  bash tools/cloud-setup.sh  (it links that file from family-tree-private); if the file is
+  not in family-tree-private either, say so in this session's report. The lists in sources/ are as they were before."
+  elif [ ! -s "$FT/sources/urls.tsv" ]; then back=1; why="checks/manifest.js wrote no sources/urls.tsv"
   elif ! git -C "$ARCH" fetch -q origin main 2>/dev/null; then why="GitHub could not be reached (the source archive)"
   elif [ "$(git -C "$ARCH" rev-list --count HEAD..origin/main 2>/dev/null || echo 1)" -gt 0 ] \
        && ! { git -C "$ARCH" merge-base HEAD origin/main >/dev/null 2>&1 && ft_take_in "$ARCH" rebase; }; then
@@ -431,18 +452,21 @@ sync_urls() {
   elif ! { mkdir -p "$ARCH/sources" && cp "$FT/sources/urls.tsv" "$ARCH/sources/urls.tsv" && git -C "$ARCH" add -- sources/urls.tsv; }; then
     why="the new list could not be copied into the archive"
   elif git -C "$ARCH" diff --cached --quiet -- sources/urls.tsv; then
-    return 0                                                             # the archive's list is current
-  elif git -C "$ARCH" commit -q -m "update the source list" -- sources/urls.tsv; then
+    ok=1                                                                 # the archive's list is current
+  elif git -C "$ARCH" commit -q -m "$LIST_MSG" -- sources/urls.tsv; then
+    ok=1
     echo "archive: its source list was behind the cards: sources/urls.tsv rebuilt from data.json ($(grep -vc '^#' "$ARCH/sources/urls.tsv") addresses) and committed"
-    return 0
   else why="the new list could not be committed in the archive"
   fi
+  # a run that failed or was not complete leaves family-tree-private's own lists as they were, too: they go with the state
+  [ "$back" = 1 ] && lists_back "$keep"
+  [ -z "$keep" ] || rm -rf "$keep"
+  [ "$ok" = 1 ] && return 0
   # leave the archive as it was: an uncommitted file there would stop the next finish
   git -C "$ARCH" reset -q -- sources/urls.tsv 2>/dev/null || true
   git -C "$ARCH" checkout -q -- sources/urls.tsv 2>/dev/null || { git -C "$ARCH" ls-files --error-unmatch -- sources/urls.tsv >/dev/null 2>&1 || rm -f "$ARCH/sources/urls.tsv"; }
   echo "NOTE: the archive's source list (sources/urls.tsv) was not brought up to date: $why.
-  Nothing is lost and nothing stops for it: the next full finish rebuilds it. (By hand: node checks/manifest.js,
-  copy sources/urls.tsv into family-tree-sources/sources/, commit it there.)"
+  Nothing is lost and nothing stops for it: the next full finish rebuilds it. $next"
 }
 sync_urls
 
