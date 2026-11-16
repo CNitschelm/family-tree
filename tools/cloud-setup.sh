@@ -211,8 +211,8 @@ if [ -n "$q" ]; then
       # The standing note at the end of setup says the rest.
       say "NOTE: the platform may say there are $nq unpushed commit(s) on branch 'main' and ask to push them: do not."
       say "  They are queued, and the airlock publishes them."
-      # a stale queue and a quiet airlock (16 Nov 2026): the airlock records nothing while idle, so one that has
-      # stopped looks like one with nothing to do. A warning; the session goes on.
+      # a queue that has waited (16 Nov 2026): the airlock's verdict changes only when it checks a queue, so the
+      # warning is worded by its heartbeat, read above. A warning; the session goes on.
       if w="$(ft_queue_wait "$FT" "$PRIV")"; then
         read -r wh wn whow <<< "$w"
         if ft_queue_late "$wh"; then

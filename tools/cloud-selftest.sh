@@ -36,7 +36,7 @@
 # tools/doctor.js, which is run from the copy under test with FT_ROOT) with the note about the platform's
 # "unpushed commits" message, and the airlock's heartbeat (a warning at setup and in tools/doctor.js when it
 # is more than eight hours old, whatever the queue holds; none at seven; a note when it cannot be read or is
-# dated ahead of now). From the review of that work: a fault on GitHub's own side is tried again, not
+# dated ahead of now; the doctor's queue warning worded by it, as setup's is). From the review of that work: a fault on GitHub's own side is tried again, not
 # taken for a refusal; a folder of ignored files is named once; a source list whose commit cannot be pushed, or
 # that manifest.js calls incomplete (by its exit code), stops neither a finish nor a checkpoint and never reaches the
 # archive; the checkpoint's two kinds of clash each get their own way out; and every setup that may write ends
@@ -775,6 +775,11 @@ says "WARNING: the queue's 1 commit(s) are still not published" "…with the que
 says 'The airlock is running: its last run was 1\.[0-9] hours ago and left "unchanged-check"' "…which now says the airlock is running, and what its last run left"
 says "it is in check mode" "…and what that word means"
 lacks "WARNING: the airlock's last sign of life" "…(and no warning that it has stopped)"
+doc A
+says 'The airlock is running: its last run was 1\.[0-9] hours ago and left "unchanged-check"' "tools/doctor.js words its queue warning by the heartbeat too: the airlock is running"
+says "So it ran and did not publish them" "…and that it ran and did not publish them"
+lacks "has missed a run or has stopped" "…(it no longer says the airlock has missed a run or stopped, against setup's own words)"
+lacks "the airlock is late" "…(nor asks for a report that the airlock is late)"
 heartbeat 9 idle
 check "the same queue under an airlock whose last sign of life is nine hours old: setup still goes on" cloud A
 says "The airlock seems to have stopped: its last sign of life is 9\.[0-9] hours old" "…the queue's warning says it seems to have stopped"
@@ -784,6 +789,7 @@ says "This session may go on" "…and that the session may go on"
 doc A
 says "\\[WARN\\] the airlock's last sign of life is 9\.[0-9] hours old" "tools/doctor.js gives the same warning"
 says "Run workflow" "…with the same way out"
+says "The airlock seems to have stopped: its last sign of life is 9\.[0-9] hours old" "…and its queue warning says the airlock seems to have stopped"
 publish
 check "with nothing waiting, an old heartbeat is still a warning (an idle queue does not hide a stopped airlock)" cloud A
 says "WARNING: the airlock's last sign of life is 9\.[0-9] hours old" "…it says so"

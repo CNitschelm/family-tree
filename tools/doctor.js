@@ -131,50 +131,63 @@ if (ahead && +ahead > 0 && unqueued !== null && +unqueued === 0) {
     "never run git push in the site clone). A change to code, tests, tools or documents is not for the queue: " +
     "it goes out only from a session with Cory there. Once the airlock has published, confirm the live site changed.");
 }
-/* A stale queue and a quiet airlock (16 Nov 2026): the airlock runs every two hours and records nothing while
- * idle, so one that has stopped looks like one with nothing to do. tools/cloud-lib.sh's ft_queue_wait works the
- * wait out from the refs as they were last fetched (the one implementation; cloud-setup.sh warns with it too).
- * No bash, or no private clone beside this one: no finding, never a failure. */
-(() => {
-  const lib = path.join(__dirname, "cloud-lib.sh");
-  const priv = process.env.FT_PRIVATE_DIR || path.join(ROOT, "..", "family-tree-private");
-  if (!queue || !fs.existsSync(lib) || !fs.existsSync(priv)) return;
-  let out = "";
-  try {
-    out = execFileSync("bash", ["-c", '. "$1" && w="$(ft_queue_wait "$2" "$3")" && read -r h n how <<< "$w" && ft_queue_late "$h" && echo "$w"',
-      "doctor", lib, ROOT, priv], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
-  } catch (_) { return; }
-  const m = out.match(/^([0-9.]+) (\d+) (queued|committed)$/);
-  if (!m) return;
-  add("WARN", "the queue's " + m[2] + " commit(s) are still not published: the oldest was " + m[3] + " " + m[1] + " hours ago",
-    "The airlock runs every two hours, so it has missed a run or has stopped" +
-    (m[3] === "committed" ? " (when the commit was queued is not in this clone's history; if that was only lately, this is nothing)" : "") +
-    ". Nothing is lost while they wait, and this session may go on: new work queues on top.",
-    "read the airlock's verdict (git -C \"" + priv + "\" fetch -q origin airlock-status && git -C \"" + priv +
-    "\" show FETCH_HEAD:status.json) and the runs in family-tree-airlock's Actions; say in this session's report that the airlock is late, so Cory looks at it.");
-})();
 /* Is the airlock running at all (16 Nov 2026)? Every run of it leaves a heartbeat on family-tree-private's
  * branch airlock-heartbeat, the quiet runs too; tools/cloud-lib.sh's ft_heartbeat reads it from GitHub as it is
  * now (a copy fetched at setup would be hours old by itself in a long session) and ft_heartbeat_old says when
- * its age means the airlock has stopped (cloud-setup.sh warns with the same two). Whatever the queue holds:
- * work queued later would wait too. No bash, no private clone, GitHub out of reach, no heartbeat yet: no
- * finding, never a failure. */
-(() => {
-  const lib = path.join(__dirname, "cloud-lib.sh");
-  const priv = process.env.FT_PRIVATE_DIR || path.join(ROOT, "..", "family-tree-private");
-  if (!fs.existsSync(lib) || !fs.existsSync(priv)) return;
+ * its age means the airlock has stopped (cloud-setup.sh warns with the same two). It is read once here, for
+ * the two findings below. null: no bash, no private clone, or no heartbeat branch yet. { unread: true }: GitHub
+ * out of reach, a broken file, or a time that lies ahead of now. Neither is ever a failure. */
+const LIB = path.join(__dirname, "cloud-lib.sh");
+const PRIV = process.env.FT_PRIVATE_DIR || path.join(ROOT, "..", "family-tree-private");
+const heartbeat = (() => {
+  if (!fs.existsSync(LIB) || !fs.existsSync(PRIV)) return null;
   let out = "";
   try {
-    out = execFileSync("bash", ["-c", '. "$1" && url="$(git -C "$2" remote get-url origin)" && h="$(ft_heartbeat "$url")" && read -r hh at o <<< "$h" && ft_heartbeat_old "$hh" && echo "$h" && echo "$FT_AIRLOCK_START"',
-      "doctor", lib, priv], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 30000, env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } }).trim();
+    out = execFileSync("bash", ["-c", '. "$1" && url="$(git -C "$2" remote get-url origin)" || exit 0; rc=0; h="$(ft_heartbeat "$url")" || rc=$?; echo "$rc"; [ "$rc" = 0 ] || exit 0; ' +
+      'read -r hh at o <<< "$h"; echo "$h"; if ft_heartbeat_old "$hh"; then echo old; else echo fresh; fi; ft_heartbeat_means "$o"; echo "$FT_AIRLOCK_START"',
+      "doctor", LIB, PRIV], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 30000, env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } }).trim();
+  } catch (_) { return { unread: true }; }
+  const l = out.split("\n");
+  if (l[0] === "1" || l[0] === "") return null;
+  const m = l[0] === "0" && (l[1] || "").match(/^([0-9.]+) (\S+) (\S+)$/);
+  if (!m || !/^(old|fresh)$/.test(l[2] || "")) return { unread: true };
+  return { hours: m[1], at: m[2], outcome: m[3], old: l[2] === "old", means: l[3] || "", start: l[4] || "" };
+})();
+/* A queue that has waited (16 Nov 2026). The airlock's verdict changes only when it checks a queue, so the
+ * verdict alone cannot tell an airlock that has stopped from one that ran and did not publish: the heartbeat
+ * above can, and this warning is worded by it, as cloud-setup.sh words its twin. (Until the review of 16 Nov
+ * 2026 it said "it has missed a run or has stopped" whatever the heartbeat showed, against setup's own words.)
+ * tools/cloud-lib.sh's ft_queue_wait works the wait out from the refs as they were last fetched (the one
+ * implementation; cloud-setup.sh warns with it too). No bash, or no private clone beside this one: no
+ * finding, never a failure. */
+(() => {
+  if (!queue || !fs.existsSync(LIB) || !fs.existsSync(PRIV)) return;
+  let out = "";
+  try {
+    out = execFileSync("bash", ["-c", '. "$1" && w="$(ft_queue_wait "$2" "$3")" && read -r h n how <<< "$w" && ft_queue_late "$h" && echo "$w"',
+      "doctor", LIB, ROOT, PRIV], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
   } catch (_) { return; }
-  const m = out.match(/^([0-9.]+) (\S+) (\S+)\n(.+)$/);
+  const m = out.match(/^([0-9.]+) (\d+) (queued|committed)$/);
   if (!m) return;
-  add("WARN", "the airlock's last sign of life is " + m[1] + " hours old (" + m[2] + ", \"" + m[3] + "\")",
+  const hb = heartbeat && !heartbeat.unread ? heartbeat : null;
+  const lately = m[3] === "committed" ? " (When the commit was queued is not in this clone's history; if that was only lately, this is nothing.)" : "";
+  const verdict = "read the airlock's verdict (git -C \"" + PRIV + "\" fetch -q origin airlock-status && git -C \"" + PRIV +
+    "\" show FETCH_HEAD:status.json) and the runs in family-tree-airlock's Actions; ";
+  add("WARN", "the queue's " + m[2] + " commit(s) are still not published: the oldest was " + m[3] + " " + m[1] + " hours ago",
+    (hb && !hb.old ? "The airlock is running: its last run was " + hb.hours + " hours ago and left \"" + hb.outcome + "\" (" + hb.means + "). So it ran and did not publish them."
+     : hb ? "The airlock seems to have stopped: its last sign of life is " + hb.hours + " hours old (the next warning says what to do)."
+     : "The airlock runs every two hours, so it has missed a run or has stopped.") + lately +
+    " Nothing is lost while they wait, and this session may go on: new work queues on top.",
+    verdict + (hb && !hb.old ? "say in this session's report that the queue has waited this long though the airlock is running, so Cory looks at it."
+                             : "say in this session's report that the airlock is late, so Cory looks at it."));
+})();
+/* An old heartbeat is a warning whatever the queue holds: work queued later would wait too. */
+if (heartbeat && !heartbeat.unread && heartbeat.old) {
+  add("WARN", "the airlock's last sign of life is " + heartbeat.hours + " hours old (" + heartbeat.at + ", \"" + heartbeat.outcome + "\")",
     "It is due every two hours and leaves one at every run, so it has stopped, or GitHub has skipped several runs in a row. " +
     "Until it runs again nothing queued is checked or published. This session may go on: its site work queues and waits.",
-    m[4] + ".");
-})();
+    heartbeat.start + ".");
+}
 if (behind && +behind > 0) {
   add("WARN", behind + " commit(s) on the remote that are not here",
     "The airlock has published newer work, or a session with Cory has pushed. Do not edit from this base.",
