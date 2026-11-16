@@ -668,6 +668,19 @@ section("Source list (manifest)");
       "tools/cloud-finish.sh tells an incomplete list by that exit code, not by the words printed");
   } catch (e) { ok(false, "source list test ran (" + String(e.message).split("\n")[0] + ")"); }
   fs.rmSync(T, { recursive: true, force: true });
+  /* checks/archive-verify.js was retired on 16 Nov 2026: it read archive/store, which is in the source
+   * archive's repository, so here it called every source lost. It refuses to run and says where the
+   * archive's own checks are; no script, test or workflow here may start it again (a document may name it). */
+  {
+    const r = cp.spawnSync("node", [path.join(ROOT, "checks", "archive-verify.js")], { cwd: ROOT, encoding: "utf8" });
+    let users = "";
+    try {
+      users = cp.execFileSync("git", ["grep", "-l", "archive-verify", "--", ".", ":!checks/archive-verify.js", ":!tests/run.js", ":!*.md"],
+        { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    } catch (_) { /* git grep leaves with 1 when nothing matches */ }
+    ok(r.status === 1 && /^RETIRED: /.test(r.stderr) && /family-tree-sources/.test(r.stderr) && /checks\/verify\.js/.test(r.stderr) && r.stdout === "" && users === "",
+      "the retired checks/archive-verify.js refuses to run, names the archive's own checks, and no script, test or workflow here refers to it" + (users ? " (" + users.split("\n").join(", ") + ")" : ""));
+  }
 }
 
 section("Decrypt DATA");
