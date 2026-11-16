@@ -356,14 +356,14 @@ says "nothing new" "…and says so"
 # work up: the checkpoint must not push lines about a commit no remote holds (found in review, 16 Nov 2026).
 mc A held1; echo "queued held1" >> "$PA/OPEN-ITEMS.md"; echo "the story of held1" >> "$PA/CHANGE-LOG-COMMITS.md"; echo "more notes" >> "$PA/_work/go1/NOTES.md"
 check "a checkpoint while a site commit is neither published nor queued still saves the notes" in_cloud A env FT_PUBLISH=notes bash "$TOOLS/cloud-finish.sh" "Save research notes"
-says "NOTE: OPEN-ITEMS.md CHANGE-LOG-COMMITS.md left out of this checkpoint: the site clone holds 1 site commit(s) that are neither published nor queued" "…and says that the open items and the changelog are left out, and why"
-says "They go up with the full finish that queues it" "…and when they go up"
+says "NOTE: left out of this checkpoint: OPEN-ITEMS.md CHANGE-LOG-COMMITS.md. The site clone holds 1 site commit(s) that are neither published nor queued" "…and says that the open items and the changelog are left out, and why"
+says "It goes up with the full finish that queues" "…and when they go up"
 gp show main:_work/go1/NOTES.md | grep -q "more notes" && ! gp show main:OPEN-ITEMS.md | grep -q "queued held1" && ! gp show main:CHANGE-LOG-COMMITS.md | grep -q "story of held1" \
   && grep -q "queued held1" "$PA/OPEN-ITEMS.md" && grep -q "story of held1" "$PA/CHANGE-LOG-COMMITS.md" \
   && ok "…GitHub has the running notes and not the two lines about a commit that is not queued; they wait here, uncommitted" || no "the checkpoint pushed lines about a site commit that is not queued"
 git -C "$A" reset -q --hard HEAD~1; echo "<!-- changed -->" >> "$A/index.html"; echo "still more" >> "$PA/_work/go1/NOTES.md"
 check "…the same while a site file is changed and not committed" in_cloud A env FT_PUBLISH=notes bash "$TOOLS/cloud-finish.sh" "Save research notes"
-says "the site clone holds site files that are changed and not committed" "…and says so"
+says "The site clone holds site files that are changed and not committed" "…and says so"
 gp show main:_work/go1/NOTES.md | grep -q "still more" && ! gp show main:OPEN-ITEMS.md | grep -q "queued held1" && ok "…the two files still wait" || no "the checkpoint pushed the record files over an uncommitted site file"
 git -C "$A" checkout -q -- index.html
 check "once the site clone holds no such work, the next checkpoint saves them" in_cloud A env FT_PUBLISH=notes bash "$TOOLS/cloud-finish.sh" "Save research notes"

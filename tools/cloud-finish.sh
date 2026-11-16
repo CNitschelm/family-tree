@@ -236,11 +236,11 @@ if [ "$PUBLISH" = notes ]; then
     for p in $RECORD_FILES; do
       [ -n "$(git -C "$PRIV" status --porcelain -- "$p" 2>/dev/null)" ] && held_back="$held_back $p"
     done
-    [ -z "$held_back" ] || echo "NOTE:$held_back left out of this checkpoint: the site clone holds $open_why,
-  and those files may already speak of that work as queued. They go up with the full finish that queues it
-  (bash tools/cloud-finish.sh \"<one neutral line>\" \"<who>\"), together with research.json and the ledger. If
-  the site work is given up instead, take its lines out of those files; the next checkpoint or finish in a
-  session whose site clone holds no such work saves them. Everything else of the checkpoint is saved now."
+    [ -z "$held_back" ] || echo "NOTE: left out of this checkpoint:$held_back. The site clone holds $open_why,
+  and a file left out may already speak of that work as queued. It goes up with the full finish that queues
+  the work (bash tools/cloud-finish.sh \"<one neutral line>\" \"<who>\"), together with research.json and the
+  ledger. If the site work is given up instead, take its lines out of the file first; the next checkpoint or
+  finish in a session whose site clone holds no such work then saves it. The rest of the checkpoint is saved now."
   fi
   np=()
   for p in $NOTES_PATHS; do
