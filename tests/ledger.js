@@ -210,8 +210,14 @@ console.log('== one writer, fresh copies, no people added without asking');
   ok(r.code === 0 && /would apply cleanly/.test(r.out), '--dry checks a file without the lock');
   lock('take', 'other session');
   r = change(back, ['--who', 'me']);
-  ok(r.code === 1 && /LOCK is held by "other session"/.test(r.out), 'a second writer is refused while the lock is held');
+  ok(r.code === 1 && /LOCK is held by "other session"/.test(r.out) && /--dry/.test(r.out) && /add --steal/.test(r.out) && now().note === 'A farmer.',
+    'a second writer is refused while the lock is held, and is told to wait, to check with --dry meanwhile, and how to take over a lock left behind');
   const anon = { ...env }; delete anon.FT_WHO;
+  r = change(back, DRY);
+  ok(r.code === 0 && /note  the writer lock is held by "other session"/.test(r.out) && /would apply cleanly/.test(r.out) && !/steal/.test(r.out),
+    '--dry runs while another session holds the lock, and says who holds it');
+  r = change(back, DRY, { ...anon, FT_READONLY: '1' });
+  ok(r.code === 0 && /would apply cleanly/.test(r.out) && now().note === 'A farmer.', 'so does the dry run of a read-only session, as its refusal to write promises');
   r = change(back, ['--who', 'other session'], anon);
   ok(r.code === 1 && /no FT_WHO/.test(r.out) && now().note === 'A farmer.', 'naming the holder with --who does not make a session the holder');
   lock('release', 'other session');
@@ -305,6 +311,8 @@ console.log('== an image on file for a fact read from an image');
   r = change(fact({ src: P_NONE, quote }), ['--dry']);
   ok(r.code === 1 && /holds no image/.test(r.out) && /archive\/hand\/[0-9a-f]{12}\.jpg/.test(r.out) && /"no_image"/.test(r.out),
     'a quote from our typed reading of a register page is refused while no image of the page is on file, and the refusal says where to file it');
+  ok(/with its row in archive\/hand\/README\.md, then: node checks\/verify\.js/.test(r.out) && r.out.includes(`node archive/file.mjs <the image file> --url "${P_NONE}"`) && /archive\/MANUAL\.md/.test(r.out),
+    'and with which tools: the README row and verify.js, or file.mjs with the address');
   r = change(fact({ src: URL_A, read: 'image', transcription: 'He came to Valeton in 1908.' }), ['--dry']);
   ok(r.code === 1 && /holds no image/.test(r.out), 'so is "read": "image" from a source held as text only');
   r = change(fact({ src: URL_D, read: 'image', transcription: quote }), ['--dry']);
@@ -327,6 +335,21 @@ console.log('== an image on file for a fact read from an image');
     'a hand copy that says "image: none", or that names an OCR text, is not taken for a reading of an image');
   r = change(fact({ src: BY_HEADER, quote }), ['--dry']);
   ok(L.imageSource(BY_HEADER) && r.code === 1 && /holds no image/.test(r.out), 'a hand copy that says it was read from an image makes its source one, whatever the address looks like');
+  // "read" says what was read. A word the tool does not know is not a way round the rule: it is taken as a picture.
+  r = change(fact({ src: URL_A, read: 'scan', transcription: quote }), DRY);
+  ok(r.code === 1 && /holds no image/.test(r.out) && /"read": "scan" is not a word this tool knows/.test(r.out) && /"image", "pdf", "original"/.test(r.out) && /"text", "index entry"/.test(r.out),
+    'a "read" the tool does not know ("scan") is taken as read from an image: refused with no image on file, and the allowed words are named');
+  r = change(fact({ src: URL_B, read: 'photo', quote }), DRY);
+  ok(r.code === 0 && /"read": "photo" is not a word this tool knows/.test(r.out), 'with the image on file it goes through, with the same warning');
+  r = change(fact({ src: URL_D, read: 'text', quote }), DRY);
+  ok(r.code === 1 && /has no words this tool can read/.test(r.out) && /2026-09-01\.html/.test(r.out) && /archive\/hand\/[0-9a-f]{12}\.txt/.test(r.out) && /"no_image"/.test(r.out),
+    '"read": "text" of a copy with no words and no image (a viewer\'s empty page) is refused: nothing in the archive can be read again');
+  r = change(fact({ src: URL_D, read: 'index entry', transcription: quote, no_image: 'the viewer serves no file; a chat at the main computer will capture the page' }), DRY);
+  ok(r.code === 0 && /REMINDER: 1 edit/.test(r.out), 'and goes through with "no_image", marked like any other missing image');
+  r = change(fact({ src: URL_A, read: 'text', transcription: 'The notice says he was a clerk at the mill.' }), DRY);
+  ok(r.code === 0 && /"transcription" is not in our copy/.test(r.out) && /as "quote"/.test(r.out), '"read": "text" with our own account of the page applies, flagged: nothing checked those words');
+  r = change(fact({ src: URL_A, read: 'text', quote: 'He came to Valeton in 1908' }), DRY);
+  ok(r.code === 0 && !/note  /.test(r.out), 'with the page\'s own words as a quote there is nothing to flag');
   const card = spawnSync(process.execPath, [path.join(T, 'tools', 'card.js'), 'c001'], { cwd: T, env, encoding: 'utf8' });
   ok(card.status === 0 && /held as: page text/.test(card.stdout), 'and card.js prints it beside each source');
 
@@ -353,7 +376,20 @@ console.log('== a new card: evidence, a decision about that place on the tree, a
   const item = { name: 'Tertia Quillfeather', years: '1905–1980', g: 'f' };
   const add = (o = {}) => one({ op: 'addCard', parent: 'c002', union: 0, item, kind: 'structure', register: 'R-0437', evidence: born, ...o });
   r = change(add({ evidence: undefined }), DRY);
-  ok(r.code === 1 && /needs "evidence"/.test(r.out), 'a new card with no evidence is refused');
+  ok(r.code === 1 && /a new card needs "evidence": the record that proves this child of c002/.test(r.out), 'a new card with no evidence is refused, and the refusal says it is the card that needs it');
+  // Cory's word is the register entry; it is not the record. Under kind "owner" his quoted words once stood in for it.
+  const told = [{ src: 'owner', quote: 'Add her, please.', opened: today }];
+  const pinned = { ...item, pl: [{ k: 'valeton', t: 'birth', c: 'doc', y: 1905 }] };
+  r = change(add({ kind: 'owner', item: pinned, evidence: told }), DRY);
+  ok(r.code === 1 && /"src": "owner" does not prove a new card/.test(r.out) && /this child of c002/.test(r.out), 'a new card called "owner", with only Cory\'s words as evidence, is refused (a doc-graded pin on it or not)');
+  r = change(add({ kind: 'owner', register: 'R-0004', evidence: told }), DRY);
+  ok(r.code === 1 && /does not prove a new card/.test(r.out), 'also under his own entry that names the parent');
+  r = change(add({ kind: 'owner', register: 'R-0004', evidence: born.concat(told) }), DRY);
+  ok(r.code === 1 && /evidence 2: "src": "owner" does not prove a new card/.test(r.out), 'and beside a real record: his words are not evidence for a card');
+  r = change(add({ kind: 'owner', register: 'R-0004', item: pinned }), DRY);
+  ok(r.code === 0, 'called "owner" with the record as evidence, it goes on');
+  r = change(add({ kind: 'source' }), DRY);
+  ok(r.code === 0 && /kind "source" on a new card/.test(r.out) && /Say "kind": "structure"/.test(r.out), 'a new card under any other kind is checked the same, and flagged');
   r = change(add({ evidence: [{ src: URL_A, quote: 'a daughter Tertia was born', opened: today }] }), DRY);
   ok(r.code === 1 && /not in our copy/.test(r.out), 'its evidence is checked like a fact\'s: a quote that is not in our copy is refused');
   r = change(add(), DRY);
@@ -399,6 +435,20 @@ console.log('== each kind of edit keeps to its own fields');
   ok(r.code === 1 && /kind "source" is for a card's sources/.test(r.out), 'a "source" edit cannot change a bio');
   r = change(one({ card: 'c002', op: 'add', list: 'pl', item: { k: 'valeton', t: 'residence', c: 'inf', y: 1900 }, kind: 'source' }), DRY);
   ok(r.code === 1 && /A new pin is a fact/.test(r.out), 'or add a pin');
+  for (const kind of ['structure', 'wording', 'translation']) {
+    r = change(one({ card: 'c002', op: 'add', list: 'src', item: { l: 'Death notice of his father', u: URL_A }, kind }), DRY);
+    ok(r.code === 0 && new RegExp(`kind "${kind}" on a new source`).test(r.out) && /Say "kind": "source" next time/.test(r.out), `a source added as "${kind}" is checked as a source and flagged`);
+  }
+  r = change(one({ card: 'c002', op: 'add', list: 'sources', item: { label: 'A record', url: 'https://example.invalid/never-archived' }, kind: 'structure' }), DRY);
+  ok(r.code === 1 && /not in the archive/.test(r.out), 'and still refused when it is not in the archive');
+  r = change(one({ card: 'c002', op: 'add', list: 'src', item: { l: 'Death notice of his father', u: URL_A }, kind: 'source' }), DRY);
+  ok(r.code === 0 && !/note  /.test(r.out), 'as "source" there is nothing to flag');
+  r = change(E({ field: 'src[0].u', from: URL_A, to: 'https://example.invalid/never-archived', kind: 'source' }), DRY);
+  ok(r.code === 1 && /never-archived is not in the archive/.test(r.out), 'a source\'s address cannot be changed to one that is not in the archive');
+  r = change(E({ field: 'sources[0].url', from: URL_A, to: 'https://example.invalid/never-archived', kind: 'source' }), DRY);
+  ok(r.code === 1 && /never-archived is not in the archive/.test(r.out), 'on the bio\'s source list either');
+  r = change(E({ field: 'src[0].u', from: URL_A, to: URL_C, kind: 'source' }), DRY);
+  ok(r.code === 0, 'to one we hold, it can');
   r = change(one({ card: 'c003', field: 'note', find: 'Teacher', replace: 'Schoolteacher', kind: 'structure' }), DRY);
   ok(r.code === 1 && /kind "structure" is for a card added or removed/.test(r.out), 'a "structure" edit cannot change a note');
   r = change(one({ ...wed, kind: 'structure' }), DRY);
@@ -422,6 +472,12 @@ console.log('== each kind of edit keeps to its own fields');
   ok(r.code === 1 && /a spouse's name/.test(r.out), 'or a spouse\'s name');
   r = change(E({ field: 'pl[0].k', from: 'valeton', to: 'marrowby', kind: 'wording' }), DRY);
   ok(r.code === 1 && /the place a pin stands on/.test(r.out), 'or the place a pin stands on');
+  r = change(one({ card: 'c003', field: 'g', from: 'f', to: 'm', kind: 'wording' }), DRY);
+  ok(r.code === 1 && /the person's sex/.test(r.out), 'or the person\'s sex (it decides whose children the standing yes covers)');
+  r = change(one({ card: 'c003', field: 'years', from: '1882–1960', to: 'b. 1882–1960', kind: 'wording' }), DRY);
+  ok(r.code === 1 && /the person's years/.test(r.out), 'or the years, though no digit changes ("b. …" would make her a living person)');
+  r = change(one({ card: 'c003', field: 'years', from: '1882–1960', to: '1882 – 1960', kind: 'wording' }), DRY);
+  ok(r.code === 0, 'a dash or a space set right in the years is still wording');
   const own = (o) => one({ card: 'c002', field: 'note_fr', find: 'Commis', replace: 'Commis au moulin', kind: 'owner', ...o });
   r = change(own({ register: 'R-0001' }), DRY);
   ok(r.code === 1 && /R-0001 does not name c002/.test(r.out), 'an "owner" edit must cite a decision of Cory\'s about that card');
@@ -526,7 +582,9 @@ console.log('== the gate and the commit hook, on this repo');
   stub('tools/research.js', "module.exports = { load: () => ({ updated: 'test' }), check: () => ({ warnings: [], problems: [] }), claimsFor: () => [], password: () => '' };\n");
   stub('tools/stats.js', "const path = require('path');\nmodule.exports = { OUT: path.join(__dirname, '..', 'stats.json'), KEYS: ['people'], compute: () => ({ people: 3 }) };\n");
   stub('stats.json', '{"people":3,"updated":"test"}\n');
-  const gate = (...a) => { const g = spawnSync(process.execPath, [path.join(T, 'checks', 'gate.js'), ...a], { cwd: T, env, encoding: 'utf8' }); return { code: g.status, out: (g.stdout || '') + (g.stderr || '') }; };
+  // the gate's own temp folder, so what it leaves behind can be seen
+  const TMP = path.join(T, 'tmp'); fs.mkdirSync(TMP);
+  const gate = (...a) => { const g = spawnSync(process.execPath, [path.join(T, 'checks', 'gate.js'), ...a], { cwd: T, env: { ...env, TMPDIR: TMP, TMP, TEMP: TMP }, encoding: 'utf8' }); return { code: g.status, out: (g.stdout || '') + (g.stderr || '') }; };
   const stampFile = path.join(T, '.gate-stamp');
   const iv = () => L.readEnc(fs.readFileSync(path.join(T, 'index.html'), 'utf8')).iv;
   const sets = records().length;
@@ -540,6 +598,7 @@ console.log('== the gate and the commit hook, on this repo');
   ok(/3b\. warnings kept with these edits \(\d+\)/.test(g.out) && /capitalised words differ/.test(g.out) && /brings in 1883/.test(g.out) && /research ids were not checked/.test(g.out),
     'it prints every warning kept with the edits, under their own heading');
   ok(/change loop: 7 passed, 0 failed/.test(g.out), 'it runs the change loop\'s own tests');
+  ok(/linter: high 0/.test(g.out) && fs.readdirSync(TMP).length === 0, 'the copies of the data it gave the linter are gone when it ends');
   const stamp = fs.readFileSync(stampFile, 'utf8');
   ok(new RegExp(`^${iv().replace(/[+/]/g, '\\$&')}\\n\\S+ PASS ${sets} change set\\(s\\) \\d+ edit\\(s\\) over origin/main\\n$`).test(stamp), 'the stamp keeps its two lines: the iv, then PASS and the base');
   stub('tests/ledger.js', "console.log('  FAIL a rule\\n6 passed, 1 failed'); process.exit(1);\n");

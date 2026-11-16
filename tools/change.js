@@ -7,7 +7,7 @@
  *
  * It writes only while this session holds the writer lock (ledger/LOCK names FT_WHO; take it with
  * bash tools/cloud-lock.sh take "<who>" "<what>"), and never in a read-only session (FT_READONLY=1).
- * --dry checks a file without the lock and writes nothing.
+ * --dry checks a file and writes nothing: it needs no lock, and runs while another session holds it.
  *
  * A change file says what to change, what kind of change it is, and on what evidence.
  * This tool applies it only if:
@@ -45,16 +45,20 @@
  *   "research": "i3 s9a"            the research items this change moves (investigation, source or visit ids)
  *   "research": "none: <why>"       or why it moves none
  * kind: fact | grade | source | wording | translation | structure | owner. Each kind has its own fields (R-0760):
- *   source      src[…] and sources[…] only: labels, addresses, quotes, a source added or removed
+ *   source      src[…] and sources[…] only: labels, addresses (in the archive, like a new source), quotes,
+ *               a source added or removed
  *   structure   a card added or removed, a gazetteer entry (gaz.<key>), an exact duplicate removed ("dup_of": its index)
- *   wording, translation   never a name, a spouse's name or a pin's place
+ *   wording, translation   never a name, a spouse's name, a pin's place, the person's sex or years
  *   owner       cites a live entry of Cory's that names the card
  *   A new pin, marriage or paragraph is a fact and needs evidence, whatever it is called.
  * evidence item: { src, quote } | { src, absent: ["word", …] } | { src, read: "image"|"pdf"|"original", transcription }
  *                and always "opened": the date the source was actually opened.
+ *                "read" says what was read: "image", "pdf" or "original" for a picture of the record, "text" or
+ *                "index entry" for words on a page. Any other word is taken as a picture, with a warning.
  *                A source read from an image (a register page, a film image, a newspaper page) needs the image
- *                on file in the archive, not only our typed reading (R-0755). Where it cannot be had now, the
- *                item says "no_image": "<why, and what will fetch it>" and the ledger marks the edit image_missing.
+ *                on file in the archive, not only our typed reading (R-0755); so does a "read" of a copy that
+ *                has no words in it. Where the image cannot be had now, the item says
+ *                "no_image": "<why, and what will fetch it>" and the ledger marks the edit image_missing.
  * optional per edit: "register": "R-0042", "effect": "consistent"|"reopen", "reverts": "why this comes back",
  *                    "fr": "exempt: <why the French differs>", "note": "…"
  * Every warning printed here is kept on the edit's record in the ledger ("warnings"), and the gate prints
@@ -102,21 +106,28 @@ if (typeof cs.research !== 'string' || !cs.research.trim()) {
   } else fileWarn('research.json is not here, so the research ids were not checked (the gate will check them)');
 }
 
-try { L.assertLock(who); } catch (e) { console.error('REFUSED: ' + e.message); process.exit(1); }
 // Writing needs the lock in hand, not merely nobody else's (R-0760). Until 16 Nov 2026 a change applied
 // while the lock was free, and a read-only session could write: two sessions could each build a payload
 // on the other's stale copy. FT_WHO is set by cloud-lock.sh take, in ~/.ft-env.
-if (!dry) {
+// A dry run writes nothing, so it asks for no lock: a read-only session, or one waiting for the lock,
+// checks its file with it. It only says who holds the lock, so nobody takes "would apply" for "applied".
+{
   const refuse = m => { console.error('REFUSED: ' + m); process.exit(1); };
-  if (process.env.FT_READONLY === '1') refuse('this session is read-only (FT_READONLY=1), so it may not change data.json. ' +
-    'Check the file here with --dry, and apply it in a session set up for writing (bash tools/cloud-setup.sh without FT_READONLY).');
   const lock = L.lockState(), me = process.env.FT_WHO;
   const take = 'bash tools/cloud-lock.sh take "<who>" "<what you are doing>"';
-  if (!lock) refuse(`the writer lock is free, and a change is written only by the session that holds it. Take it first:\n    ${take}\n  then run this again (or check the file now with --dry).`);
-  if (lock.stale) refuse(`the writer lock ran out (taken by "${lock.who}" at ${lock.since}, over 12 hours ago). Take it again:\n    ${take}\n  then run this again.`);
-  if (!me) refuse(`ledger/LOCK is held by "${lock.who}", but this shell has no FT_WHO, so it cannot tell that it is that session. ` +
-    `If you took the lock, start the command with:  . ~/.ft-env &&   Otherwise take it:\n    ${take}`);
-  if (lock.who !== me) refuse(`ledger/LOCK is held by "${lock.who}", and this session is "${me}". Wait for that session, or take the lock once it is free:\n    ${take}`);
+  if (dry) {
+    if (lock && !lock.stale && lock.who !== me)
+      console.log(`  note  the writer lock is held by "${lock.who}" since ${lock.since}${lock.what ? ' (' + lock.what + ')' : ''}. This dry run only reads; the file can be applied once that session has released the lock and this one has taken it.`);
+  } else {
+    if (process.env.FT_READONLY === '1') refuse('this session is read-only (FT_READONLY=1), so it may not change data.json. ' +
+      'Check the file here with --dry, and apply it in a session set up for writing (bash tools/cloud-setup.sh without FT_READONLY).');
+    if (!lock) refuse(`the writer lock is free, and a change is written only by the session that holds it. Take it first:\n    ${take}\n  then run this again (or check the file now with --dry).`);
+    if (lock.stale) refuse(`the writer lock ran out (taken by "${lock.who}" at ${lock.since}, over 12 hours ago). Take it again:\n    ${take}\n  then run this again.`);
+    if (!me) refuse(`ledger/LOCK is held by "${lock.who}", but this shell has no FT_WHO, so it cannot tell that it is that session. ` +
+      `If you took the lock, start the command with:  . ~/.ft-env &&   Otherwise take it:\n    ${take}`);
+    if (lock.who !== me) refuse(`ledger/LOCK is held by "${lock.who}" since ${lock.since}${lock.what ? ' (' + lock.what + ')' : ''}, and this session is "${me}". Another session is editing: wait for it ` +
+      `(the file can be checked meanwhile with --dry), then take the lock:\n    ${take}\n  If that session is gone, add --steal to that command.`);
+  }
 }
 
 // data.json must be exactly the payload in index.html, or that payload plus change sets the
@@ -160,9 +171,16 @@ const LATEST_TODAY = new Date(Date.now() + 14 * 3600e3).toISOString().slice(0, 1
 const realDate = d => typeof d === 'string' && /^\d{4}-\d\d-\d\d$/.test(d) && !isNaN(Date.parse(d + 'T00:00:00Z')) &&
   new Date(d + 'T00:00:00Z').toISOString().slice(0, 10) === d;
 const SHORT_QUOTE = 8;
-function checkEvidence(i, e, needed) {
+// What "read" may say. The first three are a picture of the record, and need that picture on file
+// (checkImage). The last two are words on a page: a record a site shows as text, a line of an index.
+// Until 16 Nov 2026 any other word ("scan", "photo", anything) passed as a reading and skipped the image
+// rule; none had been used. It is now taken as a picture, with a warning that names these words.
+const IMAGE_READS = ['image', 'pdf', 'original'], TEXT_READS = ['text', 'index entry'];
+// "needed": true, or the words of the refusal where a plain "a fact change needs evidence" would not say
+// what is missing. "newCard": the parent, when the evidence is for a card being added.
+function checkEvidence(i, e, needed, newCard) {
   const ev = e.evidence || [];
-  if (!ev.length) { if (needed) err(i, `a ${e.kind} change needs "evidence" — the source you opened, and the words in it (quote) or the words it lacks (absent)`); return; }
+  if (!ev.length) { if (needed) err(i, typeof needed === 'string' ? needed : `a ${e.kind} change needs "evidence" — the source you opened, and the words in it (quote) or the words it lacks (absent)`); return; }
   ev.forEach((x, j) => {
     const tag = `evidence ${j + 1}`;
     if (!x.src) return err(i, `${tag}: no "src"`);
@@ -176,7 +194,8 @@ function checkEvidence(i, e, needed) {
     if (x.absent !== undefined && (!Array.isArray(x.absent) || !x.absent.length || x.absent.some(w => typeof w !== 'string' || !w.trim())))
       return err(i, `${tag}: "absent" must be a list of the words the source lacks, each a real word: "absent": ["arrived", "1907"]`);
     if (x.src === 'owner') {
-      if (e.kind !== 'owner') err(i, `${tag}: "src": "owner" is only for kind "owner" (Cory's own instruction)`);
+      if (newCard) err(i, `${tag}: "src": "owner" does not prove a new card. Cory's word is the register entry the edit cites; the evidence is the record that shows this child of ${newCard}: its address or family: folder as "src", with its words`);
+      else if (e.kind !== 'owner') err(i, `${tag}: "src": "owner" is only for kind "owner" (Cory's own instruction)`);
       if (!x.quote) err(i, `${tag}: quote Cory's instruction`);
       return;
     }
@@ -194,7 +213,13 @@ function checkEvidence(i, e, needed) {
         err(i, `${tag}: you say ${x.src} lacks "${w}" — our copy of it contains "${w}". A negative claim has to survive opening the source.`);
     }
     if (x.read && !x.transcription && !x.quote) err(i, `${tag}: "read": "${x.read}" needs "transcription" — what the page says, in its words`);
-    checkImage(i, x, tag);
+    if (x.read && !IMAGE_READS.includes(x.read) && !TEXT_READS.includes(x.read))
+      warn(i, `${tag}: "read": ${JSON.stringify(x.read)} is not a word this tool knows, so it was taken as read from an image. Next time say ${IMAGE_READS.map(w => `"${w}"`).join(', ')} (a picture of the record) or ${TEXT_READS.map(w => `"${w}"`).join(', ')} (words on a page).`);
+    // "read": "text" with a transcription is our own account of a page whose words we hold: nothing checks
+    // it, where a quote would be checked (94 such items before 16 Nov 2026, none word for word). Kept in view.
+    if (TEXT_READS.includes(x.read) && x.transcription && !x.quote && a.text && !L.normText(a.text).includes(L.normText(x.transcription)))
+      warn(i, `${tag}: the "transcription" is not in our copy of ${x.src} word for word, so nothing checked it. Next time give the page's own words as "quote": a quote is checked against the copy.`);
+    checkImage(i, x, tag, a);
   });
   // a quote that proves only that the source was opened (the audit's "died"): kept as a warning
   const words = ev.filter(x => x.src !== 'owner').flatMap(x => [x.quote, x.transcription]).filter(w => typeof w === 'string' && w.trim());
@@ -257,18 +282,27 @@ function checkNewCard(i, item) {
 // read from an image, and any evidence from an address that is an image, needs the image in the archive.
 // "no_image" is the way through when the image cannot be had today; the ledger then says so on the edit.
 const MIN_NO_IMAGE = 20;
-function checkImage(i, x, tag) {
+function checkImage(i, x, tag, a) {
   if (x.no_image !== undefined && (typeof x.no_image !== 'string' || x.no_image.trim().length < MIN_NO_IMAGE))
     return err(i, `${tag}: "no_image" must say why the image cannot be filed now and what will fetch it, in at least ${MIN_NO_IMAGE} characters ("the site needs a sign-in; an item on the At your computer list fetches it")`);
-  const fromImage = ['image', 'pdf', 'original'].includes(x.read) || L.imageSource(x.src);
-  if (!fromImage) return;
+  // Read from a picture: it says so ("read" is anything but words on a page), or the address is a picture.
+  // And a copy with no words in it (a viewer's empty page) that the item says it "read": what was read is
+  // not in the archive at all, so the picture is the only copy there could be.
+  const pictured = (x.read && !TEXT_READS.includes(x.read)) || L.imageSource(x.src);
+  const blank = !pictured && x.read && !a.text;
+  if (!pictured && !blank) return;
   if (L.recordImage(x.src).held) { if (x.no_image) warn(i, `${tag}: "no_image" is given, but an image of ${x.src} is on file — take "no_image" out next time`); return; }
   if (x.no_image) return void keep(i).noImage.push({ src: x.src, why: x.no_image.trim() });
-  const fam = /^family:/.test(x.src);
-  err(i, `${tag}: ${x.src} was read from an image, and the archive holds no image of it (our typed reading, or a viewer's empty page, is not a copy of the record).\n` +
+  const fam = /^family:/.test(x.src), id = fam ? '' : L.sourceId(x.src);
+  err(i, `${tag}: ` + (blank
+      ? `our copy of ${x.src} has no words this tool can read (${a.files.map(f => path.basename(f)).join(', ') || 'no file'}; a viewer saves an empty page), and the archive holds no image of it, so what was read cannot be checked or read again.\n`
+      : `${x.src} was read from an image, and the archive holds no image of it (our typed reading, or a viewer's empty page, is not a copy of the record).\n`) +
     (fam ? `    Put the photograph or scan in family-tree-sources archive/family/${x.src.slice(7)}/ with a row in that folder's README, then run this again.\n`
-         : `    Save the image in family-tree-sources as archive/hand/${L.sourceId(x.src)}.jpg (or .png, .pdf), or beside its dated copy under the copy's name with a row in archive/hand/README.md (archive/MANUAL.md, notes/source_archive.md), then run this again.\n`) +
-    `    If it cannot be had now (a sign-in, a site that refuses downloads), add "no_image": "<why, and what will fetch it>" to this evidence item instead.`);
+         : `    File the image in family-tree-sources (archive/MANUAL.md, "The image"; notes/source_archive.md), commit it there, then run this again. Either\n` +
+           `      save it as archive/hand/${id}.jpg (or .png, .pdf; beside its dated copy, under that copy's name) with its row in archive/hand/README.md, then: node checks/verify.js\n` +
+           `      or, for an address a card already cites: node archive/file.mjs <the image file> --url "${x.src}"   then: node checks/verify.js --record\n` +
+           (blank ? `    If the page shows the record as words, not as a picture, save those words as the hand copy archive/hand/${id}.txt instead and give them as "quote".\n` : '')) +
+    `    If the image cannot be had now (a sign-in, a site that refuses downloads), add "no_image": "<why, and what will fetch it>" to this evidence item instead.`);
 }
 
 // ---- the register: settled questions answer back
@@ -400,7 +434,10 @@ const retired = L.loadChanges().flatMap(c => c.retired || []);
       } else if (!(r.cards || []).includes(pid) && !(r.cards || []).includes(node.id) && addedUnder.get(pid) !== r.id)
         err(i, `${r.id} does not name the parent ${pid} (it names ${(r.cards || []).join(', ') || 'no card'}). A new card cites ${SCOPE_ENTRY} (a child of a man of the line, proven from a document we hold) ` +
           `or the owner entry in which Cory decided this card: one whose "cards" list ${pid}. If he decided it and the entry does not say so, record his words as a new owner entry that lists ${pid}.`);
-      checkEvidence(i, e, true);
+      // The evidence is a fact's, whatever the edit is called: under kind "owner" Cory's own words would
+      // otherwise have stood in for the record (his word is the register entry, checked above).
+      checkEvidence(i, { ...e, kind: 'fact' }, `a new card needs "evidence": the record that proves this child of ${pid} (the address or family: folder we hold it under, as "src"), with its words as "quote", or "read" and a "transcription"`, pid);
+      if (e.kind !== 'structure' && e.kind !== 'owner') warn(i, `kind "${e.kind}" on a new card: it was checked as a card added, with its evidence. Say "kind": "structure" next time.`);
       checkNewCard(i, e.item);
       checkFigures(i, { ...e, kind: 'fact' }, null, e.item);
       kids.splice(at, 0, node);
@@ -449,7 +486,8 @@ const retired = L.loadChanges().flatMap(c => c.retired || []);
           warn(i, `kind "${e.kind}" on a new ${THING[head] || head}: it was checked as a fact, with its evidence. Say "kind": "fact" next time.`);
           checkEvidence(i, { ...e, kind: 'fact' }, true);
         }
-      }
+      } else if (e.kind !== 'source')
+        warn(i, `kind "${e.kind}" on a new source: it was checked as a source is (in the archive, its quote in our copy). Say "kind": "source" next time.`);
       if (head === 'pl' && e.item.c === 'doc' && e.kind === 'owner') checkEvidence(i, { ...e, kind: 'grade' }, true);
       if (!SOURCE_LISTS.has(head) && e.kind !== 'owner') checkFigures(i, { ...e, kind: 'fact' }, null, e.item);
       if (head === 'src' && e.item.u && e.item.q) { const q = L.quoteIn(e.item.u, e.item.q); if (q.ok === false) err(i, `the new source's quote is not in our copy of ${e.item.u}`); if (!L.archived(e.item.u).held) err(i, `${e.item.u} is not in the archive — archive it first`); }
@@ -516,8 +554,14 @@ const retired = L.loadChanges().flatMap(c => c.retired || []);
   if (e.kind === 'structure' && fhead !== 'gaz')
     err(i, `kind "structure" is for a card added or removed, a gazetteer entry (gaz.<key>) and an exact duplicate removed, and ${e.field} is none of these. ` +
       `Say "kind": "fact" and give the evidence (or "wording"/"translation" if nothing the card asserts changes).`);
-  if ((e.kind === 'wording' || e.kind === 'translation') && (e.field === 'name' || (fhead === 'union' && fkey === 's') || (fhead === 'pl' && fkey === 'k')))
-    err(i, `${e.field} is ${e.field === 'name' ? 'the person\'s name' : fhead === 'union' ? 'a spouse\'s name' : 'the place a pin stands on'}: changing it is a change of fact, not of ${e.kind}. Say "kind": "fact" and give the evidence.`);
+  // Sex and years are not prose either. Neither had been edited as wording; but "years" turned into
+  // "b. …" makes a dead person a living one with no digit changed, and "g" decides whose children the
+  // standing yes covers. (A dash or a space set right in "years" is still wording.)
+  const NOT_WORDS = { name: 'the person\'s name', g: 'the person\'s sex', years: 'the person\'s years' };
+  const typo = v => String(v ?? '').replace(/[\u2010-\u2015\u2212-]/g, '-').replace(/\s+/g, '');
+  if ((e.kind === 'wording' || e.kind === 'translation') && !(e.field === 'years' && typo(before) === typo(after)) &&
+      (NOT_WORDS[e.field] || (fhead === 'union' && fkey === 's') || (fhead === 'pl' && fkey === 'k')))
+    err(i, `${e.field} is ${NOT_WORDS[e.field] || (fhead === 'union' ? 'a spouse\'s name' : 'the place a pin stands on')}: changing it is a change of fact, not of ${e.kind}. Say "kind": "fact" and give the evidence.`);
   if (e.kind === 'wording' || e.kind === 'translation') {
     const d = tokDiff(before, after);
     if (d.length) err(i, `a ${e.kind} edit may not change years or numbers, and this one changes ${d.join(', ')} — it is a fact change: say "kind": "fact" and give the evidence`);
@@ -529,6 +573,10 @@ const retired = L.loadChanges().flatMap(c => c.retired || []);
   checkFigures(i, e, before, after, e.field);
   if (e.kind === 'grade' && !/(^|\.)(c|occ_c)$/.test(e.field)) warn(i, 'kind "grade" on a field that is not a grade (pl[…].c or occ_c)');
   if (/(^|\.)(c|occ_c)$/.test(e.field) && e.kind !== 'grade' && e.kind !== 'owner') err(i, 'a change of grade is kind "grade", with the evidence for the new grade');
+  // A changed address is a new source under the old one's label: it must be in the archive, as a source
+  // added is. (Until 16 Nov 2026 only "add" asked; three addresses had been changed, all to ones we hold.)
+  if (/^(src\[.*\]\.u|sources\[.*\]\.url)$/.test(e.field) && textish(after) && !L.archived(after).held)
+    err(i, `${after} is not in the archive — archive it first (hand copy or capture), then cite it`);
   if (e.kind === 'source') {
     if (/^src\[.*\]\.q$/.test(e.field) && textish(after)) {
       const url = L.getField(card.node, e.field.replace(/\.q$/, '.u'));

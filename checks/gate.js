@@ -175,8 +175,11 @@ function lint(d) {
   fs.writeFileSync(f, L.serialize(d));
   const r = spawnSync(process.execPath, [path.join(L.ROOT, 'checks', 'run.js'), '--json', out],
     { cwd: L.ROOT, encoding: 'utf8', env: { ...process.env, FT_DATA: f }, maxBuffer: 64 * 1024 * 1024 });
-  if (r.status !== 0 || !fs.existsSync(out)) throw new Error((r.stderr || '').slice(-400));
+  // the folder holds a copy of the data in the clear: it is not left behind, pass or fail
+  const done = () => { try { fs.rmSync(dir, { recursive: true, force: true }); } catch (_) {} };
+  if (r.status !== 0 || !fs.existsSync(out)) { done(); throw new Error((r.stderr || '').slice(-400)); }
   const F = JSON.parse(fs.readFileSync(out, 'utf8'));
+  done();
   // a finding is known by its card id, check and path — not its wording
   const labelToId = new Map(L.cards(d).map(c => [`${c.node.name} ${c.node.years || ''}`.trim(), c.node.id]));
   return F.map(x => ({ ...x, cid: labelToId.get(x.card) || x.card }));
