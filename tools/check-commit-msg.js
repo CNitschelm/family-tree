@@ -308,14 +308,18 @@ function denyHits(text, deny) {
 
 /* Rule 5. True for an address that may be published: the two forms the airlock lets through
  * (its rules.py), so the guard and the airlock cannot disagree about a commit. With
- * opts.throwaway, an address under the reserved ".invalid" ending as well. */
-const SESSION_HOST = "anthropic.com";
+ * opts.throwaway, an address under the reserved ".invalid" ending as well. With opts.web, the
+ * address GitHub itself writes as the committer of an edit made on its web page (noreply at
+ * WEB_HOST): tests/run.js asks that way about the committer of a commit already on main, which
+ * no hook and no airlock ever saw; a commit made here never carries it. */
+const SESSION_HOST = "anthropic.com", WEB_HOST = "github.com";
 function noreply(email, opts) {
   const m = String(email || "").trim().toLowerCase().match(/^([^@\s]+)@([^@\s]+)$/);
   if (!m) return false;
   const local = m[1], host = m[2];
   if (local === "noreply" && host === SESSION_HOST) return true;
   if (host === "users.noreply.github.com" && local.length <= 100) return true;
+  if (opts && opts.web && local === "noreply" && host === WEB_HOST) return true;
   return !!(opts && opts.throwaway) && /(?:^|\.)invalid$/.test(host);
 }
 /* A repository that cannot publish: it has no remote, or every remote is a folder on this
@@ -335,7 +339,7 @@ const ADDRESS_FIX = "give this clone an address that may be published: git confi
 
 if (require.main !== module) {
   module.exports = { fold, words, nameForms, labelNames, privateLists, namesFromRecords, namesFromTables, listWords, listedAs,
-    nameWords, denyHits, noreply, throwaway, PRIVATE_FILES, LABEL_WORD_MIN, PUBLIC_WORDS, SESSION_HOST, ADDRESS_FIX, NOT_A_PERSON_HINT };
+    nameWords, denyHits, noreply, throwaway, PRIVATE_FILES, LABEL_WORD_MIN, PUBLIC_WORDS, SESSION_HOST, WEB_HOST, ADDRESS_FIX, NOT_A_PERSON_HINT };
   return;
 }
 

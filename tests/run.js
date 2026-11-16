@@ -1883,8 +1883,10 @@ section("Commit hygiene");
   /* which of a commit's two addresses may not be published (the guard's rule 5: the airlock's two forms;
    * ".invalid" only in a throwaway repository); only the part after the @ is ever printed */
   const loose = { throwaway: NG.throwaway(ROOT) };
-  const addrIn = c => [["author", c.ae], ["committer", c.ce]].filter(([, a]) => !NG.noreply(a, loose))
-    .map(([k, a]) => k + " …@" + String(a).replace(/^.*@/, ""));
+  /* onMain: the commit is already public. An edit made on GitHub's web page has GitHub's own address
+   * as its committer; that is nobody's mailbox, and no commit made in a clone carries it. */
+  const addrIn = (c, onMain) => [["author", c.ae, loose], ["committer", c.ce, { ...loose, web: !!onMain }]]
+    .filter(([, a, how]) => !NG.noreply(a, how)).map(([k, a]) => k + " …@" + String(a).replace(/^.*@/, ""));
   /* What to do about unpushed commits, by where they stand. The queue is family-tree-private's branch
    * site-queue, which tools/cloud-lib.sh fetches to refs/remotes/queue/site-queue. */
   const QUEUE = "refs/remotes/queue/site-queue";
@@ -1944,6 +1946,9 @@ section("Commit hygiene");
       "the guard passes the two addresses the airlock publishes, and nothing else");
     ok(NG.noreply("t@example.invalid", { throwaway: true }) && !NG.noreply("someone@host.example", { throwaway: true }),
       "an address under .invalid passes only in a repository with no remote on the network");
+    ok(NG.noreply("noreply@" + NG.WEB_HOST, { web: true }) && !NG.noreply("noreply@" + NG.WEB_HOST) && !NG.noreply("someone@" + NG.WEB_HOST, { web: true }) &&
+       addrIn({ ae: "someone@host.example", ce: "noreply@" + NG.WEB_HOST }, true).length === 1 && addrIn({ ae: session, ce: "noreply@" + NG.WEB_HOST }).length === 1,
+      "the web page's own committer address passes only on a commit already on main, and only as committer");
   }
 
   /* ---- recent pushed history, so a leak cannot hide behind having shipped ---- */
@@ -1977,14 +1982,15 @@ section("Commit hygiene");
       /* An address that is pushed is public for good, like a name in a message. This line then
        * stays red until the commit is 40 back or its id is added to ACCEPTED above, which is a
        * privacy decision and Cory's to make. */
-      const addr = pushed.map(c => ({ sha: c.sha.slice(0, 7), bad: addrIn(c) })).filter(h => h.bad.length);
+      const addr = pushed.map(c => ({ sha: c.sha.slice(0, 7), bad: addrIn(c, true) })).filter(h => h.bad.length);
       ok(!addr.length,
         "pushed commits carry author and committer addresses that may be published (" + pushed.length + " scanned)" +
         (addr.length ? " — " + addr.map(h => h.sha + (process.env.CI ? "" : " [" + h.bad.join(", ") + "]")).join("; ") +
           " — it is public and cannot be taken back, so rewrite nothing. If the address is this clone's own (git config user.email" +
           " prints it), " + NG.ADDRESS_FIX + ", so that the next commit is clean. Then stop and report this line to Cory: he decides" +
           " whether the commit's id goes into ACCEPTED in tests/run.js section 13; until then, or until the commit is 40 back," +
-          " this line and the gate stay red." : ""));
+          " this line and the gate stay red. (An edit made on GitHub's web page carries the account's own address unless" +
+          " \"Keep my email addresses private\" is on in the account's email settings.)" : ""));
     }
   }
 }
