@@ -287,6 +287,8 @@ GIT_AUTHOR_EMAIL=someone@host.example gnohook -C "$A" commit -q --allow-empty -m
 refuse "a commit whose author has an address that may not be published is refused" fin A "Update working state" "session-a"
 says "the author of this commit does not use an address that may be published" "…and says so, naming the author"
 says "git config user.email" "…with the way to put it right"
+says "git commit --amend --reset-author --no-edit" "…down to the guard's last step, the repair itself (once cut off after six lines)"
+says "stop and report it to Cory" "…and what to do when the commit is older or already queued"
 git -C "$A" reset -q --hard HEAD~1
 GIT_COMMITTER_EMAIL=someone@host.example gnohook -C "$A" commit -q --allow-empty -m "Update site media y"
 refuse "…and so is one whose committer has" fin A "Update working state" "session-a"

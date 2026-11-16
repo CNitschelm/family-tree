@@ -368,10 +368,11 @@ if [ "$own" -gt 0 ]; then
     fi
     # the guard is given the commit too, so it reads THAT commit's author and committer (16 Nov 2026): with the
     # message alone it checked the address of whoever runs this script, and a commit made elsewhere, or with
-    # --author, went into the queue for the airlock to refuse, which blocks every session.
+    # --author, went into the queue for the airlock to refuse, which blocks every session. All of the guard's
+    # words are shown: cut to six lines, they lost the repair itself (amend with --reset-author, or stop and report).
     git -C "$FT" log -1 --format=%s "$c" > "$gm"
-    out="$(cd "$FT" && node "$guard" "$gm" "$c" 2>&1)" || { rm -f "$gm"; die "commit $(short "$c"): the commit guard refuses it (its message, or the address of its author or committer):
-$(printf '%s\n' "$out" | grep -v '^$' | head -6 | sed 's/^/  /')
+    out="$(cd "$FT" && node "$guard" "$gm" "$c" 2>&1)" || { rm -f "$gm"; die "commit $(short "$c"): the commit guard refuses it (its message, or the address or name of its author or committer):
+$(printf '%s\n' "$out" | grep -v '^$' | head -n 16 | sed 's/^/  /')
   To redo this session's own commits as one: git -C \"$FT\" reset --soft $(short "$N"), then commit again with one
   neutral line (if the guard could not build its name index, run node tools/crypt.js decrypt first)."; }
     git -C "$FT" diff --quiet "$c^" "$c" -- index.html || page=1
