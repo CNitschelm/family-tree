@@ -14,7 +14,9 @@
  *   node tools/pages.js show <register address>        what was read, by result; what never was, when the
  *                                                      register's length is known
  *   node tools/pages.js unread <register address> [--list [--limit <n>|all]]
- *                                                      the pages still to read (--list: one a line, with ids)
+ *                                                      the pages still to read: never opened, marked not read,
+ *                                                      or unreadable when last tried (--list: one a line, with
+ *                                                      ids; an unreadable page says so in a fourth column)
  *   node tools/pages.js list                           every register that has a page list
  *   node tools/pages.js import-list <register address> <tsv> [--what "<register title>"]
  *                                                      the register's length and page ids, from a list with
@@ -390,15 +392,21 @@ function main(argv) {
     case "unread": {
       if (pos.length !== 1) throw refusal(USAGE);
       const reg = known(pos[0]), s = summary(reg);
-      const marked = s.by["not read"], todo = [...marked, ...s.never].sort((a, b) => (+a || Infinity) - (+b || Infinity));
+      /* An unreadable page is still to read: nobody has read it, so it is no negative, and it must be tried
+         again or read another way. Until 16 Nov 2026 it was left out of the count and of --list, and a register
+         whose only pages left were unreadable ones was called read ("every page has been read"). */
+      const marked = s.by["not read"], bad = s.by.unreadable, isBad = new Set(bad);
+      const byPage = (a, b) => (+a || Infinity) - (+b || Infinity);
+      const open = [...marked, ...bad].sort(byPage), todo = [...open, ...s.never].sort(byPage);
       console.log(reg.address + (reg.what ? "  (" + reg.what + ")" : ""));
       if (reg.length) console.log("  still to read: " + todo.length + " of " + reg.length + " pages" + (todo.length ? ": " + ranges(todo) : " (every page has been read)"));
-      else console.log("  marked not read: " + (marked.length ? marked.length + ": " + ranges(marked) : "none") + ". The pages never opened cannot be listed without the register's length. Give it once: " + HOW_LENGTH(reg.address));
-      if (s.by.unreadable.length) console.log("  unreadable, so not a negative (" + s.by.unreadable.length + "): " + ranges(s.by.unreadable));
+      else console.log("  marked not read or unreadable: " + (open.length ? open.length + ": " + ranges(open) : "none") + ". The pages never opened cannot be listed without the register's length. Give it once: " + HOW_LENGTH(reg.address));
+      if (bad.length) console.log("  of these, unreadable when last tried, so still to read and not a negative (" + bad.length + "): " + ranges(bad) + ". Try each again, or read it another way (a better image, the original).");
       if (opt.list) {
         if (opt.limit !== undefined && !/^(all|[1-9]\d*)$/.test(opt.limit)) throw refusal("--limit takes a number, or all");
         const n = opt.limit === "all" ? todo.length : opt.limit ? +opt.limit : LIST_LIMIT;
-        todo.slice(0, n).forEach(p => { const k = reg.ids.get(p) || {}; console.log([p, k.id || "", k.address || ""].join("\t")); });
+        todo.slice(0, n).forEach(p => { const k = reg.ids.get(p) || {}, row = s.newest.get(p) || {};
+          console.log([p, k.id || row.id || "", k.address || ""].concat(isBad.has(p) ? ["unreadable"] : []).join("\t")); });
         if (todo.length > n) console.log("… " + (todo.length - n) + " more: add --limit <n> (or --limit all)");
       } else if (todo.length) console.log("  one page a line, with its id and address where the list has them: add --list");
       return;

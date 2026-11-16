@@ -625,9 +625,38 @@ section('pages.js: the page list of a register scan');
 
   /* unread */
   r = pg('unread', REG);
-  ok(r.status === 0 && /still to read: 6 of 12 pages: 6, 8-10, 12, cover/.test(r.stdout) && /unreadable, so not a negative \(1\): 5/.test(r.stdout), 'unread: the pages marked not read and the pages never opened; unreadable pages apart');
+  ok(r.status === 0 && /still to read: 7 of 12 pages: 5-6, 8-10, 12, cover\n/.test(r.stdout) && /of these, unreadable when last tried, so still to read and not a negative \(1\): 5\./.test(r.stdout),
+    'unread: the pages never opened, the pages marked not read and the unreadable ones, which are named again on a line of their own');
   r = pg('unread', REG, '--list', '--limit', '2');
-  ok(r.status === 0 && r.stdout.split('\n').filter(l => /^\S+\t/.test(l)).map(l => l.split('\t')[0]).join() === '6,8' && /… 4 more: add --limit <n> \(or --limit all\)/.test(r.stdout), 'unread --list: one page a line, as many as --limit says, and how many are left');
+  ok(r.status === 0 && r.stdout.split('\n').filter(l => /^\S+\t/.test(l)).map(l => l.split('\t')[0]).join() === '5,6' && /… 5 more: add --limit <n> \(or --limit all\)/.test(r.stdout), 'unread --list: one page a line, as many as --limit says, and how many are left');
+  {
+    const rows = pg('unread', REG, '--list', '--limit', 'all').stdout.split('\n').filter(l => /^\S+\t/.test(l)).map(l => l.split('\t'));
+    ok(rows.map(c => c[0]).join() === '5,6,8,9,10,12,cover' && rows[0].length === 4 && rows[0][3] === 'unreadable' && rows.slice(1).every(c => c.length === 3),
+      'an unreadable page is in the list, marked as such in a fourth column; the others keep their three');
+  }
+  /* a register whose every page was opened, one of them unreadable, is not read yet */
+  {
+    const A5 = path.join(T, 'archive5'), R5 = 'https://registers.example.invalid/shelf/short';
+    fs.mkdirSync(path.join(A5, 'archive'), { recursive: true });
+    const p5 = (...a) => pgAs({ FT_ARCHIVE: A5 }, ...a);
+    ok(p5('add', R5, '1-2', 'nothing', '--who', 'go1', '--pages', '3', '--what', 'Short book').status === 0 && p5('add', R5, '3', 'unreadable', '--who', 'go1', '--id', 'p-three', '--note', 'blurred').status === 0,
+      'a register of three pages: two read, the third unreadable');
+    let u = p5('unread', R5);
+    ok(u.status === 0 && /still to read: 1 of 3 pages: 3\n/.test(u.stdout) && !/every page has been read/.test(u.stdout) && /unreadable when last tried, so still to read and not a negative \(1\): 3\./.test(u.stdout),
+      'unread counts the unreadable page and does not say every page has been read');
+    u = p5('unread', R5, '--list');
+    ok(u.stdout.includes('3\tp-three\t\tunreadable'), 'unread --list has it, with the id its row gave');
+    ok(/read in full: 2 of 3 pages/.test(p5('show', R5).stdout), 'show still counts two pages read in full');
+    ok(p5('add', R5, '3', 'nothing', '--who', 'go2').status === 0 && /still to read: 0 of 3 pages \(every page has been read\)/.test(p5('unread', R5).stdout) && !/unreadable/.test(p5('unread', R5).stdout),
+      'once it is read after all, every page has been read');
+    /* without the register's length: the unreadable pages are named with the ones marked not read */
+    const R6 = 'https://registers.example.invalid/shelf/unknown-length';
+    ok(p5('add', R6, '4', 'unreadable', '--who', 'go1', '--what', 'Another book').status === 0 && p5('add', R6, '2', 'not read', '--who', 'go1').status === 0 && p5('add', R6, '1', 'nothing', '--who', 'go1').status === 0,
+      'a register whose length is not known: one page read, one marked not read, one unreadable');
+    u = p5('unread', R6, '--list');
+    ok(/marked not read or unreadable: 2: 2, 4\. The pages never opened cannot be listed/.test(u.stdout) && u.stdout.split('\n').filter(l => /^\S+\t/.test(l)).map(l => l.split('\t')[0]).join() === '2,4',
+      'unread names both, and lists both');
+  }
 
   /* a register's own list of pages: its length and ids, nothing read */
   const REG2 = 'https://registers.example.invalid/ark:/12345/weirbook2', LIST = path.join(T, 'weirbook2.tsv');
