@@ -439,7 +439,10 @@ finish stopped, and it works in any session that has set up once. While the site
 that is not queued (a commit neither published nor queued, or a changed site file not committed) it
 leaves `OPEN-ITEMS.md` and `CHANGE-LOG-COMMITS.md` out and says so in a NOTE: those two record a site
 commit as queued, so they go up with the full finish that queues it. If that site work is given up, take
-its lines out of both files. When another session wrote to the same
+its lines out of both files. The checkpoint pushes the archive's own commits first, so it stops as a
+finish does when the archive cannot be pushed: GitHub refuses the push, its newer commits change the
+same lines, or an archive commit holds a file of 95 MB or more. Repair or undo that archive commit first
+(the stop says how), then run the checkpoint again; until then neither the state nor the notes can be saved. When another session wrote to the same
 file it stops and says how to go on: for a notes file, the steps to put the two together by hand; for a
 state file this session has changed and not committed, not to rebase by hand, and how to set the file aside.
 
