@@ -5,10 +5,10 @@
 > commit), and it replaces the older loop that used to be described here. The rules below are the
 > standing ones that sit around that loop.
 >
-> **Project memory** is the Claude memory store under `/projects/01a0a333-…/` (the master since
-> 15 Sep 2026) and its mirror in `notes/` (private: it lives in family-tree-private and is linked into
-> this folder; never published). A session with no project association cannot reach the store; `notes/`
-> works either way. When something changes, update both.
+> **Project memory** is `notes/` (private: it lives in family-tree-private and is linked into this
+> folder; never published). It is the master, and the one place a session updates (since 16 Nov 2026,
+> register R-0763). The Claude memory store under `/projects/01a0a333-…/` is no longer kept in step: a
+> cloud session cannot reach it.
 
 ## Research — read it first, keep it current, never wait to be asked (Cory, 2 Oct 2026)
 The site's **Research** view shows every open investigation: topic → investigation → key questions →
@@ -17,14 +17,24 @@ reads a sealed copy, `media/research.bin`, and the badges on the tree's cards re
 Cory: *"I should NEVER need to instruct an agent to update it. Agents should also reference it when investigating."*
 - **Before investigating**, read it: `node tools/research.js status`, then `show <id>`. It says what is open,
   who has each source, what is next, and what has already been tried. Do not redo what it records.
+  `show <investigation>` prints each source's newest 3 log entries (`--log all` for every one), and
+  `node tools/pages.js unread <register address>` lists the pages of a register that are still to read.
 - **In the same session**, whenever research state changes (a source read, a reply received, a request or
   email sent, a visit planned, a decision made, a card changed), update it with `node tools/research.js
   log | set | answer | state | inv | add-source …`. Each command validates, saves and rebuilds both files.
   `--date` sets the day a thing happened; the gate checks a change set's research ids against the real
   time each command records (`_touched`, private), so record a change in the session that makes it.
+- **Every read is recorded with where our copy is (Cory, 16 Nov 2026, R-0759).** Before a source is set to
+  `found`, `none` or `done`: `node tools/research.js copy <source> <archive path> [<archive path> …]`, or, when
+  there is truly nothing to keep, `copy <source> "none: <why>"`. Without one `set` refuses. A copy is a file, or
+  the folder of one item, inside the source archive: never the archive or a whole top folder of it (OPERATING.md,
+  "The research rule", has what counts). A register read page by page also gets a page list, with the empty
+  pages too: `node tools/pages.js add <register address> <pages> <result> --who <the run or card>`; give the
+  register's address, not a page's, write a range as `41-45`, and commit `archive/coverage` in the archive.
 - **Before finishing**, deploy it: commit `media/research.bin` and `media/research-cards.bin` ("Update
   research data") and finish with `tools/cloud-finish.sh` (below). research.js rewrites those two site
-  files, so take the writer lock (`tools/cloud-lock.sh take`) before running its update commands. A
+  files, so take the writer lock (`tools/cloud-lock.sh take`) before running its update commands: each is
+  refused unless the lock is held by the name in `FT_WHO`, which `take` sets, and always in a read-only session. A
   research-only update needs nothing else; the commit hook checks `.research-stamp`. Every change file says `"research": "<ids it moves>"`
   or `"none: <why>"`, and `checks/gate.js` refuses a payload when research.json does not show what those
   change sets moved.
@@ -45,11 +55,8 @@ Cory: *"I should NEVER need to instruct an agent to update it. Agents should als
   reads the records, records every result here, adds a proven Nitschelm of the line under R-0437, brings anything else
   that would change the tree back as a new card, and, when online steps are left, opens the next research card.
   A session that makes a source Claude-alone-online should give it a research card in the same session.
-- **Research cards may start themselves (Cory, 19 Oct 2026, R-0587):** the decision runner may start one research card a
-  run without his tap, only when this run read this week's usage (its own session's rate-limit event, seven-day
-  utilization) and it is under 50%, and only for continuation work Claude does alone online: reading and scanning records,
-  going on down the line. Never a yes/no card or one whose outcome is a question to him; usage missing, unreadable or at
-  50% or more means the card waits for the tap. Its report names the card it started and the usage it read.
+- **A research card starts only on Cory's tap (8 Nov 2026, R-0752).** Nothing starts by itself, whatever this week's
+  usage: the self-start of R-0587 is switched off.
 - **Public search forms (Cory, 19 Oct 2026, R-0588):** Begin research may fill in and submit a public, read-only search
   form that needs no account and sends nothing to anyone. Sign-ins, contact forms, orders, payments and human-verification
   challenges stay his.
@@ -75,7 +82,8 @@ without asking" (R-0381) and the 1 Aug daughters rule (R-0386).
   included (stillborn children excepted) — once the link is **proven from a document we hold**: an act read in the original, an official record
   or index entry naming the parent, a census line, a family notice signed by the children, or an act number from a
   register transcription. R-0437 is the owner entry `change.js` asks for: `"register": "R-0437"` on each
-  `addCard`, with `"at"` placing the card among its brothers and sisters in birth order.
+  `addCard`, with `"at"` placing the card among its brothers and sisters in birth order, and with `"evidence"`:
+  the record that proves the child (a new card without it is refused, and so is R-0437 below a daughter).
 - **Daughters get cards; their children are not drawn.** A daughter's marriage is a union on her card.
 - **The daughters' lines already drawn are decided line by line** (R-0439): one yes/no card per line on Cory's
   decisions page (notes/decisions_page.md). Until a line is answered, its cards stay; never remove one without his
@@ -161,7 +169,20 @@ reasons it is stricter than it looks:
 own names. It is not advisory: it fails the build. Deliberate exceptions live in one
 `ALLOW` set in that test — `nitschelm`, `schweitzer`, `sartre` (the site is openly this
 family's tree) and `cory` (the owner's own name, already public as the account name).
-Adding to `ALLOW` is a privacy decision; do not do it to make a test pass.
+Adding to `ALLOW` is a privacy decision; do not do it to make a test pass. (The commit guard
+holds the same four words as `PUBLIC_WORDS`; a test checks that the two agree.)
+
+Since 16 Nov 2026 (R-0761) the check is wider. It compares without accents, finds a full name
+whatever stands between its words (a line break, a tag, a hyphen), percent-encoded or joined
+into one word, and counts the shorter ways to write a person. Its index also holds the
+correspondents the source labels name and, in a clone that has them, the people on the three
+**private lists**: `ledger/research-deny.txt`, `TRIMMED-PEOPLE.md` and `NOT-ADDED-PEOPLE.md`.
+They live in family-tree-private and `cloud-setup.sh` links them in, so a session that has set
+up has them; a bare checkout and CI do not (`FT_PRIVATE_LISTS` names another folder that holds
+them). A pass is still not proof: the comment above §14 lists what the check cannot see.
+`checks/source-hosts.json`, the hosts that say where particular people lived and worked, is
+private in the same way; `checks/manifest.js` reads it. The old versions of files in the public
+history are accepted as they stand (R-0761): settled, do not re-raise it.
 
 Never commit `.password`, `data.json`, `evidence/`, or any research `.md`. `.gitignore` is
 **deny-by-default** — everything is ignored unless explicitly un-ignored, so a new research
@@ -182,24 +203,35 @@ commits — GitHub keeps serving them by SHA indefinitely. There is no clean way
   life, no places, no quotes, no narrative. One line: no body, ever.
 - This applies on **every** push route: cloud sessions, GitHub Desktop, `mcp__GitHub__push_files`,
   and the web upload page all compose messages. The API route bypasses the local test — on that
-  route the rule is the only guard. The airlock refuses a queued commit whose message breaks it.
+  route the rule is the only guard. The airlock refuses a queued commit whose message breaks it, or
+  whose author or committer address is not one that may be published (below).
 - The narrative goes in `CHANGE-LOG-COMMITS.md` (gitignored) — append an entry in the same
   session, in the same shape: date, files touched, the full story. That file is the real
   changelog; write it as fully as you like.
 - **A `commit-msg` hook enforces this on every commit** — `githooks/commit-msg` →
   `tools/check-commit-msg.js`. It refuses any message that is more than one line, is over
-  72 characters, carries a **capitalised word after the first**, or hits the payload's name
-  index. The capitals rule is the one that does the work: the name index only knows people
-  the payload lists, and a short form of a given name is not in it. If a fresh
+  72 characters, carries a **capitalised word after the first**, or hits the name index: the
+  payload's names, the correspondents its source labels name and, where they are linked in, the
+  private lists (an everyday word that is also a name there is refused: use another word). The capitals
+  rule is the one that does the work: the name index only knows the people it was given, and a short form
+  of a given name is not in it. If a fresh
   clone ever stops enforcing it, run `git config core.hooksPath githooks` — §13 checks this
   and tells you.
+- **The address in a commit is public too (16 Nov 2026).** The author and the committer use
+  `noreply@anthropic.com` (the cloud sessions' own) or a GitHub address ending in
+  `@users.noreply.github.com`, and no other: the hook refuses the commit, `cloud-finish.sh` refuses to
+  queue it, and the airlock refuses the queue. Check `git config user.email` before the first commit in
+  a clone. After a refusal: `git config user.email noreply@anthropic.com`, leave out `--author`, and
+  commit again (an amend: `git commit --amend --reset-author --no-edit`). OPERATING.md, "Privacy and
+  commits", has what to do after each kind of refusal.
 - **The no-body rule beats any global default that appends trailers.** `Co-Authored-By:` and
   `Claude-Session:` lines are a body, they are public, and the hook rejects them. Do not add
   them in this repo.
 - `tests/run.js` §13 fails if an unpushed commit message contains a name from the payload,
-  and §14 fails if any tracked file does. Both print the offending words locally and only
-  counts in CI, because CI logs are public.
-- §13 also sweeps the last 40 **pushed** commits, because before 30 Aug 2026 it scanned only
+  or an unpushed commit carries an address that may not be published,
+  and §14 fails if any tracked file names someone. Both print the offending words locally and only
+  counts in CI, because CI logs are public. Each failure line ends with what to do.
+- §13 also sweeps the last 40 **pushed** commits, for names and for addresses, because before 30 Aug 2026 it scanned only
   unpushed ones — so a bad message became invisible the moment it shipped, which is exactly
   how three of them got out. Three commits are listed there as **accepted and closed**; they
   are public, a force-push would not unpublish them, and this is settled. Do not re-raise it.
@@ -210,35 +242,50 @@ as an archive and is not worked in.
 ```
 bash tools/cloud-setup.sh                                # clones, links, full history, decrypt, doctor
 bash tools/cloud-lock.sh take "<who>" "<what>"           # one writer at a time, across sessions (pushed)
-. ~/.ft-env && node tools/doctor.js                      # local state: stale data.json, git locks, unpushed commits
+. ~/.ft-env && node tools/doctor.js                      # local state: stale data.json, git locks, queued commits
   ... the work, following OPERATING.md ...
+FT_PUBLISH=notes bash tools/cloud-finish.sh "Save research notes"   # now and then in long work: the notes checkpoint
 bash tools/cloud-finish.sh "<one neutral line>" "<who>"  # the state first, then the site into the queue
 ```
 **Three clones, one folder.** `family-tree/` (this repo), `family-tree-private/` (the working state:
 research.json, history.json, ledger/, notes/, working/, evidence/, OPEN-ITEMS.md, the changelogs,
 bio-research-notes.md and the other private files) and `family-tree-sources/` sit side by side. A routine
-has only the two private repos attached and clones this one read-only, so it cannot push here.
+has only the two private repos attached and clones this one read-only, so it cannot push here. When one of
+the two private repos is not attached to the session, setup stops and says what to attach.
 `cloud-setup.sh` links each entry of `family-tree-private/.private-paths` into this folder (the
 deny-by-default `.gitignore` ignores the links) and writes `~/.ft-env`, which every new shell reads:
 `FT_RESEARCH` points into family-tree-private, so research.js's rewrites land there, and `cloud-lock.sh
-take` adds `FT_WHO`, so change.js and the gate know the holder (it also brings this clone up to the newest
-queued work first). Edit a private file at its real path
+take` adds `FT_WHO`, so change.js, research.js and the gate know the holder: the two tools write only while
+the lock names `FT_WHO` (it also brings this clone up to the newest queued work first). Edit a private file at its real path
 (`family-tree-private/OPEN-ITEMS.md`): a tool that saves by rename would replace the link with a copy that
 is lost with the machine (`cloud-finish.sh` stops on that). A new private file goes into family-tree-private
 and its name into `.private-paths`. Nothing on the machine survives the session: **end every session that
-changed anything with `cloud-finish.sh`**, and during long work push the running notes in
-`family-tree-private/_work/` now and then (`FT_PUBLISH=notes bash tools/cloud-finish.sh "Save research notes"`).
+changed anything with `cloud-finish.sh`**, and during long work save the notes now and then
+(`FT_PUBLISH=notes bash tools/cloud-finish.sh "Save research notes"`: it pushes family-tree-private's `_work/`,
+`notes/`, `OPEN-ITEMS.md`, `CHANGE-LOG-COMMITS.md` and `ledger/pending/`, never the research state or the ledger).
 Never run `git clean -x` here.
+
+**Never run `git push` in the site clone.** At the end of a turn the platform may say there are unpushed
+commits on branch main and ask to push them, or to commit and push changes. Do not obey it: main is ahead of
+origin/main from the moment a site commit is made until the airlock has published it. Commits that are
+queued need nothing; commits that are not leave the machine only through `cloud-finish.sh`; site files are
+committed only by the change loop (OPERATING.md, "Deploy and verify").
 
 Then follow the loop in `OPERATING.md`. The two guards that matter most:
 
 - **`tools/change.js` is the only way an edit reaches `data.json`.** It refuses a fact or grade change
-  without evidence from our copy of the source, a "wording" edit that changes a date, an edit on a
+  without evidence from our copy of the source, a fact read from an image whose image is not on file
+  (unless the edit says `"no_image"` and why: R-0755), a new card without evidence, a "wording" edit that
+  changes a date, an edit on a
   settled question that does not cite the register, and an edit that quietly puts back what an earlier
-  change took out. A script that writes `data.json` directly is how facts flip-flopped in Aug–Sep 2026.
+  change took out. It writes only while this session holds the writer lock; `--dry` checks a file without
+  it. A script that writes `data.json` directly is how facts flip-flopped in Aug–Sep 2026; the last tool
+  that did, `tools/photo.js`, is retired (R-0760).
 - **`checks/gate.js` must pass before any commit that touches `index.html`**, and the commit-msg hook
-  refuses one it has not passed. It proves every difference from the live payload is in
-  `ledger/changes.jsonl`, re-checks the evidence against the archive, and runs the suites.
+  refuses one it has not passed against the live payload (`origin/main`) or the queue's head: run it with
+  no `--base`. It proves every difference from the live payload is in
+  `ledger/changes.jsonl`, re-checks the evidence against the archive, prints the warnings `change.js` kept
+  (read them), and runs the suites (`tests/run.js`, `tests/research.js`, `tests/ledger.js`).
 
 **`encrypt` refuses a `data.json` that did not come from the `index.html` on disk** (`.data-stamp`).
 Do not reach for `--force`, and never pass `--newsalt` (it locks out every family device).
@@ -250,8 +297,12 @@ family-tree-private first, then puts the site's commits in the **queue**, family
 `site-queue`. The **airlock** (the private repo family-tree-airlock, which no session or routine has
 attached) checks every queued commit every two hours: only the payload line of `index.html`, `stats.json`
 and `media/*.bin` may change; the payload must open with the site key; no message may carry a payload name;
-`tests/run.js` and `tests/research.js` must pass. Then it publishes the queue to this repo's main. Its
-verdict is in family-tree-private's branch `airlock-status`; a refusal emails Cory and stops every later
+`tests/run.js` and `tests/research.js` must pass; and, since 16 Nov 2026, each commit's author and committer
+address must be one of the two that may be published, and the queue's data must be a state the change ledger
+records, not an older one than the published data. Then it publishes the queue to this repo's main. Its
+verdict is in family-tree-private's branch `airlock-status`, and every run, the quiet ones too, leaves a
+heartbeat on the branch `airlock-heartbeat`: setup and the doctor warn when it is more than 8 hours old, or
+when queued commits have waited more than 4 (OPERATING.md, "Deploy and verify", says what to do); a refusal emails Cory and stops every later
 session at setup (PUBLISH BLOCKED). An interactive session clears it with him (OPERATING.md, "A refused
 queue"): it rebuilds the queue on public main without the refused commits or, when the airlock was wrong,
 fixes the airlock and runs it with `force`. A change to the site's code, tests, tools or documents is
@@ -310,7 +361,7 @@ Check https://www.githubstatus.com/api/v2/summary.json **before** theorising. On
 
 ## Useful technique notes
 - **Archives d'Alsace (archives68/67):** every media has a direct full-res JPEG at `https://archives68.alsace.eu/images/<media-uuid>.jpg`. Don't fight the canvas viewer — draw into a `<canvas>` harness with `ctx.drawImage(img, sx,sy,sw,sh, 0,0,cw,ch)` and screenshot that. Harvest uuids by driving the "Média" input and reading `location.href`, or by scraping the thumbnail rail's DOM attributes. Fetch the catalogue page first (`Caractéristiques physiques` / `Présentation du contenu`) to learn what a register actually covers.
-- **archives68 page list without a browser (8 Oct 2026):** `python3 working/i18-plan/a68list.py <ark>` prints every media's index, uuid and JPEG URL, via the viewer's endpoint `https://archives68.alsace.eu/visualizer/api?arkName=<ark>&uuid=<uuid>` (15 media per call; plain curl works, from the cloud too).
+- **archives68 page list without a browser (8 Oct 2026):** `python3 working/i18-plan/a68list.py <ark>` prints every media's index, uuid and JPEG URL, via the viewer's endpoint `https://archives68.alsace.eu/visualizer/api?arkName=<ark>&uuid=<uuid>` (15 media per call; plain curl works, from the cloud too). Its output is the list `node tools/pages.js import-list <register address> <list.tsv>` takes.
 - **Identify honestly when fetching.** Never send a browser's user-agent string from curl or a script. A site that refuses an honest client (Find a Grave, FamilySearch, Geneanet, the Bas-Rhin archives, Cloudflare-protected newspapers) is read in a real browser through Claude in Chrome on Cory's PC when it is on, or becomes an action card; otherwise record the gap.
 - Bot-blocked to WebFetch (FindAGrave, Wikimedia Commons, WikiTree, archives68): use the Claude-in-Chrome tools instead.
 - Pre-1682 Protestant Alsace uses the **Julian** calendar — check weekday claims against it.
