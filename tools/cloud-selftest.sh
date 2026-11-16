@@ -31,7 +31,7 @@ SEED="${1:?usage: cloud-selftest.sh <site clone>}"
 T="$(mktemp -d /tmp/ft-selftest.XXXXXX)"
 # the scripts under test run from a copy: from inside a site clone, cloud-setup.sh would use that clone
 TOOLS="$T/tools-under-test"; mkdir -p "$TOOLS"
-cp "$HERE"/cloud-lib.sh "$HERE"/cloud-setup.sh "$HERE"/cloud-verify.sh "$HERE"/cloud-lock.sh "$HERE"/cloud-finish.sh "$TOOLS"/
+cp "$HERE"/cloud-lib.sh "$HERE"/cloud-setup.sh "$HERE"/cloud-verify.sh "$HERE"/cloud-lock.sh "$HERE"/cloud-finish.sh "$HERE"/doctor.js "$TOOLS"/
 export GIT_AUTHOR_NAME=selftest GIT_AUTHOR_EMAIL=selftest@example.invalid GIT_COMMITTER_NAME=selftest GIT_COMMITTER_EMAIL=selftest@example.invalid
 unset FT_DIR FT_PRIVATE_DIR FT_ARCHIVE FT_RESEARCH FT_LEDGER FT_PASSWORD FT_OWNER_KEY FT_PUBLISH FT_READONLY FT_WHO
 export FT_SPLIT_WAIT=1 FT_RETRY_WAIT=0
@@ -449,6 +449,43 @@ test "$(git --git-dir="$GHA" rev-parse main)" = "$am0" && ok "…the archive was
 refuse "…and the notes checkpoint stops on it too" in_cloud A env FT_PUBLISH=notes bash "$TOOLS/cloud-finish.sh" "Save research notes"
 git -C "$AA" reset -q --hard HEAD~1
 check "with the file gone, the finish goes through" fin A "Update working state"
+quiet git -C "$PB" pull -q --ff-only
+
+echo "6d. the archive's source list keeps itself current (16 Nov 2026)"
+stamp_data() { # $1 = site clone: mark its data.json as coming from the index.html on disk, as tools/crypt.js does
+  ( cd "$1" && node -e 'const fs=require("fs"),c=require("crypto");const e=JSON.parse(fs.readFileSync("index.html","utf8").match(/const ENC = (\{[^}]*\});/)[1].replace(/(\w+):/g,"\"$1\":"));fs.writeFileSync(".data-stamp",e.iv+":"+c.createHash("sha256").update(e.ct).digest("hex").slice(0,16)+"\n")' )
+}
+cp "$A/data.json" "$T/data.keep"
+echo "a line more" >> "$PA/OPEN-ITEMS.md"; am0="$(git --git-dir="$GHA" rev-parse main)"
+check "a finish whose data.json has no stamp leaves the source list alone" fin A "Update working state"
+says "NOTE: the archive's source list (sources/urls.tsv) was not brought up to date" "…with a note, not a stop"
+test "$(git --git-dir="$GHA" rev-parse main)" = "$am0" && test -z "$(git -C "$AA" status --porcelain)" && ok "…and the archive is untouched" || no "the archive changed without a current data.json"
+printf '{"id":"c001","name":"Selftest Person","src":[{"l":"A register","u":"https://example.invalid/register/1"}],"unions":[{"s":"Other Person","c":[{"id":"c002","name":"Selftest Child","src":[{"l":"A register","u":"https://example.invalid/register/1"},{"l":"A notice","u":"https://example.invalid/notice/2"}],"unions":[]}]}]}\n' > "$A/data.json"
+refuse "tools/doctor.js --data-current says no for a data.json with no stamp" env FT_ROOT="$A" node "$TOOLS/doctor.js" --data-current
+stamp_data "$A"; echo "another" >> "$PA/OPEN-ITEMS.md"
+check "…and yes once it is stamped from the index.html on disk" env FT_ROOT="$A" node "$TOOLS/doctor.js" --data-current
+check "with a current data.json, a full finish rebuilds the list" fin A "Update working state"
+says "sources/urls.tsv rebuilt from data.json (2 addresses) and committed" "…and says so"
+git --git-dir="$GHA" show main:sources/urls.tsv | grep -q "example.invalid/notice/2" && test "$(git --git-dir="$GHA" log -1 --format=%s main)" = "update the source list" \
+  && ok "…GitHub's archive has the new list, in a commit of its own" || no "the source list did not reach the archive"
+! git --git-dir="$GHA" show main:sources/urls.tsv | grep -q "Selftest" && ok "…which names no card" || no "the archive's list names a card"
+gp show main:sources/MANIFEST.json | grep -q '"count": 2' && ok "…and the full manifest went with the private state" || no "MANIFEST.json not in the private repo"
+am1="$(git --git-dir="$GHA" rev-parse main)"; echo "once more" >> "$PA/OPEN-ITEMS.md"
+check "a second finish with the same data makes no new archive commit" fin A "Update working state"
+test "$(git --git-dir="$GHA" rev-parse main)" = "$am1" && ok "…the archive is as it was" || no "the list was committed twice"
+# another session moved the archive on GitHub meanwhile: the list's commit goes on top of its commits
+rm -rf "$T/arc2" && quiet git clone "file://$GHA" "$T/arc2" && echo "elsewhere" > "$T/arc2/archive/hand-z.txt" && git -C "$T/arc2" add -A \
+  && gnohook -C "$T/arc2" commit -qm "add hand copies of new sources" && quiet git -C "$T/arc2" push -q origin HEAD:main
+sed -i 's#notice/2#notice/3#' "$A/data.json"; echo "and again" >> "$PA/OPEN-ITEMS.md"
+check "a finish behind GitHub's archive still brings the list up to date" fin A "Update working state"
+git --git-dir="$GHA" show main:sources/urls.tsv | grep -q "notice/3" && git --git-dir="$GHA" show main:archive/hand-z.txt >/dev/null 2>&1 \
+  && ok "…on top of the other session's commits" || no "the list and a moved archive"
+printf '{ not json\n' > "$A/data.json"; echo "last" >> "$PA/OPEN-ITEMS.md"; am1="$(git --git-dir="$GHA" rev-parse main)"
+check "a manifest that fails does not stop the finish" fin A "Update working state"
+says "node checks/manifest.js failed" "…it is a note"
+test "$(git --git-dir="$GHA" rev-parse main)" = "$am1" && test -z "$(git -C "$AA" status --porcelain)" && gp show main:OPEN-ITEMS.md | grep -qx "last" \
+  && ok "…the archive is left clean and the state went up" || no "a failed manifest and the finish"
+cp "$T/data.keep" "$A/data.json"; rm -f "$A/.data-stamp"
 quiet git -C "$PB" pull -q --ff-only
 
 echo "7. the queue and the airlock"

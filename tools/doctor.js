@@ -19,6 +19,11 @@
  * "safe to deploy". Do not let it stand in for looking.
  *
  * Zero dependencies. Never writes to the repo. Exit 1 if any BLOCKER is found.
+ *
+ *   node tools/doctor.js --data-current    prints nothing; exit 0 when data.json descends from the index.html
+ *                                          on disk (check 2 below), 1 when not. tools/cloud-finish.sh asks this
+ *                                          before it rebuilds the archive's source list from data.json.
+ * FT_ROOT (tests): the working copy to look at, instead of the one this file sits in.
  */
 "use strict";
 const fs = require("fs");
@@ -26,7 +31,7 @@ const path = require("path");
 const { execFileSync } = require("child_process");
 const { createHash } = require("crypto");
 
-const ROOT = path.join(__dirname, "..");
+const ROOT = process.env.FT_ROOT || path.join(__dirname, "..");
 const p = f => path.join(ROOT, f);
 const findings = [];
 const add = (level, title, detail, fix) => findings.push({ level, title, detail, fix });
@@ -51,17 +56,22 @@ if (locks.length) {
 }
 
 /* ---- 2. is data.json a descendant of the index.html on disk? ---- */
-if (exists("data.json")) {
-  let stamp = null;
-  try { stamp = fs.readFileSync(p(".data-stamp"), "utf8").trim(); } catch (_) { /* none */ }
-  let cur = null;
+const dataStamp = () => { try { return fs.readFileSync(p(".data-stamp"), "utf8").trim(); } catch (_) { return null; } };
+const pageStamp = () => {   /* the payload's identity, as tools/crypt.js stamps it */
   try {
     const m = fs.readFileSync(p("index.html"), "utf8").match(/const ENC = (\{[^}]*\});/);
-    if (m) {
-      const enc = JSON.parse(m[1].replace(/(\w+):/g, '"$1":'));
-      cur = enc.iv + ":" + createHash("sha256").update(enc.ct).digest("hex").slice(0, 16);
-    }
-  } catch (_) { /* handled below */ }
+    if (!m) return null;
+    const enc = JSON.parse(m[1].replace(/(\w+):/g, '"$1":'));
+    return enc.iv + ":" + createHash("sha256").update(enc.ct).digest("hex").slice(0, 16);
+  } catch (_) { return null; }
+};
+if (process.argv.includes("--data-current")) {
+  const cur = pageStamp();
+  process.exit(exists("data.json") && cur !== null && dataStamp() === cur ? 0 : 1);
+}
+if (exists("data.json")) {
+  const stamp = dataStamp();
+  const cur = pageStamp();
 
   if (!cur) {
     add("BLOCKER", "index.html has no readable ENC block",
