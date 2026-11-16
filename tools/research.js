@@ -35,7 +35,8 @@
  * Where our copy is (16 Nov 2026, register R-0759): every read is recorded with where our copy of what was
  * read is, "nothing found" included, so a negative can be checked again without reading the source again.
  * A source's `_copy` is a list of paths inside the source archive (FT_ARCHIVE, by default
- * ../family-tree-sources; each must be there when it is recorded), or the one string "none: <why>" when
+ * ../family-tree-sources; each must be there when it is recorded: a file, or the item's own folder, never the
+ * archive itself or one of its top folders, which would say nothing), or the one string "none: <why>" when
  * there is truly nothing to keep. It is private ("_…"), so it never reaches the family's copy. `copy` adds
  * to the list (--replace starts it again). From now on a source cannot be set to found, none or done (the
  * states that say it was consulted) without one; the sources closed before this rule are only counted, by
@@ -162,7 +163,9 @@ function writerProblem(env = process.env) {
   if (!l) return "nobody holds the writer lock. Take it first:  " + TAKE(who) + "  Then run this command again, in a new shell or after  . ~/.ft-env  (the lock's holder is read from FT_WHO).";
   const held = 'the writer lock is held by "' + l.who + '" since ' + l.since + (l.what ? " (" + l.what + ")" : "");
   if (l.stale) return held + ", over 12 hours ago, so it no longer counts" + (l.who === who ? " and another session may take it" : "") + ". Take it again:  " + TAKE(who || undefined) + "  (if that is refused because the site has uncommitted changes, commit media/research.bin and media/research-cards.bin first). Then run this command again.";
-  if (!who) return held + ", and this shell does not say who it is (FT_WHO is not set). If this session took the lock, run  . ~/.ft-env  (or open a new shell) and run this command again. If not, wait until it is free (bash tools/cloud-lock.sh status), then:  " + TAKE();
+  /* ~/.ft-env has FT_WHO only when cloud-lock.sh took the lock: after tools/lock.js alone (doctor.js still names it
+     for an abandoned lock) reading the file again changes nothing, so the message goes on to the step that does */
+  if (!who) return held + ", and this shell does not say who it is (FT_WHO is not set). If this session took the lock, run  . ~/.ft-env  (or open a new shell) and run this command again. If FT_WHO is still not set after that (echo \"$FT_WHO\" prints nothing), the lock was taken without cloud-lock.sh: take it again under the same name, which renews it and sets FT_WHO:  " + TAKE(l.who) + "  (do what it says if it refuses), then  . ~/.ft-env  and this command again. If another session took the lock, wait until it is free (bash tools/cloud-lock.sh status), then:  " + TAKE();
   if (l.who !== who) return held + ": another session is writing, and this one is \"" + who + "\". Wait until it is free (bash tools/cloud-lock.sh status), then take it:  " + TAKE(who) + "  and run this command again.";
   return "";
 }
@@ -198,7 +201,20 @@ function copyShape(v) {
   if (!Array.isArray(v) || !v.length) return 'must be a list of archive paths, or "none: <why>"';
   const bad = v.find(p => !relOk(p));
   if (bad !== undefined) return "holds " + JSON.stringify(bad) + ", which is not a path inside the source archive (relative, such as archive/hand/<file>)";
+  const wide = v.find(p => tooWide(p));
+  if (wide !== undefined) return "holds " + JSON.stringify(wide) + ": " + tooWide(wide);
   return new Set(v).size === v.length ? "" : "names one path twice";
+}
+/* A copy is a file, or the folder of one item: archive/hand/<file>, archive/store/<site>/<item>,
+   archive/family/<folder>. The archive itself, or a whole top folder of it, holds every source's copy, so it
+   would satisfy the rule and say nothing. Returns what to give instead, or "" */
+const COPY_DEPTH = { store: 4 };   /* archive/store/<site>/<item>; everywhere else archive/<folder>/<file or folder> */
+const COPY_SUCH = "give the file or the item's own folder, such as archive/hand/<file> or archive/store/<site>/<item>";
+function tooWide(rel) {
+  const p = rel.split("/");
+  if (p[0] !== "archive") return "copies are kept under the source archive's archive/ folder: " + COPY_SUCH;
+  if (p.length >= (COPY_DEPTH[p[1]] || 3)) return "";
+  return COPY_SUCH + ", not a whole top folder of the archive or one of the archive's own files";
 }
 /* one path as given on the command line → as stored; throws, with what to do, when it is not in the archive */
 function archivePath(given, root = ARCHIVE) {
@@ -212,8 +228,11 @@ function archivePath(given, root = ARCHIVE) {
     throw refusal(JSON.stringify(given) + " is not in the source archive (" + base + "). File the copy there first, then give its path from the archive's root, such as archive/hand/<file>.");
   }
   const rel = path.relative(base, real).split(path.sep).join("/");
-  if (!rel || rel.startsWith("../") || rel === ".." || path.isAbsolute(rel)) throw refusal(JSON.stringify(given) + " is outside the source archive (" + base + "). A copy is a file or folder inside it: file it there, then give that path.");
+  if (!rel) throw refusal(JSON.stringify(given) + " is the source archive itself (" + base + "), which says nothing about where the copy is: " + COPY_SUCH + ", not the whole archive.");
+  if (rel.startsWith("../") || rel === ".." || path.isAbsolute(rel)) throw refusal(JSON.stringify(given) + " is outside the source archive (" + base + "). A copy is a file or folder inside it: file it there, then give that path.");
   if (!relOk(rel)) throw refusal(JSON.stringify(given) + " cannot be recorded as an archive path (" + rel + "): rename the file without odd characters, then run this again.");
+  const wide = tooWide(rel);
+  if (wide) throw refusal(JSON.stringify(given) + " does not say where the copy is: " + (rel.split("/")[0] === "archive" && fs.statSync(real).isDirectory() ? COPY_SUCH + ", not the whole " + rel + " folder" : wide) + ".");
   return rel;
 }
 /* the sources that say they were consulted (found, none, done) and record no copy */
@@ -818,4 +837,4 @@ if (require.main === module) {
   catch (e) { console.error((e.refused ? "REFUSED: " : "FAILED: ") + e.message); process.exit(1); }
 }
 module.exports = { password, FILE, OUT, STAMP, STATUSES, QSTATES, TIERS, tierOf, invTier, load, save, writerProblem, validate, publicCopy, cardIndex, sealed, build, check,
-  claimsFor, lastTouched, blobId, link, status, find, isDate, ARCHIVE, copyShape, archivePath, withoutCopy, missingCopies };
+  claimsFor, lastTouched, blobId, link, status, find, isDate, ARCHIVE, copyShape, archivePath, tooWide, withoutCopy, missingCopies };

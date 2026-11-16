@@ -11,14 +11,16 @@
  *                        updated (claimsFor); matching people to cards (link); the sealed files carry the
  *                        family's copy and nothing more, byte for byte the same when nothing they show changed;
  *                        where our copy of each read is (`_copy`, 16 Nov 2026, register R-0759): private, checked
- *                        against the source archive, and asked for before a source is found, none or done;
+ *                        against the source archive (a file or an item's own folder, never a whole top
+ *                        folder), and asked for before a source is found, none or done;
  *                        show <investigation> prints each source's newest log entries only; every command
  *                        that writes needs the writer lock, held by FT_WHO, and never in a read-only session;
  *                        a save through a link goes to the link's target and leaves the link in place
  *   tools/pages.js       the page list of a register scan (16 Nov 2026, register R-0759): one table for each
  *                        register in the source archive's archive/coverage/, only ever added to; what was read
- *                        and what never was; one register under every spelling of its address; a list of a
- *                        register's pages taken in without marking any read; it writes nowhere else
+ *                        and what never was; one register under every spelling of its address, a page's
+ *                        address included; a range as our notes write it; a list of a register's pages taken
+ *                        in without marking any read; two sessions' rows kept by git; it writes nowhere else
  *   githooks/commit-msg  §0c: the two research files are committed only as research.js built them, and never
  *                        committed as deleted
  *   tools/crypt.js       a file that a page browsers may still hold uses (the live one, origin/main, or the
@@ -50,6 +52,12 @@ const ARCH = path.join(T, 'sources');
 fs.mkdirSync(path.join(ARCH, 'archive', 'hand'), { recursive: true });
 fs.writeFileSync(path.join(ARCH, 'archive', 'hand', 'booklet-pages.md'), 'Pages 1 to 4 read. No miller is named.\n');
 fs.writeFileSync(path.join(ARCH, 'archive', 'hand', 'booklet-p3.jpg'), 'an invented image');
+fs.mkdirSync(path.join(ARCH, 'archive', 'hand', 'booklet-scans'));
+fs.writeFileSync(path.join(ARCH, 'archive', 'hand', 'booklet-scans', 'p1.jpg'), 'an invented image');
+fs.mkdirSync(path.join(ARCH, 'archive', 'store', 'registers.example.invalid', '0123456789ab'), { recursive: true });
+fs.writeFileSync(path.join(ARCH, 'archive', 'store', 'registers.example.invalid', '0123456789ab', 'page.html'), 'an invented page');
+fs.writeFileSync(path.join(ARCH, 'archive', 'INDEX.md'), 'the archive\'s own index\n');
+fs.writeFileSync(path.join(ARCH, 'README.md'), 'an invented archive\n');
 fs.writeFileSync(path.join(T, 'outside.txt'), 'not in the archive');
 /* the writer lock, held by this test: research.js writes only under it. FT_LEDGER too, for the same reason as FT_ARCHIVE */
 const WHO = 'research-test';
@@ -241,8 +249,11 @@ section('every read records where our copy is');
   const shape = (v, re) => { const R = research(); R.investigations[0].qs[0].src[1]._copy = v; const e = errs(R); return re ? e.some(x => re.test(x)) : !e.length; };
   ok(shape(['archive/hand/booklet-pages.md']) && shape('none: the reading room keeps no copies'), 'a list of archive paths, or "none: <why>", is valid');
   ok(shape([], /s2\._copy must be a list/) && shape('none: too short', /s2\._copy must be .*12 characters/) && shape('somewhere', /s2\._copy must be/) &&
-    shape(['/etc/passwd'], /not a path inside the source archive/) && shape(['archive/../../x'], /not a path inside/) && shape(['a', 'a'], /twice/),
+    shape(['/etc/passwd'], /not a path inside the source archive/) && shape(['archive/../../x'], /not a path inside/) && shape(['archive/hand/a', 'archive/hand/a'], /twice/),
     'an empty list, a short or missing why, a path out of the archive and a path given twice are refused');
+  ok(shape(['archive'], /s2\._copy holds "archive": give the file or the item's own folder/) && shape(['archive/hand'], /not a whole top folder/) && shape(['archive/store/registers.example.invalid'], /not a whole top folder/) &&
+    shape(['README.md'], /kept under the source archive's archive\/ folder/) && shape(['archive/store/registers.example.invalid/0123456789ab']) && shape(['archive/hand/booklet-scans']),
+    'so is the archive itself, a whole top folder of it, or a path beside archive/: they would say nothing; an item\'s own folder is a copy');
   /* closing a source needs it */
   let r = run('set', 's2', 'st=none');
   ok(r.status !== 0 && /node tools\/research\.js copy s2 <archive path>/.test(said(r)) && /node tools\/research\.js copy s2 "none: <why>"/.test(said(r)) && src('s2').st === 'ready',
@@ -254,6 +265,17 @@ section('every read records where our copy is');
   ok(r.status !== 0 && /is not in the source archive/.test(said(r)) && /File the copy there first/.test(said(r)) && src('s2')._copy === undefined, 'a path that is not in the archive is refused, with what to do');
   r = run('copy', 's2', '../outside.txt');
   ok(r.status !== 0 && /outside the source archive/.test(said(r)) && src('s2')._copy === undefined, 'so is a file that exists but lies outside it');
+  /* the archive, or a whole top folder of it, is where every copy is: it would satisfy the rule and say nothing */
+  const wide = ['archive', 'archive/hand', 'archive/hand/', 'archive/store', 'archive/store/registers.example.invalid', path.join(ARCH, 'archive', 'hand')].map(a => [a, run('copy', 's2', a)]);
+  const notWide = wide.filter(([a, x]) => !(x.status !== 0 && /REFUSED/.test(x.stderr) && /does not say where the copy is: give the file or the item's own folder, such as archive\/hand\/<file> or archive\/store\/<site>\/<item>, not the whole archive\S* folder/.test(said(x)))).map(w => w[0]);
+  ok(!notWide.length && src('s2')._copy === undefined && run('set', 's2', 'st=found').status !== 0 && src('s2').st === 'wait',
+    'the archive\'s top folders are refused as "where our copy is", with what to give instead, and the source still cannot close' + (notWide.length ? ' — NOT refused: ' + notWide.join(', ') : ''));
+  const whole = ['', '.', ARCH].map(a => [a, run('copy', 's2', a)]);
+  ok(whole.every(([a, x]) => x.status !== 0 && /is the source archive itself/.test(said(x)) && /give the file or the item's own folder, such as archive\/hand\/<file>/.test(said(x)) && !/outside the source archive/.test(said(x))) && src('s2')._copy === undefined,
+    'an empty path, "." and the archive\'s own path are refused for what they are (the whole archive), not as "outside" it');
+  r = run('copy', 's2', 'archive/INDEX.md');
+  ok(r.status !== 0 && /does not say where the copy is/.test(said(r)) && /one of the archive's own files/.test(said(r)) && run('copy', 's2', 'README.md').status !== 0 && /kept under the source archive's archive\/ folder/.test(said(run('copy', 's2', 'README.md'))) && src('s2')._copy === undefined,
+    'so are the archive\'s own files, and a file beside archive/');
   const before = load();
   r = run('copy', 's2', 'archive/hand/booklet-pages.md');
   ok(r.status === 0 && JSON.stringify(src('s2')._copy) === '["archive/hand/booklet-pages.md"]', 'copy <source> <archive path> records it (' + said(r).slice(0, 80) + ')');
@@ -261,14 +283,16 @@ section('every read records where our copy is');
   ok(JSON.stringify(RJ.publicCopy(load())) === JSON.stringify(RJ.publicCopy(before)), 'the family\'s copy does not change at all: no date moves for a private note');
   r = run('copy', 's2', path.join(ARCH, 'archive', 'hand', 'booklet-p3.jpg'), 'archive/hand/booklet-pages.md');
   ok(r.status === 0 && JSON.stringify(src('s2')._copy) === '["archive/hand/booklet-pages.md","archive/hand/booklet-p3.jpg"]', 'a second copy is added to the list (a full path inside the archive is stored from its root; one already there is not doubled)');
-  ok(run('copy', 's2', 'archive/hand').status === 0 && src('s2')._copy.length === 3, 'a folder of the archive is a copy too');
+  ok(run('copy', 's2', 'archive/hand/booklet-scans').status === 0 && src('s2')._copy.length === 3 && src('s2')._copy[2] === 'archive/hand/booklet-scans', 'an item\'s own folder is a copy too');
+  ok(run('copy', 's2', 'archive/store/registers.example.invalid/0123456789ab').status === 0 && run('copy', 's2', 'archive/store/registers.example.invalid/0123456789ab/page.html').status === 0 && src('s2')._copy.length === 5 &&
+    run('copy', 's2', 'archive/hand/booklet-pages.md', 'archive/hand/booklet-p3.jpg', 'archive/hand/booklet-scans', '--replace').status === 0 && src('s2')._copy.length === 3, 'and so is a stored item\'s folder, or a file in it');
   r = run('copy', 's2', 'none: the page showed nothing to keep');
   ok(r.status !== 0 && /already records 3 copies/.test(said(r)) && /--replace/.test(said(r)) && Array.isArray(src('s2')._copy), 'a source with copies cannot also say none');
-  ok(run('copy', 's2', 'none: no').status !== 0 && run('copy', 's2', 'none:').status !== 0 && run('copy', 's2').status !== 0 && run('copy', 'i1', 'archive/hand').status !== 0 && run('copy', 's2', 'archive/hand', 'none: nothing was there to keep').status !== 0,
+  ok(run('copy', 's2', 'none: no').status !== 0 && run('copy', 's2', 'none:').status !== 0 && run('copy', 's2').status !== 0 && run('copy', 'i1', 'archive/hand/booklet-pages.md').status !== 0 && run('copy', 's2', 'archive/hand/booklet-pages.md', 'none: nothing was there to keep').status !== 0,
     'a short why, no path, an investigation id, and paths mixed with none are refused');
   r = run('copy', 's2', 'archive/hand/booklet-pages.md', '--replace');
   ok(r.status === 0 && JSON.stringify(src('s2')._copy) === '["archive/hand/booklet-pages.md"]', '--replace starts the list again');
-  r = run('set', 's2', '_copy=archive/hand');
+  r = run('set', 's2', '_copy=archive/hand/booklet-pages.md');
   ok(r.status !== 0 && /node tools\/research\.js copy s2/.test(said(r)), 'set does not take the field: it points to copy');
   r = run('set', 's2', 'st=none');
   ok(r.status === 0 && src('s2').st === 'none', 'with its copy on record the source can be set to none' + (r.status ? ' (' + said(r).slice(0, 200) + ')' : ''));
@@ -370,6 +394,12 @@ section('every command that writes needs the writer lock');
   lock(WHO);
   r = runAs({ FT_WHO: '' }, ...LOG);
   ok(refused(r, /FT_WHO is not set/) && /\. ~\/\.ft-env/.test(said(r)), 'held, but this shell does not say who it is (no FT_WHO): refused, with how to say it');
+  ok(/If FT_WHO is still not set after that/.test(said(r)) && said(r).includes('take it again under the same name, which renews it and sets FT_WHO: bash tools/cloud-lock.sh take "' + WHO + '" "<what>"') && /If another session took the lock, wait until it is free/.test(said(r)),
+    'and, for a lock taken without cloud-lock.sh (nothing put FT_WHO in ~/.ft-env), with the command that renews it under the holder\'s name and sets it');
+  lock('another "session"');
+  r = runAs({ FT_WHO: '' }, ...LOG);
+  ok(refused(r, /FT_WHO is not set/), 'whatever the holder is called');
+  lock(WHO);
   lock(WHO, 13);
   r = run(...LOG);
   ok(refused(r, /over 12 hours ago/) && TAKE.test(said(r)), 'a lock over 12 hours old no longer counts, the holder\'s own included: refused, with the command to take it again');
@@ -426,7 +456,7 @@ section('pages.js: the page list of a register scan');
   const pg = (...a) => pgAs({}, ...a);
   const said = r => (r.stdout + r.stderr).replace(/[ \t]+/g, ' ');
   const COV = path.join(ARCH, 'archive', 'coverage');
-  const files = () => fs.existsSync(COV) ? fs.readdirSync(COV).sort() : [];
+  const files = () => fs.existsSync(COV) ? fs.readdirSync(COV).filter(f => f.endsWith('.tsv')).sort() : [];   /* the lists; the folder's .gitattributes is looked at by itself, below */
   /* every file under a folder, with its bytes: to prove what a command did not touch */
   const tree = (dir, skip) => { const out = {}; (function walk(d) { for (const f of fs.readdirSync(d)) { const p = path.join(d, f); if (p === skip) continue; if (fs.lstatSync(p).isDirectory()) walk(p); else out[p] = fs.readFileSync(p, 'latin1'); } })(dir); return JSON.stringify(out); };
   const outside = tree(ARCH, COV);
@@ -438,9 +468,20 @@ section('pages.js: the page list of a register scan');
   ok(/^[a-z0-9-]{10,80}$/.test(key) && /millbook7/.test(key), 'a register\'s key is a readable, safe file name (' + key + ')');
   ok([REG + '/', 'HTTPS://Registers.Example.invalid/ark:/12345/millbook7', 'http://www.registers.example.invalid/ark:/12345/millbook7', REG + '/' + PAGE4].every(a => PG.keyOf(a) === key),
     'the same under http or https, www, a trailing slash, and with a page\'s id after it');
+  ok([REG + '/dao/0/6', REG + '/dao/0/6?id=viewer', REG + '/dao/0/6/idsearch:RECH_0a1b?id=h', REG + '/dao/0', REG + '/daogrp/0/8', REG + '/daogrp/0/layout:table/idsearch:x', REG + '/f12.item', REG + '/f12.item.r=mill', REG + '/f12.image/',
+    REG + '?lang=en', REG + '#page=4', REG + '/' + PAGE4 + '?x=1'].every(a => PG.keyOf(a) === key && PG.normal(a).address === REG),
+    'and with what a viewer adds to show one page of it: /dao/0/<n>, /daogrp/0/<n>, /f<n>.item, anything after ? or #');
+  ok([REG + '/dao/1/6', REG + '/annex/3', REG + '/f12', REG + '/volume2', 'https://registers.example.invalid/books/7/dao/0/6', 'https://registers.example.invalid/view?book=7'].every(a => PG.keyOf(a) !== key && PG.normal(a).address === a),
+    'but not with another set of images, a part with a name, or an address that is not an ark: those are left as they are');
   ok(PG.keyOf(REG + '8') !== key && PG.keyOf('https://registers.example.invalid/ark:/12345/Millbook7') !== key && PG.keyOf('../../etc/passwd').indexOf('/') < 0 && PG.keyOf('../../etc/passwd').indexOf('.') < 0,
     'another register, or the same letters in another case, has another key; no address can make a path');
   ok(PG.ranges(['3', '1', '2', '7', '10', '9', 'cover']) === '1-3, 7, 9-10, cover' && PG.pagesOf('3,7,40-42').join(' ') === '3 7 40 41 42', 'pages are read and shown as ranges');
+  /* a range as our own notes write it is the same range, never ONE page with that name */
+  ok(['41\u201345', '41\u201445', '41 - 45', '41 \u2013 45', ' 41\u2212 45 ', '41\u201145'].every(a => PG.pagesOf(a).join(' ') === '41 42 43 44 45') && PG.pagesOf('3, 7 , 40 \u2013 42').join(' ') === '3 7 40 41 42',
+    'a range written with an en dash, an em dash or spaces around the dash is read as that range');
+  const notPages = a => { try { PG.pagesOf(a); return false; } catch (e) { return !!e.refused && /Write a range as 41-45 \(a plain hyphen, no spaces or words\)/.test(e.message) && e.message.includes(JSON.stringify(a)); } };
+  ok(['41 to 45', '41 45', '41-', '41--45', '41-45-50', '41,', '\u201345', '41 \u00e0 45', '41..45', '3 and 7', '41/45'].every(notPages), 'numbers joined any other way are refused, with how to write a range: they are never taken as a page\'s name');
+  ok(['cover', '12 bis', '12a', 'plate IV', 'f. 3 verso'].every(a => PG.pagesOf(a).join('|') === a), 'a page with a name of its own is still one page');
 
   /* nothing yet */
   let r = pg('list');
@@ -455,6 +496,7 @@ section('pages.js: the page list of a register scan');
     refused(pg('add', REG, '1-9000', 'nothing', '--who', 'go1'), /more than 5000 pages/), 'a range that runs backwards, page 0, and a range of thousands are refused');
   ok(refused(pg('add', REG, '1', 'nothing', '--who', 'go1', '--date', '2999-01-01'), /in the future/) && refused(pg('add', REG, '1', 'nothing', '--who', 'go1', '--date', '16 Nov'), /YYYY-MM-DD/) &&
     refused(pg('add', REG, '1', 'nothing', '--who', 'go1', '--sure'), /not an option/) && refused(pg('add', REG, '1-2', 'nothing', '--who', 'go1', '--id', 'x'), /--id names one page/), 'so are a date in the future or not a date, an unknown option, and one id for many pages');
+  ok(refused(pg('add', REG, '41 to 45', 'nothing', '--who', 'go1'), /looks like pages/) && refused(pg('add', REG, '\u201345', 'nothing', '--who', 'go1'), /Write a range as 41-45/), 'so is a range written in words, or one with no start');
   ok(!fs.existsSync(COV), 'none of them wrote anything, not even the folder');
 
   /* the first add starts the list */
@@ -465,6 +507,9 @@ section('pages.js: the page list of a register scan');
     'it opens with a small header: the register\'s address, what it is, its length');
   ok(rows().length === 3 && rows().every(x => x.date === '2026-11-10' && x.who === 'go1' && x.result === 'nothing') && text().split('\n').filter(l => l && !l.startsWith('#')).every(l => l.split('\t').length === 6),
     'then one tab-separated row for each page: page, id, date read, who, result, note');
+  const attr = path.join(COV, '.gitattributes');
+  ok(fs.readdirSync(COV).sort().join() === '.gitattributes,' + key + '.tsv' && fs.readFileSync(attr, 'utf8').split('\n').filter(l => l && !l.startsWith('#')).join() === '*.tsv merge=union',
+    'the folder gets its own .gitattributes with the first list: git keeps both sides\' rows when two sessions add to one list');
   ok(/Not committed\. Before finishing: +\(cd ".*" && git add archive\/coverage && git commit -m "Add page lists"\)/.test(r.stdout), 'and it says the file is not committed, with the command for that');
   /* the same register under other spellings; ids; the words runs use */
   r = pg('add', REG + '/' + PAGE4, '4', 'finding', '--who', 'go1', '--note', 'the\tmiller is named,\nline 3', '--date', '2026-11-10');
@@ -479,6 +524,60 @@ section('pages.js: the page list of a register scan');
   ok(refused(pg('show', REG + '/annex/3'), /no page list for/) && refused(pg('show', 'registers.example.invalid'), /no page list for/) && refused(pg('show', 'book7'), /no page list for/),
     'an address that only goes on from a register\'s, the site\'s name alone, and part of a name are not taken as that register');
   ok(rows().length === 10, '(those two rows are in the file)');
+  /* an address that goes on from the register's: a page of it, or a register of its own? Nothing is written until the reader says */
+  { const all0 = tree(COV);
+    const on = [REG + '/annex/3', REG + '/dao/1/6', REG + '/f12'].map(a => pg('add', a, '6', 'nothing', '--who', 'go1'));
+    ok(on.every(x => refused(x, /goes on from https:\/\/registers\.example\.invalid\/ark:\/12345\/millbook7, which has a page list/) && said(x).includes('node tools/pages.js add "' + REG + '" <page> <result> --who <text>') && /run this again with --new/.test(said(x)) && /Nothing was written/.test(said(x))) && tree(COV) === all0,
+      'an add for an address that only goes on from a register\'s is refused, with the two ways out: the register\'s address, or --new');
+    fs.writeFileSync(path.join(T, 'one.tsv'), '1\tx\n');
+    ok(refused(pg('import-list', REG + '/annex/3', path.join(T, 'one.tsv')), /goes on from .*millbook7, which has a page list/) && tree(COV) === all0 && /It goes on from https:\/\/registers\.example\.invalid\/ark:\/12345\/millbook7, which has one/.test(said(pg('show', REG + '/annex/3'))),
+      'so is an import-list for one; show says which register it goes on from');
+    /* the same rule where no ark tells a page from a register */
+    const A4 = path.join(T, 'sources4'); fs.mkdirSync(path.join(A4, 'archive'), { recursive: true });
+    const p4 = (...a) => pgAs({ FT_ARCHIVE: A4 }, ...a), n4 = () => fs.readdirSync(path.join(A4, 'archive', 'coverage')).filter(f => f.endsWith('.tsv')).length, BOOK = 'https://registers.example.invalid/shelf/book';
+    let x = p4('add', BOOK, '1-5', 'nothing', '--who', 'go1', '--pages', '20');
+    ok(x.status === 0 && /NOTE +the list does not say what this register is/.test(said(x)) && !/^# what:/m.test(fs.readFileSync(path.join(A4, 'archive', 'coverage', PG.keyOf(BOOK) + '.tsv'), 'utf8')), 'a register started with no title is asked for one, and its file says nothing in place of a title');
+    ok(refused(p4('add', BOOK + '/page/6', '6', 'nothing', '--who', 'go1'), /goes on from https:\/\/registers\.example\.invalid\/shelf\/book, which has a page list/) && refused(p4('add', BOOK + '?page=7', '7', 'nothing', '--who', 'go1'), /goes on from/) &&
+      refused(p4('add', BOOK + '/dao/0/8', '8', 'nothing', '--who', 'go1'), /goes on from/) && n4() === 1 && /never read \(15\): 6-20/.test(p4('show', BOOK).stdout),
+      'a page\'s address under a register with a list is refused there too, by / or by ?: no list of one row for each page');
+    ok(p4('add', 'https://registers.example.invalid/shelf/bookcase', '1', 'nothing', '--who', 'go1', '--what', 'Another book').status === 0 && n4() === 2, 'an address that merely starts with the same letters is another register, and is not stopped');
+    ok(p4('add', BOOK + '/volume2', '1', 'nothing', '--who', 'go1', '--what', 'Volume 2', '--new').status === 0 && n4() === 3 && p4('add', BOOK + '/volume2', '2', 'nothing', '--who', 'go1').status === 0 && n4() === 3 &&
+      refused(p4('add', BOOK + '/volume2/page/3', '3', 'nothing', '--who', 'go1'), /goes on from https:\/\/registers\.example\.invalid\/shelf\/book\/volume2,/),
+      '--new makes it a register of its own, found by its address from then on; an address that goes on from two registers names the nearer');
+    /* the title: asked for until it is given, and never shown as a title when it was not */
+    x = p4('add', BOOK, '6', 'nothing', '--who', 'go1');
+    ok(x.status === 0 && /NOTE +the list does not say what this register is\. Say it once: add --what/.test(said(x)), 'a register with no title is asked for one at every add, not only the first');
+    x = p4('unread', BOOK);
+    ok(x.status === 0 && x.stdout.split('\n')[0] === BOOK && !/not said/.test(x.stdout), 'unread prints no title where none was given (' + x.stdout.split('\n')[0].slice(-30) + ')');
+    ok(/what: \(not said\)/.test(p4('show', BOOK).stdout) && /\(not said\) +https:\/\/registers\.example\.invalid\/shelf\/book\n/.test(p4('list').stdout), 'show and list say that it was not said');
+    ok(PG.parse('# address: x\n# what: (not said)\n1\t\t2026-11-10\tgo1\tnothing\t\n').what === '' && PG.parse('# address: x\n# what: (not said)\n# what: The dyke book\n').what === 'The dyke book', 'a list an earlier version wrote "(not said)" into has no title either, until one is given');
+    x = p4('add', BOOK, '7', 'nothing', '--who', 'go1', '--what', 'Shelf book, 1700 to 1720');
+    ok(x.status === 0 && !/NOTE/.test(said(x)) && !/NOTE/.test(said(p4('add', BOOK, '8', 'nothing', '--who', 'go1'))) && p4('unread', BOOK).stdout.split('\n')[0] === BOOK + '  (Shelf book, 1700 to 1720)', 'once given, the title is shown and no longer asked for');
+    fs.writeFileSync(path.join(T, 'two.tsv'), '1\tx\n2\ty\n');
+    x = p4('import-list', 'https://registers.example.invalid/shelf/atlas', path.join(T, 'two.tsv'));
+    ok(x.status === 0 && /NOTE +the list does not say what this register is\. Say it once: run this again with --what/.test(said(x)) && !/NOTE +the list does not say/.test(said(p4('import-list', 'https://registers.example.invalid/shelf/atlas', path.join(T, 'two.tsv'), '--what', 'An atlas'))) &&
+      /what: An atlas/.test(p4('show', 'https://registers.example.invalid/shelf/atlas').stdout), 'import-list asks for the title too, and takes it');
+    /* a range as the notes write it, at the command line */
+    x = p4('add', BOOK, '11\u201315', 'nothing', '--who', 'go1');
+    ok(x.status === 0 && /recorded 5 pages \(11-15\) as nothing/.test(x.stdout) && /read in full: 13 of 20/.test(p4('show', BOOK).stdout) && /never read \(7\): 9-10, 16-20/.test(p4('show', BOOK).stdout),
+      'add 11\u201315 (an en dash) records pages 11 to 15, not one page of that name');
+    /* the folder's rule file: put back when it is gone, completed when the rule was taken out, otherwise left alone */
+    const attr4 = path.join(A4, 'archive', 'coverage', '.gitattributes'), rule = t => t.split('\n').filter(l => l.trim() === '*.tsv merge=union').length;
+    const first = fs.readFileSync(attr4, 'utf8');
+    p4('add', BOOK, '16', 'nothing', '--who', 'go1');
+    ok(fs.readFileSync(attr4, 'utf8') === first && rule(first) === 1, 'the .gitattributes is written once and then left alone');
+    fs.writeFileSync(attr4, '# ours\n*.tsv -diff\n'); p4('add', BOOK, '17', 'nothing', '--who', 'go1');
+    ok(fs.readFileSync(attr4, 'utf8') === '# ours\n*.tsv -diff\n*.tsv merge=union\n', 'one that lost the rule gets it back, and keeps what else it says');
+    fs.rmSync(attr4); p4('import-list', BOOK, path.join(T, 'two.tsv'));
+    ok(fs.existsSync(attr4) && rule(fs.readFileSync(attr4, 'utf8')) === 1, 'one that is gone is written again, by import-list too');
+    /* under an ark, a page's address as the viewer gives it is its register */
+    const DYKE = 'https://registers.example.invalid/ark:/12345/dykebook3', n0 = n4();
+    p4('add', DYKE, '1-5', 'nothing', '--who', 'go1', '--pages', '20', '--what', 'Dyke book');
+    const viewer = [[DYKE + '/dao/0/6', '6'], [DYKE + '/daogrp/0/7?id=x', '7'], [DYKE + '/f8.item', '8'], [DYKE + '?lang=en', '9']].map(([a, n]) => p4('add', a, n, 'nothing', '--who', 'go1'));
+    ok(viewer.every(v => v.status === 0 && !/NOTE|a new list/.test(said(v))) && n4() === n0 + 1 && /read in full: 9 of 20 pages/.test(p4('show', DYKE).stdout) && /never read \(11\): 10-20/.test(p4('show', DYKE + '/dao/0/3').stdout),
+      'a page\'s address as the viewer gives it (/dao/0/<n>, /daogrp/0/<n>?…, /f<n>.item) goes to the register\'s own list: no list of its own, no note');
+    ok(refused(p4('add', DYKE + '/dao/1/6', '6', 'nothing', '--who', 'go1'), /goes on from .*dykebook3, which has a page list/) && n4() === n0 + 1, 'another set of images under it is not taken for it: refused, with the two ways out');
+  }
   r = pg('add', REG, '11', 'nothing', '--who', 'go1');
   ok(refused(r, /past the end of the register, which has 10 pages/) && /--pages <n>/.test(said(r)) && rows().length === 10, 'a page past the register\'s length is refused, with the two ways out');
   ok(pg('add', REG, '11', 'nothing', '--who', 'go2', '--pages', '12', '--date', '2026-11-12').status === 0 && PG.parse(text()).length === 12, '--pages corrects the length');
@@ -528,7 +627,7 @@ section('pages.js: the page list of a register scan');
     'a list whose lines do not start with a page number, or that is not there, is refused');
   /* --new: this address is a register of its own, even though it would fit one that has a list */
   { const A2 = path.join(T, 'sources3'); fs.mkdirSync(path.join(A2, 'archive'), { recursive: true });
-    const p3 = (...a) => pgAs({ FT_ARCHIVE: A2 }, ...a), n3 = () => fs.readdirSync(path.join(A2, 'archive', 'coverage')).length;
+    const p3 = (...a) => pgAs({ FT_ARCHIVE: A2 }, ...a), n3 = () => fs.readdirSync(path.join(A2, 'archive', 'coverage')).filter(f => f.endsWith('.tsv')).length;
     p3('add', 'https://registers.example.invalid/a/ark:/12345/millbook7', '1', 'nothing', '--who', 'go1');
     ok(p3('add', 'ark:/12345/millbook7', '2', 'nothing', '--who', 'go1').status === 0 && n3() === 1 && p3('add', 'ark:/12345/millbook7', '2', 'nothing', '--who', 'go1', '--new').status === 0 && n3() === 2,
       '--new starts a list for exactly the address given');
@@ -548,6 +647,36 @@ section('pages.js: the page list of a register scan');
   ok(refused(r, /there is no source archive at/) && /FT_ARCHIVE/.test(said(r)) && !fs.existsSync(path.join(T, 'no-archive-here')), 'with no source archive it is refused, with what to set, and makes no folder');
   ok(tree(ARCH, COV) === outside, 'nothing in the archive outside archive/coverage/ was touched');
   ok(!/child_process|execFile|spawn/.test(fs.readFileSync(path.join(SRC, 'tools', 'pages.js'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')), 'and it runs no other program, so it never commits');
+  { /* two sessions add rows to the same list before either has pushed. Both add at the end of the file, which git calls a
+       conflict: the second session's push would stop (cloud-finish.sh, "GitHub's newer commits change the same files").
+       The folder's .gitattributes makes git keep both sides' rows. Proven with git itself, the way cloud-lib.sh takes
+       newer commits in: a rebase onto them */
+    const G = path.join(T, 'two-sessions'), origin = path.join(G, 'origin.git'), who = ['-c', 'user.email=t@example.invalid', '-c', 'user.name=t', '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=' + path.join(G, 'no-hooks'), '-c', 'core.autocrlf=false'];
+    const g = (dir, ...a) => spawnSync('git', ['-C', dir, ...who, ...a], { encoding: 'utf8' });
+    fs.mkdirSync(path.join(G, 'a', 'archive'), { recursive: true });
+    spawnSync('git', ['init', '-q', '--bare', origin]); g(origin, 'symbolic-ref', 'HEAD', 'refs/heads/main');
+    g(path.join(G, 'a'), 'init', '-q'); g(path.join(G, 'a'), 'symbolic-ref', 'HEAD', 'refs/heads/main'); g(path.join(G, 'a'), 'remote', 'add', 'origin', origin);
+    fs.writeFileSync(path.join(G, 'a', '.gitattributes'), '* -text\n'); fs.writeFileSync(path.join(G, 'a', 'archive', 'INDEX.md'), 'an invented archive\n');
+    g(path.join(G, 'a'), 'add', '-A'); g(path.join(G, 'a'), 'commit', '-qm', 'start'); g(path.join(G, 'a'), 'push', '-q', 'origin', 'HEAD:main');
+    const session = (name, pages, more) => { const dir = path.join(G, name);
+      const x = pgAs({ FT_ARCHIVE: dir }, 'add', REG, pages, 'nothing', '--who', name, '--date', '2026-11-12', ...(more || []));
+      g(dir, 'add', 'archive/coverage'); return x.status === 0 && g(dir, 'commit', '-qm', 'add page lists').status === 0; };
+    const takeIn = name => { g(path.join(G, name), 'fetch', '-q', 'origin', 'main'); return g(path.join(G, name), 'rebase', '-q', '--autostash', 'origin/main'); };
+    const list = name => fs.readFileSync(path.join(G, name, 'archive', 'coverage', key + '.tsv'), 'utf8');
+    const cloned = ['b', 'c'].every(n => spawnSync('git', ['clone', '-q', origin, path.join(G, n)]).status === 0);
+    /* a and b both START the register's list (and the folder, and its rule file); a pushes first */
+    const made = cloned && session('a', '1-3', ['--what', 'Mill ledger', '--pages', '10']) && session('b', '4-6', ['--what', 'Mill ledger', '--pages', '10']) && g(path.join(G, 'a'), 'push', '-q', 'origin', 'HEAD:main').status === 0;
+    let x = takeIn('b');
+    ok(made && x.status === 0 && !/^[<=>]{7}/m.test(list('b')) && PG.parse(list('b')).rows.map(w => w.page).sort().join() === '1,2,3,4,5,6' && PG.parse(list('b')).bad.length === 0,
+      'two sessions that both start a register\'s list: the second takes the first\'s rows in with no conflict, and has all six' + (x.status ? ' (' + (x.stdout + x.stderr).trim().split('\n')[0] + ')' : ''));
+    ok(g(path.join(G, 'b'), 'push', '-q', 'origin', 'HEAD:main').status === 0 && /read in full: 6 of 10 pages/.test(pgAs({ FT_ARCHIVE: path.join(G, 'b') }, 'show', REG).stdout) && (list('b').match(/^# address:/mg) || []).length === 1, 'so its push goes through, and show reads the merged list');
+    /* c (set up before either wrote) and a (which has not seen b's rows) both add to the list as it now is */
+    g(path.join(G, 'a'), 'pull', '-q', '--rebase', 'origin', 'main');
+    const more = session('a', '7', []) && g(path.join(G, 'a'), 'push', '-q', 'origin', 'HEAD:main').status === 0 && session('c', '8-9', ['--pages', '12']);
+    x = takeIn('c');
+    ok(more && x.status === 0 && !/^[<=>]{7}/m.test(list('c')) && PG.parse(list('c')).rows.map(w => +w.page).sort((p, q) => p - q).join() === '1,2,3,4,5,6,7,8,9' && PG.parse(list('c')).length === 12 && g(path.join(G, 'c'), 'push', '-q', 'origin', 'HEAD:main').status === 0,
+      'a session set up before any of it adds rows too: nothing is lost and nothing stops' + (x.status ? ' (' + (x.stdout + x.stderr).trim().split('\n')[0] + ')' : ''));
+  }
   { /* a coverage folder, or a list, that is a link leading elsewhere */
     const A2 = path.join(T, 'sources2'), away = path.join(T, 'elsewhere');
     fs.mkdirSync(path.join(A2, 'archive'), { recursive: true }); fs.mkdirSync(away);
