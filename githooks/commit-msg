@@ -7,11 +7,13 @@
 # on PATH inside GitHub Desktop's bundled git on Windows, and that is the
 # environment every deploy goes through: from 12 Sep 2026 the hook could not
 # run there at all, so it blocked the commit instead of checking it. The shell
-# fallback below enforces the same four rules with sed/grep/tr, which git ships
+# fallback below enforces the same five rules with sed/grep/tr, which git ships
 # with, and it FAILS CLOSED exactly as the node guard does: where it cannot
 # check, it refuses. It is the stricter of the two — it also rejects any
-# non-ASCII subject, and it has no encrypted-payload fallback, so a working
-# copy without data.json is refused rather than waved through.
+# non-ASCII subject, it has no encrypted-payload fallback, so a working
+# copy without data.json is refused rather than waved through, and it passes
+# no address under .invalid. It does not read the private lists of people
+# (the node guard does, where they are linked in): its name index is data.json's.
 dir=$(dirname "$0")
 die() { printf '\ncommit-msg: %s\n\n' "$1" >&2; exit 1; }
 
@@ -162,4 +164,21 @@ done
   The repo is PUBLIC and a force-push does not take it back - GitHub keeps
   serving old SHAs by hash indefinitely. There is no clean way back.
   Use a neutral mechanical line and put the story in CHANGE-LOG-COMMITS.md."
+
+# 5. the author and the committer use an address the airlock publishes: the cloud sessions' own, or a
+# GitHub address ending in @users.noreply.github.com (the node guard's rule 5; 16 Nov 2026). An address in a
+# commit is as public as its message. `git var` gives both exactly as git is about to write them, an
+# --author, a -c user.email and an amend included; when it gives nothing, the commit is refused.
+for v in GIT_AUTHOR_IDENT GIT_COMMITTER_IDENT; do
+  a=$(git var "$v" 2>/dev/null | sed 's/.*<\([^<>]*\)>[^<>]*$/\1/' | tr 'A-Z' 'a-z')
+  case $a in
+    *[!\ -~]*|*\ *|*@*@*) a="" ;;
+  esac
+  case $a in
+    noreply@anthropic.com|?*@users.noreply.github.com) ;;
+    *) die "the address git would write for this commit ($v) is not one that may be published.
+  Fix: git config user.email noreply@anthropic.com (the cloud sessions' own), or the GitHub account's
+  address ending in @users.noreply.github.com. Then commit again (an amend: add --reset-author)." ;;
+  esac
+done
 exit 0

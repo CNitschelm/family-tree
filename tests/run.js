@@ -1949,6 +1949,45 @@ section("Commit hygiene");
     ok(NG.noreply("noreply@" + NG.WEB_HOST, { web: true }) && !NG.noreply("noreply@" + NG.WEB_HOST) && !NG.noreply("someone@" + NG.WEB_HOST, { web: true }) &&
        addrIn({ ae: "someone@host.example", ce: "noreply@" + NG.WEB_HOST }, true).length === 1 && addrIn({ ae: session, ce: "noreply@" + NG.WEB_HOST }).length === 1,
       "the web page's own committer address passes only on a commit already on main, and only as committer");
+    /* The hook's shell fallback, which runs where node is not on PATH, has the address rule too (16 Nov
+     * 2026). Run here as git would run it, with a PATH that holds the hook's own commands and no node, in a
+     * throwaway repository with a made-up data.json for its name index. No sh here: nothing to run. */
+    {
+      const os = require("os");
+      const T = fs.mkdtempSync(path.join(os.tmpdir(), "ft-hook-"));
+      try {
+        const bin = path.join(T, "bin"), repo = path.join(T, "r");
+        fs.mkdirSync(bin); fs.mkdirSync(path.join(repo, "githooks"), { recursive: true });
+        ["sh", "git", "sed", "grep", "tr", "head", "cut", "wc", "mktemp", "rm", "dirname", "sort"].forEach(c =>
+          fs.symlinkSync(cp.execFileSync("sh", ["-c", "command -v " + c], { encoding: "utf8" }).trim(), path.join(bin, c)));
+        fs.writeFileSync(path.join(repo, "githooks", "commit-msg"), fs.readFileSync(hookFile, "utf8").replace(/\r\n/g, "\n"));
+        const made = Array.from({ length: 24 }, (_, i) => "Zz" + String.fromCharCode(97 + i).repeat(3));   /* 24 words no message uses */
+        fs.writeFileSync(path.join(repo, "data.json"), JSON.stringify({ id: "t00", name: made[0] + " " + made[1],
+          unions: [{ s: made[2] + " " + made[3], c: made.slice(4).map((w, i) => ({ id: "t" + (i + 1), name: w + " " + made[1], unions: [] })) }] }, null, 1));
+        fs.writeFileSync(path.join(T, "msg"), "Update site data payload\n");
+        const base = { PATH: bin, HOME: T, GIT_CONFIG_NOSYSTEM: "1", GIT_AUTHOR_NAME: "test", GIT_COMMITTER_NAME: "test" };
+        cp.execFileSync("git", ["init", "-q", repo], { env: { ...base, PATH: process.env.PATH }, stdio: "ignore" });
+        const hook = (author, committer) => {
+          const r = cp.spawnSync(path.join(bin, "sh"), [path.join(repo, "githooks", "commit-msg"), path.join(T, "msg")],
+            { cwd: repo, env: { ...base, GIT_AUTHOR_EMAIL: author, GIT_COMMITTER_EMAIL: committer }, encoding: "utf8" });
+          return { code: r.status, out: (r.stdout || "") + (r.stderr || "") };
+        };
+        const github = "12345+someone@users.noreply.github.com", personal = "someone@host.example";
+        const noNode = cp.spawnSync(path.join(bin, "sh"), ["-c", "command -v node"], { env: base }).status !== 0;
+        const good = [hook(session, session), hook(github, session), hook(session, github), hook(session.toUpperCase(), session)];
+        const bad = [hook(personal, session), hook(session, personal), hook("noreply@host.example", session), hook("@users.noreply.github.com", session),
+          hook("a@b@users.noreply.github.com", session), hook("t@example.invalid", session)];
+        ok(noNode && good.every(r => r.code === 0) && bad.every(r => r.code === 1 && /is not one that may be published/.test(r.out)) &&
+           /GIT_AUTHOR_IDENT/.test(bad[0].out) && /GIT_COMMITTER_IDENT/.test(bad[1].out) && /git config user\.email/.test(bad[0].out),
+          "the hook's shell fallback (no node on PATH) passes the same two addresses and refuses any other, for the author and the committer" +
+          (noNode ? "" : " (node was still on the test's PATH)") +
+          ([...good.filter(r => r.code !== 0), ...bad.filter(r => r.code !== 1)].map(r => " [" + r.code + ": " + r.out.trim().split("\n")[0] + "]")[0] || ""));
+      } catch (e) {
+        if (e.code === "ENOENT" || /command -v/.test(String(e.message))) console.log("  --  no sh and its tools here: the hook's shell fallback was not run");
+        else ok(false, "the hook's shell fallback test ran (" + String(e.message).split("\n")[0] + ")");
+      }
+      fs.rmSync(T, { recursive: true, force: true });
+    }
   }
 
   /* ---- recent pushed history, so a leak cannot hide behind having shipped ---- */
