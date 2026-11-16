@@ -181,8 +181,11 @@ $(printf '%s\n' "$big" | sed 's/^/    /')
 # left there is never pushed and nothing said so. A NOTE, never a stop.
 note_unsaved() {
   local list n
+  # (git names a folder that holds only ignored files and, with a rule like /_work/**/*.png, each file in it as
+  # well: an entry inside a folder already named is left out, so nothing is counted twice)
   list="$( { git -C "$PRIV" ls-files --others --ignored --exclude-standard --directory -- _work 2>/dev/null | sed 's#^#family-tree-private/#'
-             [ -z "$ARCH" ] || git -C "$ARCH" ls-files --others --ignored --exclude-standard --directory -- archive/inbox 2>/dev/null | sed 's#^#family-tree-sources/#'; } )"
+             [ -z "$ARCH" ] || git -C "$ARCH" ls-files --others --ignored --exclude-standard --directory -- archive/inbox 2>/dev/null | sed 's#^#family-tree-sources/#'; } \
+           | LC_ALL=C sort -u | awk 'd != "" && index($0, d) == 1 { next } { print } /\/$/ { d = $0 }' )"
   [ -n "$list" ] || return 0
   n=$(printf '%s\n' "$list" | wc -l | tr -d ' ')
   printf 'NOTE: %s file(s) or folder(s) here are ignored by git: they are NOT pushed, and vanish with this machine:\n%s\n' "$n" "$(printf '%s\n' "$list" | head -n 12 | sed 's/^/    /')"
