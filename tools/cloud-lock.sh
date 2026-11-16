@@ -21,6 +21,8 @@
 # cloud-finish.sh releases the lock only after it has queued the site, so nobody takes it in between.
 # `take` puts FT_WHO=<who> in ~/.ft-env (every new shell reads it), so tools/change.js and checks/gate.js
 # recognise the holder; `release` removes it.
+# A lock push that GitHub refuses (no push access, a protected branch) is not tried again, and the refusal
+# says why in git's own words (cloud-lib.sh, ft_push_kind); cloud-finish.sh exits 4 when its release failed.
 
 set -uo pipefail
 [ -f "$HOME/.ft-env" ] && . "$HOME/.ft-env"

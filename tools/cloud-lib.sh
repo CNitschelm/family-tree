@@ -177,7 +177,7 @@ ft_push_kind() {
     *gh006*|*"protected branch"*|*gh013*|*"repository rule violations"*) echo protected ;;
     *"permission to "*" denied"*|*"permission denied"*|*"authentication failed"*|*"could not read username"*|\
     *"could not read password"*|*"invalid username or password"*|*"repository not found"*|*"repository '"*"' not found"*|\
-    *"error: 401"*|*"error: 403"*|*"error: 404"*|*"http 401"*|*"http 403"*|*"http 404"*) echo denied ;;
+    *"error: 401"*|*"error: 403"*|*"error: 404"*|*"http 401"*|*"http 403"*|*"http 404"*|*"http code 403"*) echo denied ;;
     *"[remote rejected]"*|*"hook declined"*|*"remote: error:"*) echo refused ;;
     *"[rejected]"*|*"fetch first"*|*non-fast-forward*) echo moved ;;
     *) echo unreachable ;;

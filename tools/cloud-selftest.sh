@@ -25,6 +25,15 @@
 # stop), a read-only session (FT_READONLY=1) that neither stops on a blocked queue nor pushes, a finish that
 # could not queue (exit 2: the same machine's setup then stops, and the printed command repairs it),
 # setup's STATE SPLIT stop (after which the lock and finish refuse), and that nothing outside its folder changed.
+# Since 16 Nov 2026 also: a failed push that says why (a file too large, no push access, a server not reached,
+# each told from the rest, with git's own words), a finish that stops on a file of 95 MB before anything is
+# committed or pushed, the note for files git ignores under _work/ and the archive's inbox, the wider notes
+# checkpoint (notes/, the open items, the changelog and pending change files, never the state), the archive's
+# source list rebuilt at the full finish (a note when it cannot be), the gate's stamp (line 2: a pass over
+# origin/main or the queue's head), a lock release that fails after queuing (exit 4, said last), setup's stop
+# when a private repository is not attached, and the queue that has waited (a warning at setup and in
+# tools/doctor.js, which is run from the copy under test with FT_ROOT) with the note about the platform's
+# "unpushed commits" message.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SEED="${1:?usage: cloud-selftest.sh <site clone>}"
@@ -395,6 +404,8 @@ check "…a protected branch" kind_is protected 'remote: error: GH006: Protected
  ! [remote rejected] HEAD -> main (protected branch hook declined)'
 check "…a session without push access" kind_is denied "remote: Permission to owner/repo.git denied to someone.
 fatal: unable to access 'https://example.invalid/owner/repo.git/': The requested URL returned error: 403"
+check "…also when a proxy on the way refuses it" kind_is denied "fatal: unable to access 'https://example.invalid/owner/repo.git/': Received HTTP code 403 from proxy after CONNECT"
+check "…two pushes that met at the same moment (tried again, like a remote that moved)" kind_is moved " ! [remote rejected] HEAD -> main (cannot lock ref 'refs/heads/main': is at 1111111 but expected 2222222)"
 check "…a hook that declined it" kind_is refused ' ! [remote rejected] HEAD -> main (pre-receive hook declined)'
 check "…and a server that was not reached" kind_is unreachable "fatal: unable to access 'https://example.invalid/': Could not resolve host: example.invalid"
 # "GitHub" refuses pushes to a repo's main with the words in $T/refuse-<repo> while that file is there

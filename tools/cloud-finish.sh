@@ -177,12 +177,12 @@ if [ "$PUBLISH" = notes ]; then
   [ "${#np[@]}" -gt 0 ] || { echo "notes: family-tree-private has none of the notes files ($NOTES_PATHS): nothing to save"; exit 0; }
   git -C "$PRIV" rev-parse -q --verify '@{upstream}' >/dev/null || die "family-tree-private's branch does not follow GitHub"
   git -C "$PRIV" add -A -- "${np[@]}" || die "could not stage the notes"
-  cp=()                                     # of those, the ones git now knows (an empty folder is no pathspec for commit)
+  known=()                                  # of those, the ones git now knows (an empty folder is no pathspec for commit)
   for p in "${np[@]}"; do
-    { [ -n "$(git -C "$PRIV" ls-files -- "$p" | head -n 1)" ] || ! git -C "$PRIV" diff --cached --quiet -- "$p"; } && cp+=("$p")
+    { [ -n "$(git -C "$PRIV" ls-files -- "$p" | head -n 1)" ] || ! git -C "$PRIV" diff --cached --quiet -- "$p"; } && known+=("$p")
   done
-  if [ "${#cp[@]}" -eq 0 ] || git -C "$PRIV" diff --cached --quiet -- "${cp[@]}"; then echo "notes: nothing new ($NOTES_PATHS)"
-  else git -C "$PRIV" commit -q -m "$msg" -- "${cp[@]}" || die "the notes commit failed"; fi
+  if [ "${#known[@]}" -eq 0 ] || git -C "$PRIV" diff --cached --quiet -- "${known[@]}"; then echo "notes: nothing new ($NOTES_PATHS)"
+  else git -C "$PRIV" commit -q -m "$msg" -- "${known[@]}" || die "the notes commit failed"; fi
   other=$(git -C "$PRIV" log --name-only --format= '@{upstream}..HEAD' | grep -v -e '^$' -e '^ledger/LOCK$' | grep -vE "$NOTES_RE" | sort -u | head -5 | tr '\n' ' ')
   [ -z "$other" ] || die "family-tree-private has unpushed commits that are not notes ($other). They may be a state the
   site does not have, so the checkpoint does not push them: finish with cloud-finish.sh (no FT_PUBLISH)."
@@ -390,7 +390,8 @@ sync_urls() {
   elif ! FT_ROOT="$FT" node "$HERE/doctor.js" --data-current 2>/dev/null; then why="data.json does not come from the index.html on disk (node tools/doctor.js says what to do)"
   elif [ ! -L "$FT/sources" ] || [ ! -d "$FT/sources" ]; then why="sources/ is not a link into family-tree-private (checks/manifest.js writes there)"
   elif ! out="$(cd "$FT" && FT_DATA="$FT/data.json" node checks/manifest.js 2>&1)"; then
-    why="node checks/manifest.js failed ($(printf '%s\n' "$out" | grep -m 1 -E 'Error|error' | cut -c1-160))"
+    why="$(printf '%s\n' "$out" | grep -m 1 -E 'Error|error' | cut -c1-160)"       # node's own line, when it gave one
+    why="node checks/manifest.js failed (${why:-$(printf '%s\n' "$out" | grep -v '^$' | tail -n 1 | cut -c1-160)})"
   elif [ ! -s "$FT/sources/urls.tsv" ]; then why="checks/manifest.js wrote no sources/urls.tsv"
   elif ! git -C "$ARCH" fetch -q origin main 2>/dev/null; then why="GitHub could not be reached (the source archive)"
   elif [ "$(git -C "$ARCH" rev-list --count HEAD..origin/main 2>/dev/null || echo 1)" -gt 0 ] \
