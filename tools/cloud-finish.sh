@@ -25,7 +25,8 @@
 #
 #  1. stops if setup has not finished in this session, if a rebase or merge is unfinished, if a private
 #     file sits outside family-tree-private (it would vanish with the machine), if a link was replaced by
-#     a real file (a tool rewrote it by rename), if the source archive has uncommitted changes, or if a
+#     a real file (a tool rewrote it by rename) or a name new in .private-paths has no link yet (setup makes
+#     it), if the source archive has uncommitted changes, or if a
 #     new or changed file to be pushed is 95 MB or more (GitHub refuses one of 100 MB); it also names (a
 #     NOTE) the files git ignores under family-tree-private/_work/ and the archive's archive/inbox/, which
 #     are never pushed (both of these in the notes checkpoint too)
@@ -307,7 +308,12 @@ done < <(git -C "$FT" ls-files --others --ignored --exclude-standard --directory
   Move each into family-tree-private, add it to .private-paths, and run cloud-setup.sh to link it."
 while IFS= read -r name || [ -n "$name" ]; do
   name="${name%$'\r'}"; name="${name%/}"; case "$name" in ''|'#'*) continue ;; esac
-  [ -L "$FT/$name" ] || die "$name is no longer a link into family-tree-private (a tool replaced it).
+  [ -L "$FT/$name" ] && continue
+  # nothing at all in the site clone under that name: no tool replaced a link, the name is new in .private-paths
+  # since setup last ran here (the stop used to blame a tool for it and send the reader to compare two files)
+  [ -e "$FT/$name" ] || die "$name is in family-tree-private's .private-paths and has no link in the site clone yet: the name
+  was added after setup last ran here. Run  bash tools/cloud-setup.sh  (it makes the link), then run this again."
+  die "$name is no longer a link into family-tree-private (a tool replaced it).
   Compare $FT/$name with $PRIV/$name, keep the right one in family-tree-private, then run cloud-setup.sh."
 done < "$PRIV/.private-paths"
 inside=$(git -C "$FT" ls-files --others --ignored --exclude-standard | while IFS= read -r f; do

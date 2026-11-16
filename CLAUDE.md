@@ -263,7 +263,8 @@ take` adds `FT_WHO`, so change.js, research.js and the gate know the holder: the
 the lock names `FT_WHO` (it also brings this clone up to the newest queued work first). Edit a private file at its real path
 (`family-tree-private/OPEN-ITEMS.md`): a tool that saves by rename would replace the link with a copy that
 is lost with the machine (`cloud-finish.sh` stops on that). A new private file goes into family-tree-private
-and its name into `.private-paths`. Nothing on the machine survives the session: **end every session that
+and its name into `.private-paths`; then run `bash tools/cloud-setup.sh` again, which makes its link
+(until then `cloud-finish.sh` stops and says so). Nothing on the machine survives the session: **end every session that
 changed anything with `cloud-finish.sh`**, and during long work save the notes now and then
 (`FT_PUBLISH=notes bash tools/cloud-finish.sh "Save research notes"`: it pushes family-tree-private's `_work/`,
 `notes/`, `OPEN-ITEMS.md`, `CHANGE-LOG-COMMITS.md` and `ledger/pending/`, never the research state or the ledger).

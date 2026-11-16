@@ -14,7 +14,8 @@
 # into the queue, .public-head, lock released, a later session starts from the queue, a clone behind the
 # queue pushes its state and leaves .public-head alone), the notes checkpoint, the source archive (no
 # uncommitted copies, its commits pushed first), finish's stops (not set up, a rebase unfinished, a stray
-# private file, a replaced link at the top level and inside a public folder, uncommitted site changes,
+# private file, a replaced link at the top level and inside a public folder, a name new in .private-paths
+# that has no link yet, uncommitted site changes,
 # files the airlock does not publish, a message with a body, an author or committer whose address may not be
 # published (one written with capitals too) or whose name holds an @, a payload the gate did not pass, more commits
 # than the airlock takes, no writer lock or someone else's, a commit a queue rebuild dropped, other site
@@ -426,6 +427,13 @@ cp --remove-destination "$PA/checks/priority-cards.json" "$A/checks/priority-car
 refuse "finish stops when the link inside a public folder was replaced" fin A "x"
 rm "$A/checks/priority-cards.json" && ln -s ../../family-tree-private/checks/priority-cards.json "$A/checks/priority-cards.json"
 check "…and the links are whole again (setup agrees)" sh -c "cd '$T/A' && HOME='$T/A/home' FT_SKIP_DECRYPT=1 FT_SKIP_TOOLS=1 bash '$TOOLS/cloud-setup.sh'"
+# a name added to .private-paths after setup ran has no link yet: no tool replaced anything, and setup makes the link
+cp "$PA/.private-paths" "$T/private-paths.keep"; echo '{"new": true}' > "$PA/new-private.json"; echo "new-private.json" >> "$PA/.private-paths"
+refuse "finish stops while a name new in .private-paths has no link in the site clone" fin A "x"
+says "new-private.json is in family-tree-private's .private-paths and has no link in the site clone yet" "…and says so"
+says "Run  bash tools/cloud-setup.sh" "…with what to do: run setup, which makes the link"
+lacks "a tool replaced it" "…(it does not blame a tool for a link that never was)"
+rm -f "$PA/new-private.json"; cp "$T/private-paths.keep" "$PA/.private-paths"
 echo "<!-- uncommitted -->" >> "$A/README.md"
 refuse "finish stops on uncommitted site changes" fin A "x"
 git -C "$A" checkout -q -- README.md
