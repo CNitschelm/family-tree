@@ -66,6 +66,9 @@ no()   { printf '  FAIL  %s\n' "$*"; failn=$((failn+1)); }
 check(){ local what="$1"; shift; if "$@" >"$T/last.out" 2>&1; then ok "$what"; else no "$what"; sed 's/^/          /' "$T/last.out" | tail -8; fi; }
 refuse(){ local what="$1"; shift; if "$@" >"$T/last.out" 2>&1; then no "$what (it did not stop)"; sed 's/^/          /' "$T/last.out" | tail -4; else ok "$what"; fi; }
 says() { if grep -q "$1" "$T/last.out"; then ok "$2"; else no "$2"; sed 's/^/          /' "$T/last.out" | tail -6; fi; }
+# lacks: the last output does NOT hold $1. (Not "refuse grep … last.out": refuse writes the command's output to
+# last.out, so that grep would read a file just emptied, and the check would pass whatever was said.)
+lacks(){ if grep -q "$1" "$T/last.out"; then no "$2"; grep "$1" "$T/last.out" | head -n 3 | sed 's/^/          /'; else ok "$2"; fi; }
 quiet(){ "$@" >/dev/null 2>&1; }
 gnohook(){ git -c core.hooksPath=/dev/null -c commit.gpgsign=false "$@"; }
 GH="$T/gh"; GHP="$GH/family-tree-private.git"; GHS="$GH/family-tree.git"; GHA="$GH/family-tree-sources.git"
@@ -481,7 +484,7 @@ check "a full finish goes through with them too" fin A "Update working state"
 says "family-tree-sources/archive/inbox/capture.jpg" "…with the same note"
 rm -f "$PA/_work/go1/scan.png" "$AA/archive/inbox/capture.jpg"
 check "with none left, a finish says nothing of the kind" fin A "Update working state"
-refuse "…(no note)" grep -q "ignored by git" "$T/last.out"
+lacks "ignored by git" "…(no note)"
 # GitHub refuses a file of 100 MB: the finish stops at 95, before anything is committed or pushed
 truncate -s 95M "$PA/_work/go1/download.bin"; echo "kept" >> "$PA/_work/go1/NOTES.md"; pm0="$(gp rev-parse main)"
 refuse "the notes checkpoint stops on a new file of 95 MB" in_cloud A env FT_PUBLISH=notes bash "$TOOLS/cloud-finish.sh" "Save research notes"
@@ -597,12 +600,12 @@ publish
 quiet cloud A; quiet lock A take "session-a" "late"
 GIT_AUTHOR_DATE="$old" GIT_COMMITTER_DATE="$old" mc A old2; echo "late" >> "$PA/OPEN-ITEMS.md"; quiet fin A "Update working state" "session-a"
 check "a commit made long ago and queued just now is no stale queue" cloud A
-refuse "…(no warning)" grep -q "still not published" "$T/last.out"
+lacks "still not published" "…(no warning)"
 doc A
-refuse "…(none from tools/doctor.js either)" grep -q "still not published" "$T/last.out"
+lacks "still not published" "…(none from tools/doctor.js either)"
 publish
 check "…and a queue with nothing waiting gets neither" cloud A
-refuse "…(no warning, no note)" grep -q "still not published\\|platform may" "$T/last.out"
+lacks "still not published\\|platform may" "…(no warning, no note)"
 check "session D sets up from public main" cloud D
 check "session E sets up from the same main" cloud E
 quiet lock E take "E" "work"; mc E w-e
