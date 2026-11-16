@@ -232,7 +232,7 @@ function archiveState() {
   return _state;
 }
 // Named entities an old page may use. Without the accented letters, a page that writes
-// "Chr&eacute;tien" never matched a quote that says "Chrétien", and the gate refused true evidence.
+// "d&eacute;c&egrave;s" never matched a quote that says "décès", and the gate refused true evidence.
 const ENTITIES = {
   nbsp: ' ', amp: '&', quot: '"', apos: "'", lt: '<', gt: '>', ndash: '–', mdash: '—', hellip: '…',
   lsquo: '‘', rsquo: '’', sbquo: '‚', ldquo: '“', rdquo: '”', bdquo: '„', laquo: '«', raquo: '»',
