@@ -317,8 +317,11 @@ inside=$(git -C "$FT" ls-files --others --ignored --exclude-standard | while IFS
 note_unsaved
 if [ -n "$ARCH" ] && [ -n "$(git -C "$ARCH" status --porcelain)" ]; then
   die "the source archive (family-tree-sources) has uncommitted changes: $(git -C "$ARCH" status --porcelain | head -3 | cut -c4- | tr '\n' ' ')
-  A copy that is cited must be committed there (it would vanish with the machine): commit it
-  (git -C \"$ARCH\" add <files> && git -C \"$ARCH\" commit -m \"add hand copies of new sources\"), or put it back."
+  What a card or the research cites must be committed there, or it vanishes with the machine:
+    a hand copy or another record:  git -C \"$ARCH\" add <files> && git -C \"$ARCH\" commit -m \"add hand copies of new sources\"
+    a page list (archive/coverage/, written by tools/pages.js):  git -C \"$ARCH\" add archive/coverage && git -C \"$ARCH\" commit -m \"Add page lists\"
+  Never delete a new copy or a new page list to get past this. Only a tracked file that was changed by
+  mistake is put back (git -C \"$ARCH\" checkout -- <file>). Then run this again."
 fi
 no_big_files
 
