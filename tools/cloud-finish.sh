@@ -90,11 +90,42 @@ for r in "$PRIV" "$FT" ${ARCH:+"$ARCH"}; do
 done
 PRIV_URL="$(git -C "$PRIV" remote get-url origin)" || die "family-tree-private has no origin"
 
+# The archive commit that 4a makes (sync_urls, below) holds the rebuilt source list and nothing else. It must
+# never stop a finish or a checkpoint: when the archive cannot be pushed (a session that may not push to it, a
+# list another session changed on the same lines), the commit used to stay in the clone and stop this finish,
+# the next one and every notes checkpoint, all of which push the archive first (found in review, 16 Nov 2026).
+LIST_MSG="update the source list"
+is_list_commit() { # $1 = a commit of the archive: that subject, one parent, sources/urls.tsv alone
+  [ "$(git -C "$ARCH" log -1 --format=%s "$1" 2>/dev/null)" = "$LIST_MSG" ] \
+    && [ "$(git -C "$ARCH" rev-list --parents -n 1 "$1" 2>/dev/null | wc -w)" -eq 2 ] \
+    && [ "$(git -C "$ARCH" diff-tree --no-commit-id -r --no-renames --name-only "$1" 2>/dev/null)" = sources/urls.tsv ]
+}
+drop_list_commits() { # undo the archive's newest unpushed commits for as long as they are the list's; 0 when one
+  # was undone. Nothing is lost: the list is rebuilt from data.json at every full finish. A sources/urls.tsv
+  # changed by hand since (reset --keep refuses then) keeps its contents, uncommitted.
+  local n=0
+  while [ "$(git -C "$ARCH" rev-list --count origin/main..HEAD 2>/dev/null || echo 0)" -gt 0 ] && is_list_commit HEAD; do
+    git -C "$ARCH" reset -q --keep HEAD~1 2>/dev/null \
+      || { git -C "$ARCH" reset -q --soft HEAD~1 && git -C "$ARCH" reset -q -- sources/urls.tsv; } || break
+    n=$((n + 1))
+  done
+  [ "$n" -gt 0 ]
+}
 push_archive() { # the source archive's own commits (hand copies, urls.tsv), before anything that cites them
   [ -n "$ARCH" ] || return 0
   git -C "$ARCH" fetch -q origin main 2>/dev/null || die "cannot reach GitHub (the source archive)"
   [ "$(git -C "$ARCH" rev-list --count origin/main..HEAD 2>/dev/null || echo 0)" -gt 0 ] || return 0
-  local rc=0; ft_push_main "$ARCH" || rc=$?
+  local rc=0 why; ft_push_main "$ARCH" || rc=$?
+  if [ "$rc" != 0 ]; then
+    if [ "$rc" = 2 ]; then why="GitHub's newer commits change the same lines (${FT_CONFLICTS% })."; else why="$(ft_push_report)"; fi
+    if drop_list_commits; then
+      echo "NOTE: the archive's rebuilt source list (sources/urls.tsv) could not be pushed, so its commit was undone here.
+  Nothing is lost and nothing stops for it: the next full finish that can push the archive rebuilds it. Why:
+  $why"
+      [ "$(git -C "$ARCH" rev-list --count origin/main..HEAD 2>/dev/null || echo 0)" -gt 0 ] || return 0
+      rc=0; ft_push_main "$ARCH" || rc=$?            # the archive's other commits (hand copies) still must go up
+    fi
+  fi
   case $rc in
     0) ARCH_PUSHED=1; echo "archive: pushed family-tree-sources $(git -C "$ARCH" rev-parse --short HEAD)" ;;
     2) die "the source archive could not be pushed: GitHub's newer commits change the same files ($FT_CONFLICTS).

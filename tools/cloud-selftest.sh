@@ -543,6 +543,50 @@ sed -i 's#notice/2#notice/3#' "$A/data.json"; echo "and again" >> "$PA/OPEN-ITEM
 check "a finish behind GitHub's archive still brings the list up to date" fin A "Update working state"
 git --git-dir="$GHA" show main:sources/urls.tsv | grep -q "notice/3" && git --git-dir="$GHA" show main:archive/hand-z.txt >/dev/null 2>&1 \
   && ok "…on top of the other session's commits" || no "the list and a moved archive"
+# the list's commit must never stop anything: a session that may not push the archive used to stop here, at
+# every later finish and at every notes checkpoint, with the commit left in its clone
+alist() { git -C "$AA" log --format=%s origin/main..HEAD | tr '\n' '|'; }      # the archive clone's unpushed commits
+printf '%s\n' "Permission to owner/family-tree-sources.git denied to someone." > "$T/refuse-family-tree-sources"
+sed -i 's#notice/3#notice/4#' "$A/data.json"; echo "no archive push" >> "$PA/OPEN-ITEMS.md"; am1="$(git --git-dir="$GHA" rev-parse main)"
+check "a finish that rebuilt the list and may not push the archive goes through all the same" fin A "Update working state"
+says "NOTE: the archive's rebuilt source list (sources/urls.tsv) could not be pushed, so its commit was undone here" "…with a note that the list's commit was undone"
+says "may not push to family-tree-sources" "…and why, in git's own words too"
+gp show main:OPEN-ITEMS.md | grep -qx "no archive push" && ok "…the state went up" || no "the state after a list that could not be pushed"
+test -z "$(alist)" && test -z "$(git -C "$AA" status --porcelain)" && test "$(git --git-dir="$GHA" rev-parse main)" = "$am1" \
+  && ok "…and the archive clone holds no commit of its own, clean" || no "the list's commit was left in the archive clone ($(alist))"
+echo "after the list" >> "$PA/_work/go1/NOTES.md"
+check "…and a notes checkpoint after it still saves" in_cloud A env FT_PUBLISH=notes bash "$TOOLS/cloud-finish.sh" "Save research notes"
+gp show main:_work/go1/NOTES.md | grep -qx "after the list" && ok "…GitHub has the notes" || no "the checkpoint after a list that could not be pushed"
+# a list commit left in the clone (as an earlier finish could leave one) does not stop a checkpoint either
+echo "# left over" >> "$AA/sources/urls.tsv" && gnohook -C "$AA" commit -qm "update the source list" -- sources/urls.tsv
+echo "with a list left over" >> "$PA/_work/go1/NOTES.md"
+check "a checkpoint that finds a list commit it cannot push undoes it and saves the notes" in_cloud A env FT_PUBLISH=notes bash "$TOOLS/cloud-finish.sh" "Save research notes"
+says "could not be pushed, so its commit was undone here" "…with the same note"
+test -z "$(alist)" && test -z "$(git -C "$AA" status --porcelain)" && gp show main:_work/go1/NOTES.md | grep -qx "with a list left over" \
+  && ok "…the archive clone is clean and GitHub has the notes" || no "a left-over list commit and the checkpoint"
+# hand copies under the list's commit are another matter: evidence must go up first, so that still stops
+echo "a new copy" > "$AA/archive/hand-d.txt" && git -C "$AA" add archive/hand-d.txt && gnohook -C "$AA" commit -qm "add hand copies of new sources"
+echo "with a copy" >> "$PA/OPEN-ITEMS.md"; pm0="$(gp rev-parse main)"
+refuse "hand copies that cannot be pushed still stop the finish (the evidence goes first)" fin A "Update working state"
+says "the source archive could not be pushed" "…and says so"
+test "$(alist)" = "add hand copies of new sources|" && test "$(gp rev-parse main)" = "$pm0" && ok "…only the list's commit was undone; the copies wait, nothing else pushed" || no "hand copies under a list commit ($(alist))"
+rm -f "$T/refuse-family-tree-sources"
+check "once the archive can be pushed, the finish takes the copies and the list up" fin A "Update working state"
+git --git-dir="$GHA" show main:archive/hand-d.txt >/dev/null 2>&1 && git --git-dir="$GHA" show main:sources/urls.tsv | grep -q "notice/4" \
+  && test "$(git --git-dir="$GHA" log -1 --format=%s main)" = "update the source list" && ok "…the list in a commit of its own, on top" || no "the copies and the list after the refusal"
+# a list commit that clashes with a list another session pushed (the same lines): undone as well
+quiet git -C "$T/arc2" pull -q --ff-only && sed -i 's#notice/4#notice/5#' "$T/arc2/sources/urls.tsv" && gnohook -C "$T/arc2" commit -qam "update the source list" \
+  && quiet git -C "$T/arc2" push -q origin HEAD:main
+sed -i 's#notice/4#notice/6#' "$AA/sources/urls.tsv" && gnohook -C "$AA" commit -qm "update the source list" -- sources/urls.tsv
+echo "with a clash" >> "$PA/_work/go1/NOTES.md"
+check "a list commit that clashes with another session's list does not stop the checkpoint" in_cloud A env FT_PUBLISH=notes bash "$TOOLS/cloud-finish.sh" "Save research notes"
+says "newer commits change the same lines (sources/urls.tsv" "…the note says why"
+test -z "$(alist)" && test -z "$(git -C "$AA" status --porcelain)" && ! ( . "$TOOLS/cloud-lib.sh"; ft_midop "$AA" ) && gp show main:_work/go1/NOTES.md | grep -qx "with a clash" \
+  && ok "…no rebase is left open in the archive, and GitHub has the notes" || no "a clashing list commit and the checkpoint"
+echo "after the clash" >> "$PA/OPEN-ITEMS.md"
+check "the next full finish puts the list right again, on top of the other session's" fin A "Update working state"
+git --git-dir="$GHA" show main:sources/urls.tsv | grep -q "notice/4" && ! git --git-dir="$GHA" show main:sources/urls.tsv | grep -q "notice/5" \
+  && ok "…GitHub's archive has the list the cards give" || no "the list after a clash"
 printf '{ not json\n' > "$A/data.json"; echo "last" >> "$PA/OPEN-ITEMS.md"; am1="$(git --git-dir="$GHA" rev-parse main)"
 check "a manifest that fails does not stop the finish" fin A "Update working state"
 says "node checks/manifest.js failed" "…it is a note"
