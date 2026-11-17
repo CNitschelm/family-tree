@@ -1,373 +1,154 @@
 # Working rules for this project
 
-> **Read `OPERATING.md` first — every session.** It is the single description of how a change reaches
-> the site (the change loop: `tools/card.js` → a change file → `tools/change.js` → `checks/gate.js` →
-> commit), and it replaces the older loop that used to be described here. The rules below are the
-> standing ones that sit around that loop.
->
-> **Project memory** is `notes/` (private: it lives in family-tree-private and is linked into this
-> folder; never published). It is the master, and the one place a session updates (since 16 Nov 2026,
-> register R-0763). The Claude memory store under `/projects/01a0a333-…/` is no longer kept in step: a
-> cloud session cannot reach it.
+Read `OPERATING.md` first, every session: it is how a change reaches the site and what to do after a refusal. This
+file holds only rules, each once, with the register entry that owns it (`ledger/register.jsonl`, private, which
+governs); "Rules from the register" is generated from the register's rule entries (R-0762). Project memory is `notes/` in
+family-tree-private, the one place a session updates; its index is `notes/MEMORY.md` (R-0763).
 
-## Research — read it first, keep it current, never wait to be asked (Cory, 2 Oct 2026)
-The site's **Research** view shows every open investigation: topic → investigation → key questions →
-sources → what has happened. Its data is `research.json` (private, repo root, like `data.json`); the page
-reads a sealed copy, `media/research.bin`, and the badges on the tree's cards read `media/research-cards.bin`.
-Cory: *"I should NEVER need to instruct an agent to update it. Agents should also reference it when investigating."*
-- **Before investigating**, read it: `node tools/research.js status`, then `show <id>`. It says what is open,
-  who has each source, what is next, and what has already been tried. Do not redo what it records.
-  `show <investigation>` prints each source's newest 3 log entries (`--log all` for every one), and
-  `node tools/pages.js unread <register address>` lists the pages of a register that are still to read.
-- **In the same session**, whenever research state changes (a source read, a reply received, a request or
-  email sent, a visit planned, a decision made, a card changed), update it with `node tools/research.js
-  log | set | answer | state | inv | add-source …`. Each command validates, saves and rebuilds both files.
-  `--date` sets the day a thing happened; the gate checks a change set's research ids against the real
-  time each command records (`_touched`, private), so record a change in the session that makes it.
-- **Every read is recorded with where our copy is (Cory, 16 Nov 2026, R-0759).** Before a source is set to
-  `found`, `none` or `done`: `node tools/research.js copy <source> <archive path> [<archive path> …]`, or, when
-  there is truly nothing to keep, `copy <source> "none: <why>"`. Without one `set` refuses. A copy is a file, or
-  the folder of one item, inside the source archive: never the archive or a whole top folder of it (OPERATING.md,
-  "The research rule", has what counts). A register read page by page also gets a page list, with the empty
-  pages too: `node tools/pages.js add <register address> <pages> <result> --who <the run or card>`; give the
-  register's address, not a page's, write a range as `41-45`, and commit `archive/coverage` in the archive.
-- **Before finishing**, deploy it: commit `media/research.bin` and `media/research-cards.bin` ("Update
-  research data") and finish with `tools/cloud-finish.sh` (below). research.js rewrites those two site
-  files, so take the writer lock (`tools/cloud-lock.sh take`) before running its update commands: each is
-  refused unless the lock is held by the name in `FT_WHO`, which `take` sets, and always in a read-only session. A
-  research-only update needs nothing else; the commit hook checks `.research-stamp`. Every change file says `"research": "<ids it moves>"`
-  or `"none: <why>"`, and `checks/gate.js` refuses a payload when research.json does not show what those
-  change sets moved.
-- **Everyone with the site password sees it.** Living people get a birth year only; no emails, phone
-  numbers or street addresses; no health, money or private family matters; nothing about a recent death
-  beyond what the family made public; no notes on how to handle a person; neutral wording about anyone's
-  beliefs. `research.js validate` checks what a machine can, including the names in the private
-  `ledger/research-deny.txt` (people researched but never to be published); you read every string you write.
-- **Cory's Decide buttons (R-0445).** An investigation, source or visit list that waits on one of his open yes/no
-  cards carries `dec`, the card's id (`research.js set <id> dec=<card>`, `inv <inv> dec=<card>`); the address of his
-  private decisions page is the file's `decide` (`research.js decide <url>`). The Research view shows a Decide button
-  for each, and a "Your decisions" link, only on a device opened once with `#owner` (`#owner-off` undoes it).
-  **Whoever finishes a card clears its `dec`** (`dec=`), the decision runner included.
-- **Begin research (Cory, 4 Oct 2026, R-0448): "decisions should include buttons to Begin Research if the task is just for
-  claude to look online".** Work Claude can do alone, online (the Research view's "Ready to do" tier) gets a research
-  card on the same page, id `go` and a number (`go1`…), with one button, Begin research. Its sources carry `dec=go<n>`;
-  on the tab their button says Begin research and their chip Your go-ahead. One tap starts the decision runner, which
-  reads the records, records every result here, adds a proven Nitschelm of the line under R-0437, brings anything else
-  that would change the tree back as a new card, and, when online steps are left, opens the next research card.
-  A session that makes a source Claude-alone-online should give it a research card in the same session.
-- **A research card starts only on Cory's tap (8 Nov 2026, R-0752).** Nothing starts by itself, whatever this week's
-  usage: the self-start of R-0587 is switched off.
-- **Public search forms (Cory, 19 Oct 2026, R-0588):** Begin research may fill in and submit a public, read-only search
-  form that needs no account and sends nothing to anyone. Sign-ins, contact forms, orders, payments and human-verification
-  challenges stay his.
-- **At your computer (Cory, 19 Oct 2026, R-0591):** a step that needs his hands (a sign-in such as FamilySearch, a robot
-  check, a password) is never left as a gap: it goes on one list, collection `atcomputer` of his decisions page (its "At
-  your computer" section), and he works it in a Claude chat at his main computer. An open item from a generation's work
-  holds the next generation, as an open question does (R-0590). Scheduled jobs never use the main laptop's browser; a step
-  that needs a computer but not him runs on the always-on old laptop. How items are made and worked:
-  `notes/at_your_computer.md` (private).
-
-## Standing priorities (Cory, 31 Jul 2026 — applies to every task here)
-1. **Thoroughness and accuracy first.** Never trade correctness for a shortcut.
-2. **Then token efficiency.**
-3. **Time is last.** A task that takes hours is fine if it saves tokens or improves accuracy.
-4. **Use subagents whenever they serve those priorities** — fan out for research, document capture, and verification. Prefer one well-briefed agent over many shallow ones; give each the full technique notes so it doesn't rediscover them.
-5. **Obvious code fixes are made, then reported (Cory, 19 Oct 2026, R-0589).** A failing self-test with an obvious code fix gets fixed and reported, not asked. Never the airlock, `checks/gate.js`, the privacy tests or the commit hook, and never a change to what is published or deleted. Code still publishes only by `FT_PUBLISH=direct` with Cory there.
-
-## Scope rule — the root's whole male line (Cory, 3 Oct 2026)
-Cory wants **the true extent of the line**: every Nitschelm, in any spelling, descended in the male line from
-the root ancestor, card `c001` (c. 1500). Register entry R-0437 holds his words. It replaces "do not add people
-without asking" (R-0381) and the 1 Aug daughters rule (R-0386).
-- **Add freely, without asking:** anyone born to a man of the line — sons and daughters, children who died young
-  included (stillborn children excepted) — once the link is **proven from a document we hold**: an act read in the original, an official record
-  or index entry naming the parent, a census line, a family notice signed by the children, or an act number from a
-  register transcription. R-0437 is the owner entry `change.js` asks for: `"register": "R-0437"` on each
-  `addCard`, with `"at"` placing the card among its brothers and sisters in birth order, and with `"evidence"`:
-  the record that proves the child (a new card without it is refused, and so is R-0437 below a daughter).
-- **Daughters get cards; their children are not drawn.** A daughter's marriage is a union on her card.
-- **The daughters' lines already drawn are decided line by line** (R-0439): one yes/no card per line on Cory's
-  decisions page (notes/decisions_page.md). Until a line is answered, its cards stay; never remove one without his
-  answer. The Schweitzer–Sartre line (c114–c122) came off the tree on 8 Oct 2026 (R-0539, superseding R-0440); it is told in c113's bio, and the cards are kept in TRIMMED-PEOPLE.md. The "Schweitzer" Filters button, which opened c111's whole branch, came off on 8 Nov 2026 (R-0696); the payload's "schw" anchor and branch id stay, and the page ignores them.
-- **No cards for stillborn children** (R-0441); a parent's note or bio may mention one.
-- **At most two marriages on a card** (R-0442), so cards keep their size. When more are known, the card keeps the
-  marriage whose children are drawn, then the latest; the earlier ones are told in the bio only. A child whose
-  parents did not marry hangs on a union with no spouse name and no note (c182 under c181, c294 under c004): no
-  marriage sign, and it does not count as a marriage.
-- **The tree folds dead lines by default** (R-0697, Cory, 8 Nov 2026: "Do the fold option instead"; it replaced hiding
-  them, R-0444, R-0572, R-0575). A card is on a live line when the person is living (dates "b. YYYY", or none) or has a
-  living descendant on the tree. With the "Fold dead lines" switch in Filters on (when the tree opens, back on with
-  Start over) nobody is left out: among the children of a card with a living child, each run of brothers and sisters
-  on dead lines is ONE small grey card in their place, in birth order ("+N · no living descendants"), and a tap opens
-  them; inside a picked branch too, and a branch where no one is living, beside living ones under Show all, is folded
-  the same way, with a note. Picked on its own (Origins aside), such a branch turns the switch off, with a note that
-  says why. A card's pill counts its live children; a dead line, once opened, opens in full; search and a card's links
-  unfold the line they go to. In index.html: `n.live`, `foldDead`, `kidItems`, `folds`, `unfolded`, `unfoldRun`,
-  `firstKids`, `pickedAllDead`, `deadAutoOff`, `deadLeftOut`, `toast`; tests/run.js "Filters" and tests/browser.js
-  "fold dead lines" check it. Layout (`layout`, the same day): each row fills left to right in birth order, every card and
-  grey card as far left as its row allows; a parent sits over its cards, not its grey cards, so a line of single children
-  runs straight; a grey card sits beside its brother or sister, never after a whole branch. Under half size (`FAR_Z`) a
-  card's chips fade (`#cards.far`): a click reaches the card, the keyboard still reaches them. tests/run.js "Tree layout"
-  and tests/browser.js "far out" check it.
-- **Lines through a daughter are marked all the way down** (R-0446): below a daughter of the line every connector is
-  dashed and every card says "through <her first name>" (index.html `viaF`, `viaTag`). Nothing to do per line: a line
-  that stays is marked, one that goes takes its marks with it.
-- **Still ask first:** anyone outside the male line (a spouse's family, a daughter's children), and any link that
-  rests only on a compiled tree or on inference. Those are research leads (the Research view's "Every Nitschelm
-  of the line"), not cards.
-- **Line only in the plan** (R-0538, Cory, 8 Oct 2026: "Anything that goes through a woman should not be included even if they show on tree"): the generation cards, the completeness tracker and the bio cards cover the men of the line and their sons and daughters, never anyone below a daughter, even when that card is drawn. Those cards stay; work on them only when Cory asks for that person.
-- Spouses stay unions, never cards. Living people: birth year only. Enriching existing people (bios, documents,
-  photos, sources, corrections) never needs permission.
-
-## Where things live
-See `OPERATING.md`, "Where things live". In short: `index.html` is the site; `data.json`, `research.json`, `history.json`,
-`.password`, `ledger/` and every research `.md` are private and never committed.
-
-**Play on the map (Cory, 17 Oct 2026, R-0573).** The map's "Play the years" button plays the family from the first record
-to today, worked out from the pins each time it opens (nothing is stored, so a new pin is in the next playback). The
-camera follows the pins only, with a look-ahead, eased and speed-capped; time runs at one chosen speed (no
-fast-forward); deaths are a soft rose ring and a fade, an unknown date of death only a fade. Its history notes are
-`history.json` (private: each note with its page and supporting words) → `node tools/history.js build` →
-`media/history.bin` (commit it). The demo build gets no notes. People on dead lines with no portrait are counted in a
-crowd's "+N" only when the crowd has no room ("the map gets way too busy", R-0576); with room a crowd is a list of
-everyone, each named, or as many faces as it holds, and a face always shows (R-0578, R-0584).
-Each crowd's place is named under it and the map's town names keep off faces and names (R-0581).
-A crowd keeps its shape (R-0736, Cory, 14 Nov 2026: "whenever a new person is born, the whole group reshuffles and it's
-chaotic movement"): a face keeps its place in its crowd, a newcomer takes a free one and moves no one, a place left empty
-is taken by one face, and a crowd stands on one place and keeps its members while the map allows; never lay the crowds
-out afresh each frame (only after a jump in time). The rules are the crowds block of the play model (`playSeat`,
-`playHole`, `playCrowds`, `playNextRow`), applied in `playFaces`.
-From far away a crowd stays near its place (R-0738, Cory, 14 Nov 2026: "completely wrong with locations … Because there are so
-many faces"): it draws only the faces that stand within about 100 km of its place at the map's scale (`playRoom`,
-`PLAY_REACH`), three at least (`PLAY_FEW`), smaller from far away, and the rest wait in the +N; from a country in, nothing changes.
-A crowd draws its portraits first (R-0742, Cory, 15 Nov 2026: "Is it prioritizing people with bio pictures? If it's not, it needs
-to"): `playSeat` takes three lists, the people with a portrait, the others on a living line, and, with room, people on
-dead lines with no portrait; a portrait never waits in the +N while a plain face of its crowd is drawn.
-At Cory's own first record the year stands still for a coronation he asked for (trumpets, a synthesized fanfare, a
-crown, confetti, one royal caption: R-0577, R-0579; his face grows in size from his large portrait, so it stays sharp:
-R-0582); `PLAY_HERO` holds his card id and the demo build blanks it; a
-joke closes the playback. index.html: the PLAY block in the map section;
-tests/run.js "Play"; tests/browser.js "play" and, with `--real`, pictures of it on the real pins.
-
-**Family papers: save every file (Cory, 16 Oct 2026).** When a session refers to anything a relative sent (an email
-attachment, a photograph, a scan, a written account), it files every attachment of that message, as received, in the
-source archive in the same session: `archive/family/<date>-<slug>/` in family-tree-sources, with a row in that folder's
-README. All of them, not only the ones the site uses: the copies on the site are re-encoded and do not count as saved.
-The few deliberate exceptions are listed at the foot of that README.
-
-## Privacy invariant (non-negotiable) — read this before every commit
-
-**Nothing outside the AES-GCM ciphertext may name a person.** Not the site's plaintext
-layer, not a code comment, not a test fixture, not a regex, not a commit message. Two
-reasons it is stricter than it looks:
-
-1. The repo is **public**. Anyone can read every tracked file without the password.
-2. **GitHub Pages serves every file in the repo.** `family.corynitschelm.com/tests/run.js`
-   returns 200 to anyone holding the family link. The plaintext files are not "developer
-   only" — they are part of the published site.
-
-`node tests/run.js` enforces this (§14) across **all tracked files**, using the payload's
-own names. It is not advisory: it fails the build. Deliberate exceptions live in one
-`ALLOW` set in that test — `nitschelm`, `schweitzer`, `sartre` (the site is openly this
-family's tree) and `cory` (the owner's own name, already public as the account name).
-Adding to `ALLOW` is a privacy decision; do not do it to make a test pass. (The commit guard
-holds the same four words as `PUBLIC_WORDS`; a test checks that the two agree.)
-
-Since 16 Nov 2026 (R-0761) the check is wider. It compares without accents, finds a full name
-whatever stands between its words (a line break, a tag, a hyphen), percent-encoded or joined
-into one word, and counts the shorter ways to write a person. Its index also holds the
-correspondents the source labels name and, in a clone that has them, the people on the three
-**private lists**: `ledger/research-deny.txt`, `TRIMMED-PEOPLE.md` and `NOT-ADDED-PEOPLE.md`.
-They live in family-tree-private and `cloud-setup.sh` links them in, so a session that has set
-up has them; a bare checkout and CI do not (`FT_PRIVATE_LISTS` names another folder that holds
-them). A pass is still not proof: the comment above §14 lists what the check cannot see.
-`checks/source-hosts.json`, the hosts that say where particular people lived and worked, is
-private in the same way; `checks/manifest.js` reads it, and so does the image rule (its list `"image"`). The old versions of files in the public
-history are accepted as they stand (R-0761): settled, do not re-raise it.
-
-Never commit `.password`, `data.json`, `evidence/`, or any research `.md`. `.gitignore` is
-**deny-by-default** — everything is ignored unless explicitly un-ignored, so a new research
-file cannot be committed by accident. Adding a real site file means adding a `!` line.
-
-*History: on 12 Aug 2026 commit messages had to be rewritten and on 14 Aug the whole repo
-had to be replaced, because names leaked into places nobody was checking. Both were
-avoidable. The checks below exist so it does not happen a third time.*
-
-## Commit messages are public — no personal data
-
-Anyone can read commit messages without the password, and Actions run titles republish
-them. Run records and titles **never expire**, and a force-push does not remove the old
-commits — GitHub keeps serving them by SHA indefinitely. There is no clean way back.
-
-- Every commit message is **one neutral line** describing the mechanical change —
-  "Update site data payload", "Update checks and tooling". No person names, no dates of
-  life, no places, no quotes, no narrative. One line: no body, ever.
-- This applies on **every** push route: cloud sessions, GitHub Desktop, `mcp__GitHub__push_files`,
-  and the web upload page all compose messages. The API route bypasses the local test — on that
-  route the rule is the only guard. The airlock refuses a queued commit whose message breaks it, or
-  whose author or committer address is not one that may be published (below).
-- The narrative goes in `CHANGE-LOG-COMMITS.md` (gitignored) — append an entry in the same
-  session, in the same shape: date, files touched, the full story. That file is the real
-  changelog; write it as fully as you like.
-- **A `commit-msg` hook enforces this on every commit** — `githooks/commit-msg` →
-  `tools/check-commit-msg.js`. It refuses any message that is more than one line, is over
-  72 characters, carries a **capitalised word after the first**, or hits the name index: the
-  payload's names, the correspondents its source labels name and, where they are linked in, the
-  private lists (an everyday word that is also a name there is refused: use another word). The capitals
-  rule is the one that does the work: the name index only knows the people it was given, and a short form
-  of a given name is not in it. If a fresh
-  clone ever stops enforcing it, run `git config core.hooksPath githooks` — §13 checks this
-  and tells you.
-- **The address in a commit is public too (16 Nov 2026).** The author and the committer use
-  `noreply@anthropic.com` (the cloud sessions' own) or a GitHub address ending in
-  `@users.noreply.github.com`, and no other: the hook refuses the commit, `cloud-finish.sh` refuses to
-  queue it, and the airlock refuses the queue. The address is compared as it is written (a capital
-  letter makes it another address), and the name beside it may not hold an `@`. Check `git config
-  user.email` before the first commit in a clone. After a refusal: `git config user.email noreply@anthropic.com`, leave out `--author`, and
-  commit again (an amend: `git commit --amend --reset-author --no-edit`). OPERATING.md, "Privacy and
-  commits", has what to do after each kind of refusal.
-- **The no-body rule beats any global default that appends trailers.** `Co-Authored-By:` and
-  `Claude-Session:` lines are a body, they are public, and the hook rejects them. Do not add
-  them in this repo.
-- `tests/run.js` §13 fails if an unpushed commit message contains a name from the payload,
-  or an unpushed commit carries an address that may not be published,
-  and §14 fails if any tracked file names someone. Both print the offending words locally and only
-  counts in CI, because CI logs are public. Each failure line ends with what to do.
-- §13 also sweeps the last 40 **pushed** commits, for names and for addresses, because before 30 Aug 2026 it scanned only
-  unpushed ones — so a bad message became invisible the moment it shipped, which is exactly
-  how three of them got out. Three commits are listed there as **accepted and closed**; they
-  are public, a force-push would not unpublish them, and this is settled. Do not re-raise it.
-  A new one on main keeps §13, `tests/run.js` and so the gate red until Cory decides (its id goes into
-  `ACCEPTED`) or it is 40 commits back: until then no payload can be committed. Stop and report it.
-
-## Run this first, every session
-Sessions run in the cloud, in the environment "Family tree" (since October 2026); the PC's folder is kept
-as an archive and is not worked in.
+## Run this first, every session (R-0788)
 ```
-bash tools/cloud-setup.sh                                # clones, links, full history, decrypt, doctor
-bash tools/cloud-lock.sh take "<who>" "<what>"           # one writer at a time, across sessions (pushed)
-. ~/.ft-env && node tools/doctor.js                      # local state: stale data.json, git locks, queued commits
-  ... the work, following OPERATING.md ...
-FT_PUBLISH=notes bash tools/cloud-finish.sh "Save research notes"   # now and then in long work: the notes checkpoint
-bash tools/cloud-finish.sh "<one neutral line>" "<who>"  # the state first, then the site into the queue
+bash tools/cloud-setup.sh                                # clones, links, history, decrypt, doctor
+bash tools/cloud-lock.sh take "<who>" "<what>"           # one writer at a time (pushed)
+. ~/.ft-env && node tools/doctor.js                      # local state
+FT_PUBLISH=notes bash tools/cloud-finish.sh "Save research notes"   # now and then in long work
+bash tools/cloud-finish.sh "<one neutral line>" "<who>"  # the state, then the site into the queue
 ```
-**Three clones, one folder.** `family-tree/` (this repo), `family-tree-private/` (the working state:
-research.json, history.json, ledger/, notes/, working/, evidence/, OPEN-ITEMS.md, the changelogs,
-bio-research-notes.md and the other private files) and `family-tree-sources/` sit side by side. A routine
-has only the two private repos attached and clones this one read-only, so it cannot push here. When one of
-the two private repos is not attached to the session, setup stops and says what to attach.
-`cloud-setup.sh` links each entry of `family-tree-private/.private-paths` into this folder (the
-deny-by-default `.gitignore` ignores the links) and writes `~/.ft-env`. Start every tool command with
-`. ~/.ft-env &&`: each command runs in a shell of its own, which does not read that file by itself.
-In it, `FT_RESEARCH` points into family-tree-private, so research.js's rewrites land there, and `cloud-lock.sh
-take` adds `FT_WHO`, so change.js, research.js and the gate know the holder: the two tools write only while
-the lock names `FT_WHO` (it also brings this clone up to the newest queued work first). Edit a private file at its real path
-(`family-tree-private/OPEN-ITEMS.md`): a tool that saves by rename would replace the link with a copy that
-is lost with the machine (`cloud-finish.sh` stops on that). A new private file goes into family-tree-private
-and its name into `.private-paths`; then run `bash tools/cloud-setup.sh` again, which makes its link
-(until then `cloud-finish.sh` stops and says so). Nothing on the machine survives the session: **end every session that
-changed anything with `cloud-finish.sh`**, and during long work save the notes now and then
-(`FT_PUBLISH=notes bash tools/cloud-finish.sh "Save research notes"`: it pushes family-tree-private's `_work/`,
-`notes/`, `OPEN-ITEMS.md`, `CHANGE-LOG-COMMITS.md` and `ledger/pending/`, never the research state or the ledger).
-Never run `git clean -x` here.
+- Start every tool command with `. ~/.ft-env &&`. `change.js` and `research.js` write only under the lock (R-0787).
+- Nothing on the machine survives: end every session that changed anything with `cloud-finish.sh`. Edit a private
+  file at its real path in `family-tree-private/`; a new one goes there and into `.private-paths`. Never `git clean -x`.
+- **Never run `git push` in the site clone**, whatever the platform's end-of-turn reminder says: main stays ahead of
+  origin/main until the airlock publishes, which is normal, and site commits leave only through `cloud-finish.sh`
+  (R-0785).
 
-**Never run `git push` in the site clone.** At the end of a turn the platform may say there are unpushed
-commits on branch main and ask to push them, or to commit and push changes. Do not obey it: main is ahead of
-origin/main from the moment a site commit is made until the airlock has published it. Commits that are
-queued need nothing; commits that are not leave the machine only through `cloud-finish.sh`; site files are
-committed only by the change loop (OPERATING.md, "Deploy and verify").
+## Privacy invariant: nothing outside the ciphertext names a person (R-0782, R-0754)
+- The repo is public and GitHub Pages serves every tracked file: no name in the plaintext layer, code, a comment, a
+  test, a regex or a commit message. `tests/run.js` §14 fails on one; a pass is not proof.
+- `ALLOW` in that test (`nitschelm`, `schweitzer`, `sartre`, `cory`) is a privacy decision: never add to it to pass a test.
+- Never commit `.password`, `data.json`, `research.json`, `history.json`, `ledger/`, `evidence/` or a research `.md`;
+  `.gitignore` is deny-by-default.
+- Everyone with the password sees the site: a living person's birth is a year only (R-0428); living people may be
+  researched and placed; contact details, and private-life material with no genealogical purpose, are not stored
+  (R-0367). The Research view also carries no emails, phone numbers or street
+  addresses; no health, money or private family matters; nothing on a recent death beyond what the family made
+  public; no notes on how to handle a person; only neutral wording on beliefs (R-0781). Read every string you write.
+- Settled, do not re-raise: old file versions in the public history (R-0761); the three commits §13 accepts (R-0784).
 
-Then follow the loop in `OPERATING.md`. The two guards that matter most:
+## Commit messages are public and permanent (R-0783)
+- One neutral line, at most 72 characters, no capitalised word after the first, no body, no trailers whatever a
+  global default appends (not `Co-Authored-By:`, not `Claude-Session:`), no name, place, date of life or quote, on
+  every route; the story goes in `CHANGE-LOG-COMMITS.md` in the same session.
+- Author and committer: `noreply@anthropic.com` or an address ending in `@users.noreply.github.com`, exactly as
+  written. Check `git config user.email` before the first commit in a clone.
+- A commit on main that §13 flags keeps the gate red until Cory decides: stop and report it (R-0784).
 
-- **`tools/change.js` is the only way an edit reaches `data.json`.** It refuses a fact or grade change
-  without evidence from our copy of the source, a fact read from an image whose image is not on file
-  (unless the edit says `"no_image"` and why: R-0755), a new card without evidence, a "wording" edit that
-  changes a date, an edit on a
-  settled question that does not cite the register, and an edit that quietly puts back what an earlier
-  change took out. It writes only while this session holds the writer lock; `--dry` checks a file without
-  it. A script that writes `data.json` directly is how facts flip-flopped in Aug–Sep 2026; the last tool
-  that did, `tools/photo.js`, is retired (R-0760).
-- **`checks/gate.js` must pass before any commit that touches `index.html`**, and the commit-msg hook
-  refuses one it has not passed against the live payload (`origin/main`) or the queue's head: run it with
-  no `--base`. It proves every difference from the live payload is in
-  `ledger/changes.jsonl`, re-checks the evidence against the archive, prints the warnings `change.js` kept
-  (read them), and runs the suites (`tests/run.js`, `tests/research.js`, `tests/ledger.js`).
+## The change loop's two guards (R-0786, R-0760)
+- `tools/change.js` is the only way an edit reaches `data.json`: every change to what the site says, with its reason
+  and evidence from our copy of the source.
+- `checks/gate.js` must pass, run with no `--base`, before any commit that touches `index.html`; read its warnings.
+- `crypt.js`: never `--force`, never `--newsalt` (it locks out every family device) (R-0789).
+- The payload is published only through the queue and the airlock; code, tests, tools and documents only by
+  `FT_PUBLISH=direct` with Cory there. A green push is not proof: check the live site (R-0754). If it is behind,
+  rewrite, recompress or re-encrypt nothing: read the failure first (R-0790).
 
-**`encrypt` refuses a `data.json` that did not come from the `index.html` on disk** (`.data-stamp`).
-Do not reach for `--force`, and never pass `--newsalt` (it locks out every family device).
-*This exists because on 15 Aug 2026 the `data.json` in this repo was a week and 1.4 MB behind the
-payload, and nothing detected it.*
+## Scope rule: the root's whole male line (R-0437)
+- Every Nitschelm, in any spelling, descended in the male line from c001 is added without asking once the link is
+  proven from a document we hold: an act read in the original, an official record or index entry naming the parent,
+  a census line, a family notice signed by the children, or an act number from a register transcription (R-0794).
+- Sons and daughters, children who died young included; no card for a stillborn child, though a parent's note or bio
+  may mention one (R-0441). Daughters get cards;
+  their children are not drawn but may be told in her bio (R-0521). Spouses are unions, never cards. At most two
+  marriages on a card: the one whose children are drawn, then the latest; earlier ones are told in the bio (R-0442).
+- The daughters' lines already drawn are decided line by line; until Cory answers, a line's cards stay (R-0439).
+- Ask Cory first for anyone outside the male line (a spouse's family, a daughter's children) and for a link that rests
+  only on a compiled tree or on inference: those are research leads, not cards.
+- The research plan covers the men of the line and their sons and daughters, never anyone below a daughter, even
+  when drawn; work on those only when Cory asks (R-0538).
 
-**Deploy = commit (the hook checks the gate), then `tools/cloud-finish.sh`.** It pushes the state to
-family-tree-private first, then puts the site's commits in the **queue**, family-tree-private's branch
-`site-queue`. The **airlock** (the private repo family-tree-airlock, which no session or routine has
-attached) checks every queued commit every two hours: only the payload line of `index.html`, `stats.json`
-and `media/*.bin` may change; the payload must open with the site key; no message may carry a payload name;
-`tests/run.js` and `tests/research.js` must pass; and, since 16 Nov 2026, each commit's author and committer
-address must be one of the two that may be published, and the queue's data must be a state the change ledger
-records, not an older one than the published data. Then it publishes the queue to this repo's main. Its
-verdict is in family-tree-private's branch `airlock-status`, and every run, the quiet ones too, leaves a
-heartbeat on the branch `airlock-heartbeat`: setup and the doctor warn when it is more than 8 hours old, or
-when queued commits have waited more than 4 (OPERATING.md, "Deploy and verify", says what to do); a refusal emails Cory and stops every later
-session at setup (PUBLISH BLOCKED). An interactive session clears it with him (OPERATING.md, "A refused
-queue"): it rebuilds the queue on public main without the refused commits or, when the airlock was wrong,
-fixes the airlock and runs it with `force`. A change to the site's code, tests, tools or documents is
-never published by the airlock: an interactive session with Cory there pushes it with
-`FT_PUBLISH=direct bash tools/cloud-finish.sh …`, only while the queue is empty, with the writer lock held.
-Verify with the airlock's verdict, then the live bytes (below).
+## Research: read it first, keep it current, never wait to be asked (R-0778)
+- Before investigating: `node tools/research.js status`, then `show <id>`; do not redo what it records.
+- In the same session, record every change of research state with `research.js`; a source is closed only with where
+  our copy is, "nothing found" included; a register read page by page gets a page list (R-0759).
+- Before finishing, commit `media/research.bin` and `media/research-cards.bin`; every change file names the research
+  ids it moves, or says `"none: <why>"`.
+- Research cards start only on Cory's tap (R-0752); work Claude can do alone online gets one, in the same session (R-0448, R-0793). A step that
+  needs his hands (a sign-in, a robot check, a password) goes on his "At your computer" list, never a gap (R-0591).
 
-### Deploying is not done when the push succeeds
-The **`verify-deploy` workflow** now proves this automatically on every push to `main`: it polls
-the live site for up to ten minutes and fails if the served payload's `ENC.iv` never matches the
-committed one. It prints only IVs and byte counts — Actions logs are public. On failure, read its
-output before touching anything; it distinguishes "GitHub's runners" from "our file" and tells you
-to re-run first. **Check that run before assuming a deploy landed.** It matters most now that the
-airlock publishes scheduled runs' work with nobody watching.
+## Standing priorities (R-0777)
+- Thoroughness and accuracy first (never trade correctness for a shortcut), then token efficiency, time last: hours
+  are fine if they save tokens or improve accuracy. Use subagents when they serve those (research, document capture,
+  verification): one well-briefed agent over many shallow ones, each given the full technique notes.
+- A record reader (a subagent too) is briefed with `notes/research_standards.md`: the Kurrent traps (K≈R, N≈M/H,
+  C≈L, H with an S-like swirl) and the Julian calendar in Protestant Alsace before 1682 (check weekday claims against it).
+- A failing self-test with an obvious code fix is fixed and reported, not asked; never the airlock, the gate, the
+  privacy tests or the commit hook, and never what is published or deleted (R-0589).
 
-A green `list_commits` only proves the commit reached `main`. **Always verify the live site actually changed.** Fetch `https://family.corynitschelm.com/` (the old `cnitschelm.github.io/family-tree/` link redirects there) and compare `index.html`'s byte length and payload head against the local file. Three commits once sat undeployed for a day while the site quietly served an old payload and every local check was green.
+How-to, the data shape and deploying are in `OPERATING.md`; the site's features, reading techniques and Cory's
+decisions page are in the notes (`notes/MEMORY.md` names each).
 
-**If the site is behind, do NOT rewrite, recompress or re-encrypt anything.** Read the failure first:
-
-| Symptom in the pages run | Meaning | Fix |
-|---|---|---|
-| `deploy`: "The job was not acquired by Runner of type hosted", "Internal server error" | GitHub's runners, not our file | **Actions → open the pages run → Re-run jobs → Re-run all jobs.** Takes ~40s. |
-| Run status `Cancelled`, "a higher priority waiting request … exists" | queue confusion during an incident | same re-run |
-| `build` step itself slow then `Timeout reached, aborting!` | genuinely too big | then, and only then, look at payload size |
-
-Check https://www.githubstatus.com/api/v2/summary.json **before** theorising. On 6 Aug 2026 I blamed file size and recompressed 62 images; the build was never the problem — the deploy runner was, and a re-run fixed it in forty seconds.
-
-## Data shape (inside the payload)
-- Node: `{id, name, years, note, note_fr, src[], profile{}, unions[{s, sy, n, n_fr, c[]}], g:"m"|"f", img}`
-- `id` is the card's permanent id (`c001`…), never reused and never shown to readers. The register, the
-  change ledger and the payload history name cards by it, so a card whose name or years change stays the same card.
-- Quick facts on the bio card: `occ` / `occ_fr` (a short trade noun phrase, no trailing period) and
-  `occ_c: "doc"|"inf"|"apx"` on the **node** — graded on the evidence for the TRADE, not for the place
-  it was practised. Every other row of the strip (born, died, lived, age at death, children,
-  descendants) is computed at render time from `pl`, `years` and the drawn tree — never stored.
-- Card source: `{l, u?, q?}` — `q` is a **verbatim** family quote; labels for family records must be specific: `"Email to Cory from <name>, <D Mon YYYY>"`.
-- Profile: `{headline, headline_fr, bio[], bio_fr[], hl[], hl_fr[], sources[{label,label_fr,url}], docs[{img,u,cap,cap_fr,tr,tr_fr}]}`
-- `hl` / `hl_fr` are the card's **highlight bullets** — at most three, one sentence each, and they may
-  only restate what that card's own bio already says, at the same certainty. They exist only where a
-  bio exists. `tests/run.js` enforces the shape; the hedge discipline is enforced by a cold-audit pass,
-  not by the linter (see [[machine-checks]] for why C1 is deliberately blind to them).
-- `docs[].img` is a base64 data-URI; every doc needs a **bilingual caption and transcription**. That is data.json; in
-  the page (since 1 Oct 2026, `tools/payload.js`, payload v3) only the card fields are in index.html (`id name years g
-  img imgL branch anchor tag`, unions' `s sy div c`, and `profile` as `{}`); every other field is one encrypted file in
-  `media/` the page merges in when it lands, and `docs[].img`/`imgL` are `media:<id>:<w>x<h>` references to one file
-  each. A NEW card field shown on the tree must be added to CARD_KEYS there, or it arrives a moment late.
-- Provenance tags: `_n26` (added 2026 from family messages), `_g26` (grafted register chain). Test asserts their counts.
-- The `_legacy` reversion block and the `?legacy=1` view were removed on 19 Sep 2026 (Cory: version history is the record). Corrections no longer need a legacy entry.
-
-## Content conventions
-- **Tooltips = one sentence.** A quick factoid only; everything else belongs in the bio. Sources never appear in tooltips.
-- Everything user-visible is **bilingual (en/fr)** — notes, captions, transcriptions, profile labels. Tests enforce parity.
-- Genogram convention: circular avatar = woman (`g:"f"`), rounded square = man (`g:"m"`).
-- Cite the **exact document and view**, not a search page (e.g. `.../ark:/46858/<register>/<media-uuid>`).
-- Disclose conflicts rather than silently picking a value; a documented negative ("this cannot be verified, here's why") is a legitimate result.
-
-## Useful technique notes
-- **Archives d'Alsace (archives68/67):** every media has a direct full-res JPEG at `https://archives68.alsace.eu/images/<media-uuid>.jpg`. Don't fight the canvas viewer — draw into a `<canvas>` harness with `ctx.drawImage(img, sx,sy,sw,sh, 0,0,cw,ch)` and screenshot that. Harvest uuids by driving the "Média" input and reading `location.href`, or by scraping the thumbnail rail's DOM attributes. Fetch the catalogue page first (`Caractéristiques physiques` / `Présentation du contenu`) to learn what a register actually covers.
-- **archives68 page list without a browser (8 Oct 2026):** `python3 working/i18-plan/a68list.py <ark>` prints every media's index, uuid and JPEG URL, via the viewer's endpoint `https://archives68.alsace.eu/visualizer/api?arkName=<ark>&uuid=<uuid>` (15 media per call; plain curl works, from the cloud too). Its output is the list `node tools/pages.js import-list <register address> <list.tsv>` takes.
-- **Identify honestly when fetching.** Never send a browser's user-agent string from curl or a script. A site that refuses an honest client (Find a Grave, FamilySearch, Geneanet, the Bas-Rhin archives, Cloudflare-protected newspapers) is read in a real browser through Claude in Chrome on Cory's PC when it is on, or becomes an action card; otherwise record the gap.
-- Bot-blocked to WebFetch (FindAGrave, Wikimedia Commons, WikiTree, archives68): use the Claude-in-Chrome tools instead.
-- Pre-1682 Protestant Alsace uses the **Julian** calendar — check weekday claims against it.
-- Kurrent traps: K≈R, N≈M/H, C≈L, H has an S-like swirl.
+## Rules from the register
+<!-- rules:begin: written by node tools/rules.js write; do not edit by hand -->
+### Who goes on the tree
+- R-0475: Everyone on the tree is real with high confidence; each parent-child link has a private rating and reason.
+- R-0567: Facts about a wife's family may go in her husband's bio, on his card.
+- R-0792: Enriching existing people (bios, documents, photos, sources, plain corrections) never needs permission.
+### Privacy
+- R-0362: Photos and everyday detail of living relatives are not held back on the password site; the public repo holds no personal data.
+- R-0366: What a family source withdraws is removed in both languages; what is marked confidential goes nowhere.
+- R-0387: Family documents may be published on the closed family site, crediting the source.
+- R-0432: Wedding days of living couples may stay; the year-only rule is for births.
+### Sources and citations
+- R-0029, R-0030: The compiled regional study keeps its agreed label and one citation form everywhere.
+- R-0089: A newspaper citation points at the issue's own file, never a search or chooser page.
+- R-0282, R-0299: Never cite a source for what it does not carry; striking a true citation is as serious.
+- R-0283: A well-attested fact with no source gets its source attached, not deleted, or is marked unattributed.
+- R-0347: A newspaper read only as digitised text, image unopened, is labelled so; its figures are the paper's.
+- R-0365: A family caption that disagrees with a record: both go on the card, neither is chosen, the relative is asked.
+- R-0372: The statewide marriage index the entry names is index-only: cite it at index tier, seek no image.
+- R-0755: A fact read from an image needs the image on file; if it cannot be had, say why and make an item.
+- R-0779: Every attachment a relative sends is filed as received in the source archive, in the same session.
+- R-0780: Never send a browser's user-agent from a script; a site that refuses an honest client is read in a real browser.
+- R-0797: Cite the exact document and view, never a search page.
+- R-0798: Disclose a conflict rather than pick a value; a documented negative is a legitimate result.
+- R-0799: A source quote is verbatim; a family record's label names its sender and day.
+### Grades and link figures
+- R-0263: A pin is doc only when a specific document was read; grades are per pin; a checked cross-citation counts.
+- R-0265: On pins from the home-parish transcription an act number makes doc; a bare year is inf, with a note.
+- R-0364: A coarse point is apx even when documented (a lake's or a county's centre), with a bilingual note.
+- R-0479: A link is rated full only where someone affirmed it first-hand; else it keeps the records' figure.
+- R-0718: Link figures are kept current at every finish, a new link rated from its card's sources; an unrated one stops it.
+- R-0802: A trade is graded on the evidence for the trade, not the place; other quick facts are computed.
+### Wording
+- R-0274: A home-parish death before its registers begin "cannot be looked up"; never "unregistered".
+- R-0293: An unattested fact is "given by <source>; no act has been read for it"; in French never "n'atteste".
+- R-0338: The site never narrates its editing policy (days withheld, a session cut off, material held back).
+- R-0473: The Research view never calls the researcher "us": online work is "Cory, online".
+- R-0795: A tooltip is one sentence, a quick fact, and never cites a source.
+- R-0796: Everything the reader sees is in English and French, captions and transcriptions included.
+### Cards and the map
+- R-0020: A pin's type, death or burial, follows the home-parish transcription's label for the act.
+- R-0262: Map coordinates follow the authoritative gazetteer (in France, the government's commune service).
+- R-0301: A pin never carries a day its own note calls unattested.
+- R-0410: Marriages on a card are listed in the order they happened.
+- R-0766: A decision card reads in short parts: its subject in one sentence, points on lines, detail below.
+- R-0800: At most three highlight bullets, one sentence each, saying only what the card's bio says, as surely.
+- R-0801: A card's id is permanent: never reused, never shown to readers.
+### Research
+- R-0482: Research cards on parent-child links aim at 99% on each link.
+- R-0524: Research by generation, earliest first, split above ten men; a man with no child drawn, unless dead before 15, may have a family.
+- R-0525: Generation research builds the skeleton, keeps each record it opens, notes what a bio needs, writes one when it can.
+- R-0526: Bio cards follow, generation by generation, five people a card, for all of the line who have died: write or recheck each bio.
+- R-0527: Before anyone is added, an agreeing second reading and a same-name check; families marked complete or gap; in doubt, ask.
+- R-0536: Research and bio cards have no time limit, unless length hurts accuracy.
+- R-0585: A separate agent, given only the list of changes and our copies, confirms each before it reaches the tree.
+- R-0588: Research cards may use public read-only search forms needing no account, sending nothing; sign-ins, contact, payments stay Cory's.
+- R-0753, R-0530, R-0590: One generation at a time, rechecks first; an open question or item above holds the next; later work is made waiting.
+- R-0791: Whoever finishes a decision card clears its dec, the decision runner included.
+### Process
+- R-0378: Known false positives of the machine checks are never silenced by rewording the prose.
+- R-0535: A decision card does the step itself or comes back; it sends Cory to a chat only when his hands are needed.
+- R-0756: Backups: weekly, the private repositories outside GitHub; nightly, the decisions page; a failure emails Cory.
+- R-0757: Recorded reads and plain corrections read twice are done and reported; sessions ask on identity, links, removals, messages, money.
+- R-0758: Every decision card carries a recommendation with a percentage, its facts checked against the tree.
+- R-0775: The decision runner acts and reports at 90% sure if two readers agree; removals, messages, money, the living, below daughters ask.
+- R-0803: Scheduled jobs never use the main laptop's browser; a step needing a computer, not Cory, runs on the old one.
+<!-- rules:end -->
