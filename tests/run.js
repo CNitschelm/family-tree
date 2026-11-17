@@ -525,6 +525,102 @@ section("Public numbers");
   }
 }
 
+/* ---------- CLAUDE.md's generated rule block (17 Nov 2026, R-0762) ----------
+ * tools/rules.js writes the block of standing rules between two markers of CLAUDE.md from the register's rule
+ * entries (their public `line`). CLAUDE.md is public, so the block's shape and the public check of its lines are
+ * tested here, without the password, in CI too. A block that is behind the register is a NOTE (CLAUDE.md is
+ * published only by a direct publish, while routines add entries), unless CLAUDE.md differs from origin/main: then
+ * it is a failure, so a block the register did not write cannot go out; the generator's own cases run on an invented
+ * register in a temp folder. */
+section("Rule block (CLAUDE.md)");
+{
+  const os = require("os"), cp = require("child_process");
+  const RU = require("../tools/rules.js");
+  const F = RU.parseFile(fs.readFileSync(path.join(ROOT, "CLAUDE.md"), "utf8"));
+  ok(F.ok && !F.defects.length, "CLAUDE.md has one pair of rule markers, and every line between them is an area heading or \"- R-dddd: line\", ids once each, each line passing the public check" +
+    (F.defects.length ? " (" + F.defects.map(d => d.msg).join("; ") + ")" : ""));
+  ok([...RU.PUBLIC_CAPS].sort().join(" ") === "Claude Cory Cory's English France French GitHub Research",
+    "the capitalised words a rule line may carry are still the eight public ones (widening the list is a privacy decision)");
+  if (fs.existsSync(path.join(require("../tools/ledger.js").LEDGER, "register.jsonl"))) {
+    const r = RU.run("check");
+    if (r.exit === 1) console.log("  --  NOTE CLAUDE.md's rule block is behind the register (" + ["add", "drop", "change"].filter(k => r.behind[k].length).map(k => k + " " + r.behind[k].join(", ")).join("; ") + "): at the next direct publish run node tools/rules.js write");
+    if (r.exit === 2) console.log("  --  NOTE tools/rules.js check finds a defect: " + r.defects.map(d => d.msg).join("; "));
+    r.notes.filter(n => /left out/.test(n)).forEach(n => console.log("  --  NOTE rule block: " + n));
+    /* A CLAUDE.md that differs from the published one is on its way out by a direct publish: then its block must be
+     * what the register makes, so a hand edit inside the block cannot go out. One equal to origin/main stays a NOTE. */
+    let pub = null;
+    try { pub = cp.execFileSync("git", ["show", "origin/main:CLAUDE.md"], { cwd: ROOT, stdio: ["ignore", "pipe", "ignore"] }).toString("utf8"); } catch (_) {}
+    if (pub !== null && pub !== fs.readFileSync(path.join(ROOT, "CLAUDE.md"), "utf8"))
+      ok(r.exit === 0, "CLAUDE.md differs from the published one, and its rule block is what the register makes (node tools/rules.js check exits 0)" + (r.exit ? " (exit " + r.exit + "; run node tools/rules.js write)" : ""));
+  }
+  const T = fs.mkdtempSync(path.join(os.tmpdir(), "ft-rules-"));
+  try {
+    const md = path.join(T, "CLAUDE.md"), reg = path.join(T, "register.jsonl");
+    const HEAD = "# test rules\n\nThe hand part cites R-0001 and R-0002.\n\n## Rules from the register\n";
+    const empty = HEAD + RU.BEGIN + "\n" + RU.END + "\n\nan ending line\n";
+    const E = (id, kind, line, extra) => Object.assign({ id, status: "policy", by: "rule", decided: "2026-01-01", topic: "a test topic",
+      ruling: "a test ruling", kind, rule: "a private statement of the test rule", area: "process", superseded_by: "" }, line === undefined ? {} : { line }, extra || {});
+    const base = [E("R-0001", "rule", "hand"), E("R-0002", "rule", "hand", { area: "scope" }), E("R-0003", "rule", "every test card keeps its place in the row."),
+      E("R-0004", "rule", "with R-0003"), E("R-0005", "rule", "an old line that was replaced later on.", { superseded_by: "R-0003" }),
+      E("R-0006", "answer", "an answer is never printed in the block."), E("R-0007", "feature", "a feature is never printed in the block."),
+      E("R-0008", "rule", "a scope line about the test tree goes first.", { area: "scope" })];
+    const put = (entries, text) => { fs.writeFileSync(reg, entries.map(e => JSON.stringify(e)).join("\n") + "\n"); if (text !== undefined) fs.writeFileSync(md, text); };
+    const rules = (...a) => { const r = cp.spawnSync(process.execPath, [path.join(ROOT, "tools", "rules.js"), ...a, "--file", md, "--register", reg, "--no-names"], { encoding: "utf8" });
+      return { code: r.status, out: (r.stdout || "") + (r.stderr || "") }; };
+    const read = () => fs.readFileSync(md, "utf8");
+    put(base, empty);
+    let w = rules("write"), t = read();
+    const blk = t.slice(t.indexOf(RU.BEGIN) + RU.BEGIN.length + 1, t.indexOf(RU.END));
+    ok(w.code === 0 && blk === "### Who goes on the tree\n- R-0008: a scope line about the test tree goes first.\n### Process\n- R-0003, R-0004: every test card keeps its place in the row.\n" &&
+       t.startsWith(HEAD + RU.BEGIN + "\n") && t.endsWith(RU.END + "\n\nan ending line\n") && rules("check").code === 0,
+      "write fills an empty block, areas in order, a merged entry's id on its owner's line, nothing outside the markers changed; check then exits 0");
+    ok(!/R-0005|R-0006|R-0007/.test(t), "a superseded entry, an answer and a feature are not printed");
+    put(base.concat(E("R-0009", "rule", "a new test line that came in after the last write.")));
+    let c = rules("check");
+    ok(c.code === 1 && /to add: R-0009/.test(c.out) && rules("write").code === 0 && rules("check").code === 0 && read().includes("- R-0009: a new test line"),
+      "a new live entry with a line makes check exit 1 and name it; write brings it to 0");
+    const now = read();
+    const bad = ["met Quillfeather at the mill on the test day.", "a test line that names the year 1871 for nothing.", "a test line that names card c042 for nothing.",
+      "a test line that goes on and on " + "and on ".repeat(20) + "past the limit."];
+    ok(bad.every(l => { put(base.concat(E("R-0009", "rule", l))); return rules("write").code === 2 && read() === now; }),
+      "a line with a capitalised word not on the list, a year, a card id other than c001, or over 130 characters: write exits 2 and the file is unchanged");
+    ok(bad.slice(0, 3).every(l => RU.publicLine(l, null).length > 0) && RU.publicLine("the quillfeather line stays here.", { words: new Set(["quillfeather"]), deny: [] }).some(p => p.check === "name word") &&
+       RU.publicLine("every test card keeps its place in the row.", { words: new Set(["quillfeather"]), deny: [] }).length === 0,
+      "publicLine refuses those, and with a name index a name word in lower case too");
+    put(base.concat(E("R-0009", "rule", "with R-0005")));
+    ok(rules("check").code === 2 && read() === now, "with naming a superseded entry is a defect (exit 2)");
+    put(base.concat(E("R-0009", "rule")), empty);
+    rules("write"); c = rules("check");
+    ok(c.code === 0 && /left out of the block, no line yet: R-0009/.test(c.out), "an entry with no line is listed as left out, and check still exits 0");
+    put(base.map(e => e.id === "R-0002" ? E("R-0002", "rule", "hand", { area: "scope" }) : e), empty.replace(" and R-0002", ""));
+    ok(rules("write").code === 2 && rules("check").code === 2, "an entry marked hand that the hand part does not cite: exit 2");
+    put(base, empty.replace("R-0002.", "R-0002 and R-0005."));
+    ok(rules("write").code === 2 && read() === empty.replace("R-0002.", "R-0002 and R-0005."), "the hand part citing a superseded entry: exit 2, nothing written");
+    put(base, empty); rules("write"); const good = read();
+    fs.writeFileSync(md, good.replace(RU.END, "- R-0099: a test line that no register entry ever had.\n" + RU.END));
+    c = rules("check"); w = rules("write");
+    ok(c.code === 2 && /R-0099, which is not in the register/.test(c.out) && w.code === 0 && read() === good,
+      "a block line naming an id the register never had: check exits 2, write puts the block back");
+    fs.rmSync(reg);
+    c = rules("check"); w = rules("write");
+    ok(c.code === 3 && w.code === 3 && read() === good && /no register here/.test(c.out), "with no register, check and write exit 3 and write nothing");
+    fs.writeFileSync(md, good.replace("- R-0008: a scope line", "- R-0008: a scope Line"));
+    ok(rules("check").code === 2, "with no register, the block's shape is still checked (a capital in a line: exit 2)");
+    put(base);
+    for (const t2 of [HEAD + "no markers here\n", empty + RU.BEGIN + "\n" + RU.END + "\n", HEAD + RU.END + "\n" + RU.BEGIN + "\n"]) {
+      fs.writeFileSync(md, t2);
+      const r2 = rules("write");
+      ok(r2.code === 2 && read() === t2, "markers missing, doubled or out of order: exit 2, nothing written (" + JSON.stringify(t2.split("\n").filter(l => l.startsWith("<!--")).length) + " marker lines)");
+    }
+    put(base, empty);
+    const j = rules("list", "--json"), J = JSON.parse(j.out);
+    const keys = new Set(); (function k(o) { if (o && typeof o === "object") Object.keys(o).forEach(x => { keys.add(x); k(o[x]); }); })(J);
+    ok(j.code === 0 && J.entries.length === 5 && !keys.has("ruling") && !keys.has("topic") && !keys.has("rule") && !/private statement|test ruling|test topic/.test(j.out),
+      "--json lists the live rule entries and holds no ruling, topic or rule text");
+  } catch (e) { ok(false, "rule block test ran (" + String(e.message).split("\n")[0] + ")"); }
+  fs.rmSync(T, { recursive: true, force: true });
+}
+
 /* ---------- the line figures keep themselves current (9 Nov 2026) ----------
  * From 7 Oct to 9 Nov 2026 the % on the tree's lines froze: cards came onto the tree, nothing rated their links,
  * and linkconf.js build refuses until every link is rated. tools/linkconf.js sync rates new links from their
@@ -2290,7 +2386,7 @@ section("No names in the plaintext repo");
     NG.words(raw).filter(w => w !== f.surname && !SUFFIX.has(w))
       .forEach(w => { if (w.length >= 4 && !ALLOW.has(w)) idx.given.add(w); });
   };
-  /* CLAUDE.md: a person is living when the dates are "b. YYYY", or none. (Until 16 Nov 2026 only a
+  /* OPERATING.md, "Data shape": a person is living when the dates are "b. YYYY", or none. (Until 16 Nov 2026 only a
    * birth from 1930 on with no death counted, so the cards with no dates were read as dead.) */
   const isLiving = years => {
     const y = String(years || "").trim();

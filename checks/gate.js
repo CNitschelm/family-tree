@@ -20,7 +20,9 @@
  *      linter finds no new HIGH on any card;
  *   6. research.json is valid, media/research.bin and research-cards.bin are exactly what it makes, and
  *      every change set above that says it moves research items shows them moved in research.json
- *      (Cory, 2 Oct 2026: the Research view is kept current without anyone asking).
+ *      (Cory, 2 Oct 2026: the Research view is kept current without anyone asking);
+ *   7. stats.json says what the data says.
+ * It also notes, and never fails on, a rule block in CLAUDE.md that is behind the register (8, tools/rules.js).
  * On a pass it writes .gate-stamp: the payload's iv, then a line that says PASS and what it was
  * compared with. The commit-msg hook refuses to commit an index.html whose iv has no passing stamp,
  * or whose stamp was made against anything but the live payload (origin/main) or the queue's head
@@ -41,6 +43,7 @@ const note = m => notes.push(m);
 const section = t => console.log(`\n== ${t}`);
 
 function finish() {
+  if (notes.length) console.log('\n== notes');
   notes.forEach(n => console.log('  note  ' + n));
   if (fails.length) {
     try { fs.writeFileSync(STAMP, 'FAIL\n'); } catch (_) {}
@@ -228,6 +231,22 @@ section('7. the public numbers (stats.json)');
     if (off.length) fail(`stats.json is not what the data says (${off.join(', ')}) — run: node tools/stats.js, and commit stats.json`);
     else console.log(`  ok  stats.json current (${n.people} people, updated ${cur.updated})`);
   } catch (e) { fail(`tools/stats.js did not run: ${e.message}`); }
+}
+
+section('8. the rule block in CLAUDE.md');
+{
+  /* tools/rules.js (R-0762). Never a failure: CLAUDE.md is published only by FT_PUBLISH=direct with Cory there,
+     while routines add register entries, so a block behind the register is a note on every run until then.
+     tests/run.js (step 5) fails a block that is malformed or carries a line that fails the public check, and, when
+     CLAUDE.md differs from origin/main (a direct publish on its way), a block that is not what the register makes. */
+  try {
+    const r = require('../tools/rules.js').run('check');
+    if (r.exit === 0) console.log('  ok  CLAUDE.md\'s rule block is what the register makes');
+    else if (r.exit === 1) note(`CLAUDE.md's rule block is behind the register (${['add', 'drop', 'change'].filter(k => r.behind[k].length).map(k => `${k} ${r.behind[k].join(', ')}`).join('; ') || 'headings or order'}); at the next direct publish run node tools/rules.js write`);
+    else if (r.exit === 2) note(`tools/rules.js check finds a defect: ${r.defects.map(d => d.msg).join('; ')}`);
+    else console.log('  --  no register here; the rule block was not compared');
+    r.notes.filter(n => /left out/.test(n)).forEach(n => note('rule block: ' + n));
+  } catch (e) { note(`tools/rules.js did not run: ${e.message}`); }
 }
 
 finish();
