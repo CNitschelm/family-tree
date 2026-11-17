@@ -91,8 +91,8 @@ Since 16 Nov 2026 the research tools also hold to these (register R-0759 for the
   undoes it). Work Claude can do alone, online (the view's "Ready to do" tier) gets a research card on that page, id
   `go` and a number (`go1`…), with one button, Begin research; its sources carry `dec=go<n>`, and on the tab their
   button says Begin research and their chip Your go-ahead. One tap starts the decision runner, which reads the
-  records, records every result here, adds a proven person of the line under R-0437, makes and reports what R-0757
-  allows, brings anything else that would change the tree back as a new card, and opens the next research card when
+  records, records every result here, adds a proven person of the line under R-0437, makes and reports what R-0757 and
+  R-0775 allow, brings anything else that would change the tree back as a new card, and opens the next research card when
   online steps are left. Whoever finishes a card clears its `dec` (`dec=`). How the "At your computer" items are made
   and worked (collection `atcomputer` of the decisions page, its "At your computer" section):
   `notes/at_your_computer.md` (private).
