@@ -324,6 +324,10 @@ html.dark .node.sel .box{box-shadow:0 0 0 5px var(--paper),0 1px 2px rgba(0,0,0,
 #genlines .genline{position:absolute;left:0;right:0;border-top:1px dashed var(--rule);opacity:.75}
 #ruler .g{position:absolute;left:8px;font-size:10px;color:var(--ink-soft);background:color-mix(in srgb,var(--paper) 68%,transparent);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);border:1px solid color-mix(in srgb,var(--rule) 70%,transparent);border-radius:5px;padding:2px 7px;line-height:1.25;white-space:nowrap}   /* see-through: a card passing under a label stays readable */
 #ruler .g b{display:block;font-size:1.05em;color:var(--ink);font-weight:600}
+#ruler .g .gc{display:block}   /* how many people the generation has, under the year */
+#ruler .g .gc .ic{display:inline-block;width:1.05em;height:1.05em;vertical-align:-.15em;margin-right:.15em;stroke-width:2.2}
+#ruler.snug .g .gc{display:inline;margin-left:.4em}   /* rows too close for three lines: beside the year */
+#ruler.tight .g .gc{display:none}
 #ruler.tight .g span{display:none}
 #ruler.tight .g{padding-top:1px;padding-bottom:1px}
 #ruler.tighter .g:nth-child(even){display:none}
@@ -1333,7 +1337,7 @@ html.dark #playbar .pcap.royal{background:linear-gradient(180deg,#4A3A10,#33280A
 
 <script>
 /* ---------------- DATA (verbatim from astrosurf.com/nitschelm, updated 2026-07-14) ---------------- */
-const SYNCED = "2026-11-14"; /* the day of the last deploy of this file's code: shown only when the server gives no date (lastDeploy) */
+const SYNCED = "2026-11-24"; /* the day of the last deploy of this file's code: shown only when the server gives no date (lastDeploy) */
 /* "Updated <date>" in the footer and the menu: the day the site was last deployed (Cory, 9 Nov 2026: "ideally its just
    the last deploy simple as that"). GitHub Pages stamps every file of a deploy with the deploy's time (Last-Modified), and
    the browser gives it as document.lastModified, in local time. Without that header a browser gives the current time
@@ -2564,9 +2568,11 @@ function deadAutoOff(){
   return T(ks.length > 1 ? "dead_auto_n" : "dead_auto").replace("%s", listJoin(ks.map(k => T(k))));
 }
 
-/* generation ruler data: min birth year per generation across the whole dataset */
-const genYear = {};
+/* generation ruler data: min birth year per generation across the whole dataset, and how many people each
+   generation has (genAll), for the count under the year */
+const genYear = {}, genAll = {};
 allNodes.forEach(n=>{
+  genAll[n.gen] = (genAll[n.gen] || 0) + 1;
   const m = (n.p.years||"").match(/\d{4}/);
   if(m){ const y=+m[0]; if(!(n.gen in genYear) || y<genYear[n.gen]) genYear[n.gen]=y; }
 });
@@ -2740,11 +2746,14 @@ function renderRuler(){
   genlines.innerHTML = "";
   rulerLabels = [];
   const gens = [...new Set(nodes.map(n=>n.gen).concat(foldItems.map(f=>f.gen)))].sort((a,b)=>a-b);
+  /* under the year, how many people the generation has on the tree, whatever the screen shows (Cory, 24 Nov 2026:
+     "I want to see number of people shown next to or below the year here", then "Just the number. Does not matter
+     what's on screen") */
   gens.forEach(g=>{
     const d = document.createElement("div");
     d.className = "g";
     const era = g===0 && SITE.gen0 ? SITE.gen0 : (genYear[g] ? "~"+genYear[g] : "");
-    d.innerHTML = `<b>${T("gen")} ${g+1}</b>${era ? `<span>${era}</span>` : ""}`;
+    d.innerHTML = `<b>${T("gen")} ${g+1}</b>${era ? `<span>${era}</span>` : ""}<span class="gc">${ICON.person}${genAll[g] || 0}</span>`;
     ruler.appendChild(d);
     const ln = document.createElement("div");
     ln.className = "genline";
@@ -2756,7 +2765,9 @@ function renderRuler(){
 function positionRuler(){
   const fs = Math.max(9, Math.min(13, 10*scale)); /* gen labels grow/shrink with zoom, but never bigger than a card's name */
   const showLines = LEVEL_H*scale > 44;           /* hide rules when rows get too dense */
-  /* rows denser than a label: drop the era line, then every other label, so labels never overlap */
+  /* rows denser than a label: the people count moves up beside the year, then both go, then every other label, so labels
+     never overlap */
+  ruler.classList.toggle("snug", LEVEL_H*scale < 44);
   ruler.classList.toggle("tight", LEVEL_H*scale < 32);
   ruler.classList.toggle("tighter", LEVEL_H*scale < 19);
   rulerLabels.forEach(({el,line,gen})=>{

@@ -485,6 +485,63 @@ async function run() {
     ok(!s2.far && s2.op === "1", "zoomed back in, the chips show again");
     await ctx.close();
   }
+  /* ---------------- the people count under each generation's year (Cory, 24 Nov 2026) ----------------
+     each label says how many people its generation has on the tree, whatever the screen shows ("Just the number. Does
+     not matter what's on screen"); when the rows get too close for three lines the count moves up beside the year */
+  {
+    console.log("\n== desktop, the generation labels' people count");
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await ctx.newPage();
+    watch(page, "generation count");
+    await page.goto(BASE);
+    await unlock(page);
+    await page.waitForTimeout(800);
+    /* each label's generation, its count, and the cards its row draws (a card's top is its generation times the row height) */
+    const rows = () => page.evaluate(() => {
+      const drawn = {};
+      document.querySelectorAll("#cards .node").forEach(e => { const g = Math.round(parseFloat(e.style.top) / 132); drawn[g] = (drawn[g] || 0) + 1; });
+      return [...document.querySelectorAll("#ruler .g")].map(e => { const g = +e.querySelector("b").textContent.replace(/\D/g, "") - 1, c = e.querySelector(".gc");
+        return { g, text: c ? c.textContent : "", shown: !!c && getComputedStyle(c).display !== "none", drawn: drawn[g] || 0 }; });
+    });
+    /* the invented family: one person in each of the first five generations, then the nine branch heads, then their 17 children */
+    const WANT = [1, 1, 1, 1, 1, 9, 17];
+    const right = r => r.length > 0 && r.every(x => x.shown && x.text === String(WANT[x.g]));
+    const say = r => r.map(x => x.text + " (" + x.drawn + " drawn)").join(", ");
+    let r = await rows();
+    ok(right(r) && r.some(x => x.g === 5 && x.drawn < 9), "each label counts its whole generation, not the cards on screen: " + say(r));
+    await page.click("#filtbtn");
+    await page.click("#fall");
+    await page.waitForTimeout(600);
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+    r = await rows();
+    ok(right(r) && r.some(x => x.g === 6 && x.drawn < 17), "with more of the tree open, the counts stay the same: " + say(r));
+    await page.click("#lang");
+    await page.waitForTimeout(400);
+    r = await rows();
+    ok(right(r) && (await page.textContent("#ruler .g b")).startsWith("Gén"), "in French, the same numbers: " + say(r));
+    await page.click("#lang");
+    await page.waitForTimeout(400);
+    /* zoom out a step at a time: the labels never overlap; when the rows get too close for three lines the count moves up
+       beside the year, and when they get too close for two, both go */
+    let over = 0, snug = null, tight = null;
+    for (let i = 0; i < 8; i++) {
+      await page.click("#zout");
+      await page.waitForTimeout(250);
+      const s = await page.evaluate(() => {
+        const vis = [...document.querySelectorAll("#ruler .g")].filter(e => getComputedStyle(e).display !== "none"), b = vis.map(e => e.getBoundingClientRect());
+        const ru = document.getElementById("ruler"), yr = vis[0].querySelector("span:not(.gc)"), gc = vis[0].querySelector(".gc");
+        const shows = e => !!e && getComputedStyle(e).display !== "none";
+        return { over: b.slice(1).filter((x, k) => b[k].bottom > x.top + 0.5).length, snug: ru.classList.contains("snug"), tight: ru.classList.contains("tight"),
+          gc: shows(gc), yr: shows(yr), beside: shows(gc) && shows(yr) && Math.abs(gc.getBoundingClientRect().top - yr.getBoundingClientRect().top) < 3 };
+      });
+      if (!s.tight) over += s.over;
+      if (s.snug && !s.tight && snug === null) snug = s.gc && s.yr && s.beside;
+      if (s.tight && tight === null) tight = !s.gc && !s.yr;
+    }
+    ok(!over && snug === true && tight === true, "zoomed out, the labels never overlap: the count moves up beside the year, then both go (" + over + " overlaps)");
+    await ctx.close();
+  }
   /* ---------------- Play: the family over the years (Cory, 17 Oct 2026) ---------------- */
   {
     console.log("\n== desktop, play");
